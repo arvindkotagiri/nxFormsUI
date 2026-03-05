@@ -43,8 +43,9 @@ const navItems: NavItem[] = [
     icon: PenTool,
     children: [
       { title: "Design Forms", url: "/templates", icon: FileText },
-      { title: "Forms Manager", url: "/output-rules", icon: Layers },
+      // { title: "Forms Manager", url: "/output-rules", icon: Layers },
       { title: "API Setup", url: "/api-configurations", icon: Plug },
+      // { title: "Label Configurator", url: "/labelConfigurator", icon: GitBranch },
     ],
   },
   {
