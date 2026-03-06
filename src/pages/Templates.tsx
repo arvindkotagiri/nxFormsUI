@@ -91,6 +91,7 @@ type LabelTemplate = {
   output_mode: string;
   version: number;
   page_dimensions: string;
+  created_by: string;
   created_on: string;
 };
 export default function Templates() {
@@ -102,6 +103,7 @@ export default function Templates() {
   const [labelTemplates, setLabelTemplates] =
     useState<LabelTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => {
     // fetch("http://localhost:5050/labels")
@@ -121,7 +123,7 @@ export default function Templates() {
   }, []);
 
   function HtmlPreview({ html }: { html: string }) {
-  const srcDoc = `
+    const srcDoc = `
   <html>
   <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -132,17 +134,17 @@ export default function Templates() {
   </html>
   `;
 
-  return (
-    <iframe
-      title="preview"
-      srcDoc={srcDoc}
-      className="w-full h-full border-0"
-      style={{
-        background: "white"
-      }}
-    />
-  );
-}
+    return (
+      <iframe
+        title="preview"
+        srcDoc={srcDoc}
+        className="w-full h-full border-0"
+        style={{
+          background: "white"
+        }}
+      />
+    );
+  }
 
   // if (view === "editor" && selectedTemplate) {
   //   return (
@@ -252,105 +254,188 @@ export default function Templates() {
   //     </div>
   //   );
   // }
+
+  const loadPreview = async (zplCode: string) => {
+    try {
+      const res = await fetch(
+        "https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: zplCode
+        }
+      );
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      setPreview(url);
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedTemplate?.output_mode === "zpl" || selectedTemplate?.output_mode === "both") {
+      loadPreview(selectedTemplate.zpl_code || "");
+    }
+  }, [selectedTemplate]);
   if (view === "editor" && selectedTemplate) {
-  const { output_mode } = selectedTemplate;
+    const { output_mode } = selectedTemplate;
 
-  const showHtml = output_mode === "html" || output_mode === "both";
-  const showZpl = output_mode === "zpl" || output_mode === "both";
+    const showHtml = output_mode === "html" || output_mode === "both";
+    const showZpl = output_mode === "zpl" || output_mode === "both";
 
-  return (
-    <div className="space-y-5 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              setView("grid");
-              setSelectedTemplate(null);
-            }}
-            className="p-2 rounded-lg hover:bg-secondary transition-colors"
-          >
-            ← Back
-          </button>
+    return (
+      <div className="space-y-5 animate-fade-in">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setView("grid");
+                setSelectedTemplate(null);
+              }}
+              className="p-2 rounded-lg hover:bg-secondary transition-colors"
+            >
+              ← Back
+            </button>
+
+            <div>
+              <h1 className="text-2xl font-semibold">
+                {selectedTemplate.label_name}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                v{selectedTemplate.version} · {selectedTemplate.output_mode}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ================= MAIN EDITOR AREA ================= */}
+        {/* Template Metadata */}
+        <div className="card-elevated p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
 
           <div>
-            <h1 className="text-2xl font-semibold">
-              {selectedTemplate.label_name}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              v{selectedTemplate.version} · {selectedTemplate.output_mode}
-            </p>
+            <div className="text-xs text-muted-foreground">Label ID</div>
+            <div className="font-semibold">{selectedTemplate.label_id}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">Label Name</div>
+            <div className="font-semibold">{selectedTemplate.label_name}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">Context</div>
+            <div className="font-semibold">{selectedTemplate.context}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">Output Mode</div>
+            <div className="font-semibold uppercase">{selectedTemplate.output_mode}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">Version</div>
+            <div className="font-semibold">v{selectedTemplate.version}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">Page Size</div>
+            <div className="font-semibold">{selectedTemplate.page_dimensions}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">Created By</div>
+            <div className="font-semibold">{selectedTemplate.created_by}</div>
+          </div>
+
+          <div>
+            <div className="text-xs text-muted-foreground">Created On</div>
+            <div className="font-semibold">
+              {new Date(selectedTemplate.created_on).toLocaleDateString()}
+            </div>
+          </div>
+
+        </div>
+        <div
+          className={cn(
+            "gap-4",
+            output_mode === "both"
+              ? "grid grid-cols-2"
+              : "grid grid-cols-2"
+          )}
+        >
+          {/* ---------- LEFT SIDE ---------- */}
+          <div className="card-elevated overflow-hidden flex flex-col h-[70vh]">
+            <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
+              {showHtml ? "HTML Code" : "ZPL Code"}
+            </div>
+
+            <textarea
+              value={
+                showHtml
+                  ? selectedTemplate.html_code || ""
+                  : selectedTemplate.zpl_code || ""
+              }
+              readOnly
+              className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none"
+              style={{
+                background: "hsl(var(--background))",
+                color: "hsl(var(--foreground))",
+                lineHeight: 1.6,
+              }}
+            />
+          </div>
+
+          {/* ---------- RIGHT SIDE PREVIEW ---------- */}
+          <div className="card-elevated overflow-hidden h-[70vh]">
+            <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground flex justify-between">
+              <span>Live Preview</span>
+              <span>{output_mode.toUpperCase()}</span>
+            </div>
+
+            <div className="p-4 overflow-auto h-full">
+              {output_mode === "html" && (
+                <HtmlPreview html={selectedTemplate.html_code} />
+              )}
+
+              {output_mode === "zpl" && (
+                preview ? (
+                  <img
+                    src={preview}
+                    alt="ZPL Preview"
+                    className="w-full h-full object-contain border rounded shadow"
+                  />
+                ) : (
+                  <div className="text-muted-foreground text-sm">
+                    Preview unavailable
+                  </div>
+                )
+              )}
+
+              {output_mode === "both" && (
+                <div className="space-y-4 h-full">
+                  <HtmlPreview html={selectedTemplate.html_code} />
+
+                  <div className="border-t pt-4">
+                    <h4 className="text-xs font-semibold mb-2">ZPL Code</h4>
+                    <pre className="text-xs font-mono whitespace-pre-wrap">
+                      {selectedTemplate.zpl_code}
+                    </pre>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
-
-      {/* ================= MAIN EDITOR AREA ================= */}
-      <div
-        className={cn(
-          "gap-4",
-          output_mode === "both"
-            ? "grid grid-cols-2"
-            : "grid grid-cols-2"
-        )}
-      >
-        {/* ---------- LEFT SIDE ---------- */}
-        <div className="card-elevated overflow-hidden flex flex-col h-[70vh]">
-          <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
-            {showHtml ? "HTML Code" : "ZPL Code"}
-          </div>
-
-          <textarea
-            value={
-              showHtml
-                ? selectedTemplate.html_code || ""
-                : selectedTemplate.zpl_code || ""
-            }
-            readOnly
-            className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none"
-            style={{
-              background: "hsl(var(--background))",
-              color: "hsl(var(--foreground))",
-              lineHeight: 1.6,
-            }}
-          />
-        </div>
-
-        {/* ---------- RIGHT SIDE PREVIEW ---------- */}
-        <div className="card-elevated overflow-hidden h-[70vh]">
-          <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground flex justify-between">
-            <span>Live Preview</span>
-            <span>{output_mode.toUpperCase()}</span>
-          </div>
-
-          <div className="p-4 overflow-auto h-full">
-  {output_mode === "html" && (
-    <HtmlPreview html={selectedTemplate.html_code} />
-  )}
-
-  {output_mode === "zpl" && (
-    <div className="text-xs font-mono whitespace-pre-wrap">
-      {selectedTemplate.zpl_code}
-    </div>
-  )}
-
-  {output_mode === "both" && (
-    <div className="space-y-4 h-full">
-      <HtmlPreview html={selectedTemplate.html_code} />
-
-      <div className="border-t pt-4">
-        <h4 className="text-xs font-semibold mb-2">ZPL Code</h4>
-        <pre className="text-xs font-mono whitespace-pre-wrap">
-          {selectedTemplate.zpl_code}
-        </pre>
-      </div>
-    </div>
-  )}
-</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+    );
+  }
 
   const filteredTemplates = labelTemplates.filter((t) =>
     t.label_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
