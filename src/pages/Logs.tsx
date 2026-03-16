@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   Filter,
@@ -9,17 +9,18 @@ import {
   ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+const API_URL = import.meta.env.VITE_NODE_API;
 
-const logs = [
-  { id: "LOG-08821", level: "ERROR", service: "OutputEngine", message: "Printer DSP-PRN-01 connection timeout", ts: "2026-02-19 14:31:58", user: "system", traceId: "abc-123" },
-  { id: "LOG-08820", level: "INFO", service: "RuleEngine", message: "Rule RUL-001 matched for EVT-00421", ts: "2026-02-19 14:31:55", user: "system", traceId: "abc-122" },
-  { id: "LOG-08819", level: "INFO", service: "EventIngestor", message: "Event EVT-00421 received from ERP-SAP", ts: "2026-02-19 14:31:52", user: "system", traceId: "abc-121" },
-  { id: "LOG-08818", level: "WARN", service: "APIGateway", message: "B2B Portal API latency > 1000ms", ts: "2026-02-19 14:30:40", user: "system", traceId: "def-100" },
-  { id: "LOG-08817", level: "INFO", service: "Auth", message: "Admin user login from 10.0.1.42", ts: "2026-02-19 14:28:11", user: "admin@nxforms.io", traceId: "ghi-200" },
-  { id: "LOG-08816", level: "INFO", service: "TemplateEngine", message: "Template TPL-001 v3.2 rendered successfully", ts: "2026-02-19 14:27:58", user: "system", traceId: "jkl-300" },
-  { id: "LOG-08815", level: "ERROR", service: "Printer", message: "ZPL parse error in job DSP-PRN-01#0082", ts: "2026-02-19 14:26:30", user: "system", traceId: "mno-400" },
-  { id: "LOG-08814", level: "INFO", service: "OutputEngine", message: "Output OUT-00886 delivered to PDF-EXPORT", ts: "2026-02-19 14:25:10", user: "system", traceId: "pqr-500" },
-];
+// const logs = [
+//   { id: "LOG-08821", level: "ERROR", service: "OutputEngine", message: "Printer DSP-PRN-01 connection timeout", ts: "2026-02-19 14:31:58", user: "system", traceId: "abc-123" },
+//   { id: "LOG-08820", level: "INFO", service: "RuleEngine", message: "Rule RUL-001 matched for EVT-00421", ts: "2026-02-19 14:31:55", user: "system", traceId: "abc-122" },
+//   { id: "LOG-08819", level: "INFO", service: "EventIngestor", message: "Event EVT-00421 received from ERP-SAP", ts: "2026-02-19 14:31:52", user: "system", traceId: "abc-121" },
+//   { id: "LOG-08818", level: "WARN", service: "APIGateway", message: "B2B Portal API latency > 1000ms", ts: "2026-02-19 14:30:40", user: "system", traceId: "def-100" },
+//   { id: "LOG-08817", level: "INFO", service: "Auth", message: "Admin user login from 10.0.1.42", ts: "2026-02-19 14:28:11", user: "admin@nxforms.io", traceId: "ghi-200" },
+//   { id: "LOG-08816", level: "INFO", service: "TemplateEngine", message: "Template TPL-001 v3.2 rendered successfully", ts: "2026-02-19 14:27:58", user: "system", traceId: "jkl-300" },
+//   { id: "LOG-08815", level: "ERROR", service: "Printer", message: "ZPL parse error in job DSP-PRN-01#0082", ts: "2026-02-19 14:26:30", user: "system", traceId: "mno-400" },
+//   { id: "LOG-08814", level: "INFO", service: "OutputEngine", message: "Output OUT-00886 delivered to PDF-EXPORT", ts: "2026-02-19 14:25:10", user: "system", traceId: "pqr-500" },
+// ];
 
 function LevelBadge({ level }: { level: string }) {
   if (level === "ERROR") return <span className="badge-error">ERROR</span>;
@@ -44,10 +45,25 @@ const LOG_PAYLOAD = `{
 }`;
 
 export default function Logs() {
+  const [logs, setLogs] = useState<any[]>([]);
   const [selectedLog, setSelectedLog] = useState<typeof logs[0] | null>(null);
   const [levelFilter, setLevelFilter] = useState<string | null>(null);
 
   const filtered = logs.filter((l) => !levelFilter || l.level === levelFilter);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      const params = new URLSearchParams();
+      if (levelFilter) params.append("level", levelFilter);
+      params.append("limit", "200");
+
+      const res = await fetch(`${API_URL}/logs?${params.toString()}`);
+      const data = await res.json();
+      setLogs(data);
+    };
+
+    fetchLogs();
+  }, [levelFilter]);
 
   return (
     <div className="space-y-5 animate-fade-in">

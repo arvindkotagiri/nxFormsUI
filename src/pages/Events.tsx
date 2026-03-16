@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   Filter,
@@ -10,19 +10,20 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+const API_URL = import.meta.env.VITE_NODE_API;
 
-const events = [
-  { id: "EVT-00421", source: "ERP-SAP", context: "Invoice", form: "INV-001", status: "Success", ts: "2026-02-19 14:32:11", duration: "138ms", outputs: 3 },
-  { id: "EVT-00420", source: "WMS-Core", context: "Dispatch", form: "DSP-200", status: "Failed", ts: "2026-02-19 14:31:58", duration: "412ms", outputs: 1 },
-  { id: "EVT-00419", source: "POS-System", context: "Receipt", form: "RCT-050", status: "Pending", ts: "2026-02-19 14:31:44", duration: "–", outputs: 2 },
-  { id: "EVT-00418", source: "ERP-SAP", context: "Label", form: "LBL-300", status: "Success", ts: "2026-02-19 14:30:22", duration: "92ms", outputs: 5 },
-  { id: "EVT-00417", source: "CRM-SF", context: "Statement", form: "STM-010", status: "Success", ts: "2026-02-19 14:29:48", duration: "205ms", outputs: 1 },
-  { id: "EVT-00416", source: "WMS-Core", context: "Label", form: "LBL-310", status: "Failed", ts: "2026-02-19 14:28:32", duration: "1.2s", outputs: 0 },
-  { id: "EVT-00415", source: "ERP-SAP", context: "Invoice", form: "INV-002", status: "Success", ts: "2026-02-19 14:27:19", duration: "144ms", outputs: 2 },
-  { id: "EVT-00414", source: "B2B-Portal", context: "Report", form: "RPT-100", status: "Success", ts: "2026-02-19 14:26:05", duration: "318ms", outputs: 1 },
-  { id: "EVT-00413", source: "ERP-SAP", context: "Invoice", form: "INV-003", status: "Pending", ts: "2026-02-19 14:24:50", duration: "–", outputs: 1 },
-  { id: "EVT-00412", source: "POS-System", context: "Receipt", form: "RCT-051", status: "Success", ts: "2026-02-19 14:23:38", duration: "88ms", outputs: 1 },
-];
+// const events = [
+//   { id: "EVT-00421", source: "ERP-SAP", context: "Invoice", form: "INV-001", status: "Success", ts: "2026-02-19 14:32:11", duration: "138ms", outputs: 3 },
+//   { id: "EVT-00420", source: "WMS-Core", context: "Dispatch", form: "DSP-200", status: "Failed", ts: "2026-02-19 14:31:58", duration: "412ms", outputs: 1 },
+//   { id: "EVT-00419", source: "POS-System", context: "Receipt", form: "RCT-050", status: "Pending", ts: "2026-02-19 14:31:44", duration: "–", outputs: 2 },
+//   { id: "EVT-00418", source: "ERP-SAP", context: "Label", form: "LBL-300", status: "Success", ts: "2026-02-19 14:30:22", duration: "92ms", outputs: 5 },
+//   { id: "EVT-00417", source: "CRM-SF", context: "Statement", form: "STM-010", status: "Success", ts: "2026-02-19 14:29:48", duration: "205ms", outputs: 1 },
+//   { id: "EVT-00416", source: "WMS-Core", context: "Label", form: "LBL-310", status: "Failed", ts: "2026-02-19 14:28:32", duration: "1.2s", outputs: 0 },
+//   { id: "EVT-00415", source: "ERP-SAP", context: "Invoice", form: "INV-002", status: "Success", ts: "2026-02-19 14:27:19", duration: "144ms", outputs: 2 },
+//   { id: "EVT-00414", source: "B2B-Portal", context: "Report", form: "RPT-100", status: "Success", ts: "2026-02-19 14:26:05", duration: "318ms", outputs: 1 },
+//   { id: "EVT-00413", source: "ERP-SAP", context: "Invoice", form: "INV-003", status: "Pending", ts: "2026-02-19 14:24:50", duration: "–", outputs: 1 },
+//   { id: "EVT-00412", source: "POS-System", context: "Receipt", form: "RCT-051", status: "Success", ts: "2026-02-19 14:23:38", duration: "88ms", outputs: 1 },
+// ];
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "Success") return <span className="badge-success">● Success</span>;
@@ -64,6 +65,14 @@ const EVENT_MOCK = {
 export default function Events() {
   const [search, setSearch] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<typeof EVENT_MOCK | null>(null);
+  const [events, setEvents] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch(`${API_URL}/events`)
+      .then((res) => res.json())
+      .then((data) => setEvents(data))
+      .catch((err) => console.error(err));
+  }, []);
 
   const filtered = events.filter(
     (e) =>

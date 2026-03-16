@@ -27,91 +27,92 @@ import {
   Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
+const API_URL = import.meta.env.VITE_NODE_API;
 
-const kpiCards = [
-  {
-    label: "Total Outputs Today",
-    value: 14872,
-    icon: FileOutput,
-    trend: "+12.4%",
-    up: true,
-    color: "hsl(var(--primary))",
-    bg: "hsl(var(--secondary))",
-  },
-  {
-    label: "Processed Successfully",
-    value: 14209,
-    icon: CheckCircle,
-    trend: "+8.1%",
-    up: true,
-    color: "hsl(var(--success))",
-    bg: "hsl(var(--success-bg))",
-  },
-  {
-    label: "Failed",
-    value: 248,
-    icon: XCircle,
-    trend: "-3.2%",
-    up: false,
-    color: "hsl(var(--error))",
-    bg: "hsl(var(--error-bg))",
-  },
-  {
-    label: "Pending",
-    value: 415,
-    icon: Clock,
-    trend: "+2.1%",
-    up: true,
-    color: "hsl(var(--warning))",
-    bg: "hsl(var(--warning-bg))",
-  },
-  {
-    label: "Avg Processing Time",
-    value: "142ms",
-    icon: Timer,
-    trend: "-18ms",
-    up: false,
-    isString: true,
-    color: "hsl(var(--info))",
-    bg: "hsl(var(--info-bg))",
-  },
-];
+// const kpiCards = [
+//   {
+//     label: "Total Outputs Today",
+//     value: 14872,
+//     icon: FileOutput,
+//     trend: "+12.4%",
+//     up: true,
+//     color: "hsl(var(--primary))",
+//     bg: "hsl(var(--secondary))",
+//   },
+//   {
+//     label: "Processed Successfully",
+//     value: 14209,
+//     icon: CheckCircle,
+//     trend: "+8.1%",
+//     up: true,
+//     color: "hsl(var(--success))",
+//     bg: "hsl(var(--success-bg))",
+//   },
+//   {
+//     label: "Failed",
+//     value: 248,
+//     icon: XCircle,
+//     trend: "-3.2%",
+//     up: false,
+//     color: "hsl(var(--error))",
+//     bg: "hsl(var(--error-bg))",
+//   },
+//   {
+//     label: "Pending",
+//     value: 415,
+//     icon: Clock,
+//     trend: "+2.1%",
+//     up: true,
+//     color: "hsl(var(--warning))",
+//     bg: "hsl(var(--warning-bg))",
+//   },
+//   {
+//     label: "Avg Processing Time",
+//     value: "142ms",
+//     icon: Timer,
+//     trend: "-18ms",
+//     up: false,
+//     isString: true,
+//     color: "hsl(var(--info))",
+//     bg: "hsl(var(--info-bg))",
+//   },
+// ];
 
-const outputsByContext = [
-  { name: "Invoice", outputs: 4200, errors: 120 },
-  { name: "Receipt", outputs: 3100, errors: 45 },
-  { name: "Label", outputs: 2800, errors: 82 },
-  { name: "Report", outputs: 1900, errors: 31 },
-  { name: "Statement", outputs: 1400, errors: 18 },
-  { name: "Dispatch", outputs: 1100, errors: 22 },
-];
+// const outputsByContext = [
+//   { name: "Invoice", outputs: 4200, errors: 120 },
+//   { name: "Receipt", outputs: 3100, errors: 45 },
+//   { name: "Label", outputs: 2800, errors: 82 },
+//   { name: "Report", outputs: 1900, errors: 31 },
+//   { name: "Statement", outputs: 1400, errors: 18 },
+//   { name: "Dispatch", outputs: 1100, errors: 22 },
+// ];
 
-const statusDist = [
-  { name: "Success", value: 14209, color: "hsl(var(--success))" },
-  { name: "Failed", value: 248, color: "hsl(var(--error))" },
-  { name: "Pending", value: 415, color: "hsl(var(--warning))" },
-];
+// const statusDist = [
+//   { name: "Success", value: 14209, color: "hsl(var(--success))" },
+//   { name: "Failed", value: 248, color: "hsl(var(--error))" },
+//   { name: "Pending", value: 415, color: "hsl(var(--warning))" },
+// ];
 
-const timeTrend = [
-  { time: "00:00", ms: 165 },
-  { time: "04:00", ms: 143 },
-  { time: "08:00", ms: 188 },
-  { time: "10:00", ms: 212 },
-  { time: "12:00", ms: 178 },
-  { time: "14:00", ms: 155 },
-  { time: "16:00", ms: 162 },
-  { time: "18:00", ms: 149 },
-  { time: "20:00", ms: 134 },
-  { time: "22:00", ms: 128 },
-];
+// const timeTrend = [
+//   { time: "00:00", ms: 165 },
+//   { time: "04:00", ms: 143 },
+//   { time: "08:00", ms: 188 },
+//   { time: "10:00", ms: 212 },
+//   { time: "12:00", ms: 178 },
+//   { time: "14:00", ms: 155 },
+//   { time: "16:00", ms: 162 },
+//   { time: "18:00", ms: 149 },
+//   { time: "20:00", ms: 134 },
+//   { time: "22:00", ms: 128 },
+// ];
 
-const printerUtil = [
-  { name: "LBL-PRN-01", util: 88 },
-  { name: "PDF-EXPORT", util: 74 },
-  { name: "LBL-PRN-02", util: 61 },
-  { name: "SHIP-PRN-01", util: 52 },
-  { name: "RPT-PRN-01", util: 38 },
-];
+// const printerUtil = [
+//   { name: "LBL-PRN-01", util: 88 },
+//   { name: "PDF-EXPORT", util: 74 },
+//   { name: "LBL-PRN-02", util: 61 },
+//   { name: "SHIP-PRN-01", util: 52 },
+//   { name: "RPT-PRN-01", util: 38 },
+// ];
 
 function AnimatedCounter({ target, isString }: { target: number | string; isString?: boolean }) {
   const [value, setValue] = useState(0);
@@ -137,8 +138,42 @@ function AnimatedCounter({ target, isString }: { target: number | string; isStri
 
 const filters = ["Date Range", "Context", "Source", "Status", "Printer"];
 
+const iconMap: Record<string, any> = {
+  FileOutput,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Timer,
+};
+
 export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const [kpiCards, setKpiCards] = useState<any[]>([]);
+  const [outputsByContext, setOutputsByContext] = useState<any[]>([]);
+  const [statusDist, setStatusDist] = useState<any[]>([]);
+  const [timeTrend, setTimeTrend] = useState<any[]>([]);
+  const [printerUtil, setPrinterUtil] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      const res = await fetch(`${API_URL}/dashboard`);
+      const data = await res.json();
+
+      const mappedCards = data.kpiCards.map((card: any) => ({
+        ...card,
+        icon: iconMap[card.icon], // convert string → component
+        color: "hsl(var(--primary))",
+        bg: "hsl(var(--secondary))",
+      }));
+
+      setKpiCards(mappedCards);
+      setOutputsByContext(data.outputsByContext);
+      setStatusDist(data.statusDist);
+      setTimeTrend(data.timeTrend);
+      setPrinterUtil(data.printerUtil);
+    };
+    fetchDashboard();
+  }, []);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -150,7 +185,7 @@ export default function Dashboard() {
             Real-time output processing overview — today
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-sm font-body text-muted-foreground hover:text-foreground hover:border-accent transition-all">
+        <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-sm font-body text-muted-foreground hover:text-foreground hover:border-accent transition-all" onClick={() => { window.location.reload() }}>
           <RefreshCw size={14} />
           Refresh
         </button>
@@ -185,7 +220,8 @@ export default function Dashboard() {
               >
                 <card.icon size={18} style={{ color: card.color }} />
               </div>
-              <span
+              {/* Trend feature - disabled */}
+              {/* <span
                 className={cn(
                   "text-xs font-medium font-body flex items-center gap-0.5",
                   card.up
@@ -208,7 +244,7 @@ export default function Dashboard() {
                   <TrendingUp size={12} />
                 )}
                 {card.trend}
-              </span>
+              </span> */}
             </div>
             <div className="font-display text-2xl font-semibold text-foreground mb-1">
               <AnimatedCounter target={card.value} isString={card.isString} />

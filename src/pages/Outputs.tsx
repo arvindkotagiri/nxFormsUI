@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   Filter,
@@ -10,17 +10,18 @@ import {
   Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+const API_URL = import.meta.env.VITE_NODE_API;
 
-const outputs = [
-  { id: "OUT-00891", eventId: "EVT-00421", formId: "INV-001", printer: "PDF-EXPORT", format: "PDF", status: "Success", retries: 0, duration: "92ms" },
-  { id: "OUT-00890", eventId: "EVT-00420", formId: "DSP-200", printer: "DSP-PRN-01", format: "ZPL", status: "Failed", retries: 2, duration: "412ms" },
-  { id: "OUT-00889", eventId: "EVT-00418", formId: "LBL-300", printer: "LBL-PRN-01", format: "ZPL", status: "Success", retries: 0, duration: "88ms" },
-  { id: "OUT-00888", eventId: "EVT-00417", formId: "STM-010", printer: "PDF-EXPORT", format: "PDF", status: "Success", retries: 0, duration: "205ms" },
-  { id: "OUT-00887", eventId: "EVT-00416", formId: "LBL-310", printer: "LBL-PRN-02", format: "ZPL", status: "Failed", retries: 3, duration: "1.2s" },
-  { id: "OUT-00886", eventId: "EVT-00415", formId: "INV-002", printer: "PDF-EXPORT", format: "PDF", status: "Success", retries: 0, duration: "144ms" },
-  { id: "OUT-00885", eventId: "EVT-00414", formId: "RPT-100", printer: "RPT-PRN-01", format: "PDF", status: "Success", retries: 0, duration: "318ms" },
-  { id: "OUT-00884", eventId: "EVT-00413", formId: "INV-003", printer: "PDF-EXPORT", format: "PDF", status: "Pending", retries: 0, duration: "–" },
-];
+// const outputs = [
+//   { id: "OUT-00891", eventId: "EVT-00421", formId: "INV-001", printer: "PDF-EXPORT", format: "PDF", status: "Success", retries: 0, duration: "92ms" },
+//   { id: "OUT-00890", eventId: "EVT-00420", formId: "DSP-200", printer: "DSP-PRN-01", format: "ZPL", status: "Failed", retries: 2, duration: "412ms" },
+//   { id: "OUT-00889", eventId: "EVT-00418", formId: "LBL-300", printer: "LBL-PRN-01", format: "ZPL", status: "Success", retries: 0, duration: "88ms" },
+//   { id: "OUT-00888", eventId: "EVT-00417", formId: "STM-010", printer: "PDF-EXPORT", format: "PDF", status: "Success", retries: 0, duration: "205ms" },
+//   { id: "OUT-00887", eventId: "EVT-00416", formId: "LBL-310", printer: "LBL-PRN-02", format: "ZPL", status: "Failed", retries: 3, duration: "1.2s" },
+//   { id: "OUT-00886", eventId: "EVT-00415", formId: "INV-002", printer: "PDF-EXPORT", format: "PDF", status: "Success", retries: 0, duration: "144ms" },
+//   { id: "OUT-00885", eventId: "EVT-00414", formId: "RPT-100", printer: "RPT-PRN-01", format: "PDF", status: "Success", retries: 0, duration: "318ms" },
+//   { id: "OUT-00884", eventId: "EVT-00413", formId: "INV-003", printer: "PDF-EXPORT", format: "PDF", status: "Pending", retries: 0, duration: "–" },
+// ];
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "Success") return <span className="badge-success">● Success</span>;
@@ -36,6 +37,7 @@ export default function Outputs() {
   const [search, setSearch] = useState("");
   const [detailOutput, setDetailOutput] = useState<typeof outputs[0] | null>(null);
   const [activeTab, setActiveTab] = useState(0);
+  const [outputs, setOutputs] = useState<any[]>([]);
 
   const filtered = outputs.filter(
     (o) =>
@@ -52,6 +54,12 @@ export default function Outputs() {
 
   const allSelected = selected.length === filtered.length && filtered.length > 0;
 
+  useEffect(() => {
+    fetch(`${API_URL}/outputs`)
+      .then((res) => res.json())
+      .then((data) => setOutputs(data))
+      .catch((err) => console.error(err));
+  }, []);
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -233,7 +241,7 @@ export default function Outputs() {
               )}
               {activeTab === 1 && (
                 <pre className="p-4 rounded-xl text-xs font-mono overflow-x-auto" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}>
-{`{
+                  {`{
   "outputId": "${detailOutput.id}",
   "formId": "${detailOutput.formId}",
   "format": "${detailOutput.format}",
