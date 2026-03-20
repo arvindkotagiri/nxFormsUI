@@ -25,9 +25,12 @@ export function TemplateSave() {
       // 1. Prepare Data Payload
       const dynamicFields = chunks.filter(c => !c.isStatic && c.fieldMapping);
       const fieldMapping = dynamicFields.reduce((acc, chunk) => {
-        acc[chunk.label] = chunk.fieldMapping;
+        acc[chunk.fieldMapping!] = {
+          path: chunk.fieldMapping,
+          transformations: chunk.transformations || []
+        };
         return acc;
-      }, {} as Record<string, string>);
+      }, {} as Record<string, any>);
 
       const barcodeChunk = chunks.find(c => c.type === 'barcode');
       const barcodeType = barcodeChunk?.barcodeType || 'code128';

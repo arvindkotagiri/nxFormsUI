@@ -110,9 +110,7 @@ export default function Templates() {
     fetch(`${flaskAPI}/labels`)
       .then((res) => res.json())
       .then((data) => {
-        console.log(data[1]['html_code'])
         const cleanHtml = data[1].html_code.replace(/\\n/g, "").replace(/\\"/g, '"');
-        console.log(cleanHtml)
         setLabelTemplates(data);
         setLoading(false);
       })

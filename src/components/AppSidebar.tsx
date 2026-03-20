@@ -206,16 +206,23 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       >
         {!collapsed ? (
           <div>
-            <div className="font-display font-800 text-xl text-primary tracking-tight leading-tight">
+            {/* <div className="font-display font-800 text-xl text-primary tracking-tight leading-tight">
               nx<span style={{ color: "hsl(var(--accent))" }}>Forms</span>
             </div>
             <div className="text-[10px] text-muted-foreground font-body mt-0.5 leading-tight">
               Output Engine
+            </div> */}
+            <div className="flex items-center justify-start">
+              <img
+                src="logo.png"
+                alt="Logo"
+                className="h-14 w-auto object-contain"
+              />
             </div>
           </div>
         ) : (
           <div className="font-display font-bold text-base text-primary">
-            nx<span style={{ color: "hsl(var(--accent))" }}>F</span>
+            My<span style={{ color: "hsl(var(--accent))" }}>F</span>
           </div>
         )}
       </div>

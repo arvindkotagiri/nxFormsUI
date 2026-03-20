@@ -262,7 +262,7 @@
 // }
 
 import { useState, useEffect } from 'react';
-import { useWizard } from '@/context/WizardContext';
+import { useWizard, type Transformation } from '@/context/WizardContext';
 import { Button } from '@/components/ui/button';
 import {
   ArrowLeft,
@@ -293,9 +293,9 @@ export function TemplateIdentify() {
 
   const [selectedChunk, setSelectedChunk] = useState<string | null>(null);
   const [imgSize, setImgSize] = useState({
-  width: 0,
-  height: 0
-});
+    width: 0,
+    height: 0
+  });
 
   useEffect(() => {
     if (chunks.length > 0 && !selectedChunk) {
@@ -307,18 +307,23 @@ export function TemplateIdentify() {
 
   const displayImage = cleanImage || uploadedImage;
 
+  const isDynamic = selectedChunkData && !selectedChunkData.isStatic;
+  const hasFieldMapping = !!selectedChunkData?.fieldMapping;
+
+  const canUseTransformations = isDynamic && hasFieldMapping;
+
   return (
     <div className="space-y-5 animate-fade-in">
 
       {/* Header Stats */}
       <div className="flex justify-end gap-3">
         <span className="badge-neutral flex items-center gap-1.5">
-          <Lock size={12}/>
+          <Lock size={12} />
           {chunks.filter(c => c.isStatic).length} Static
         </span>
 
         <span className="badge-info flex items-center gap-1.5">
-          <Zap size={12}/>
+          <Zap size={12} />
           {chunks.filter(c => !c.isStatic).length} Dynamic
         </span>
       </div>
@@ -329,7 +334,7 @@ export function TemplateIdentify() {
         <div className="card-elevated flex flex-col">
 
           <div className="p-3 border-b border-border flex items-center gap-2">
-            <Layers size={14}/>
+            <Layers size={14} />
             <h3 className="font-display text-xs font-semibold">
               Fields
             </h3>
@@ -348,8 +353,8 @@ export function TemplateIdentify() {
                 )}
               >
                 {chunk.isStatic
-                  ? <Lock size={12} className="text-primary"/>
-                  : <Zap size={12} className="text-destructive"/>
+                  ? <Lock size={12} className="text-primary" />
+                  : <Zap size={12} className="text-destructive" />
                 }
 
                 <span className="truncate font-semibold uppercase tracking-tight">
@@ -365,53 +370,53 @@ export function TemplateIdentify() {
         <div className="flex flex-col items-center">
 
           <div
-  className="card-elevated relative flex justify-center"
->
+            className="card-elevated relative flex justify-center"
+          >
 
-  <img
-    src={displayImage || ""}
-    alt="Template"
-    className="max-w-full h-auto select-none"
-    onLoad={(e) => {
-      const img = e.target as HTMLImageElement;
-      setImgSize({
-        width: img.clientWidth,
-        height: img.clientHeight
-      });
-    }}
-  />
+            <img
+              src={displayImage || ""}
+              alt="Template"
+              className="max-w-full h-auto select-none"
+              onLoad={(e) => {
+                const img = e.target as HTMLImageElement;
+                setImgSize({
+                  width: img.clientWidth,
+                  height: img.clientHeight
+                });
+              }}
+            />
 
-  {/* Overlay Boxes */}
-  {imgSize.width > 0 && chunks.map(chunk => {
+            {/* Overlay Boxes */}
+            {imgSize.width > 0 && chunks.map(chunk => {
 
-    const left = (chunk.x / 100) * imgSize.width;
-    const top = (chunk.y / 100) * imgSize.height;
-    const width = (chunk.width / 100) * imgSize.width;
-    const height = (chunk.height / 100) * imgSize.height;
+              const left = (chunk.x / 100) * imgSize.width;
+              const top = (chunk.y / 100) * imgSize.height;
+              const width = (chunk.width / 100) * imgSize.width;
+              const height = (chunk.height / 100) * imgSize.height;
 
-    return (
-      <div
-        key={chunk.id}
-        onClick={(e) => {
-          e.stopPropagation();
-          setSelectedChunk(chunk.id);
-        }}
-        className={cn(
-          "absolute border-2 cursor-pointer transition-all",
-          chunk.isStatic ? "border-primary" : "border-destructive",
-          selectedChunk === chunk.id && "ring-4 ring-accent/20"
-        )}
-        style={{
-          left,
-          top,
-          width,
-          height
-        }}
-      />
-    );
-  })}
+              return (
+                <div
+                  key={chunk.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedChunk(chunk.id);
+                  }}
+                  className={cn(
+                    "absolute border-2 cursor-pointer transition-all",
+                    chunk.isStatic ? "border-primary" : "border-destructive",
+                    selectedChunk === chunk.id && "ring-4 ring-accent/20"
+                  )}
+                  style={{
+                    left,
+                    top,
+                    width,
+                    height
+                  }}
+                />
+              );
+            })}
 
-</div>
+          </div>
 
           {uploadedFile?.type === "application/pdf" && (
             <p className="text-[10px] text-muted-foreground mt-3 italic">
@@ -425,7 +430,7 @@ export function TemplateIdentify() {
         <div className="card-elevated flex flex-col">
 
           <div className="p-3 border-b border-border flex items-center gap-2">
-            <Settings2 size={14}/>
+            <Settings2 size={14} />
             <h3 className="font-display text-xs font-semibold">
               Property Editor
             </h3>
@@ -435,7 +440,7 @@ export function TemplateIdentify() {
 
             {!selectedChunkData && (
               <div className="text-center py-16">
-                <MousePointer2 className="mx-auto text-muted-foreground mb-3"/>
+                <MousePointer2 className="mx-auto text-muted-foreground mb-3" />
                 <p className="text-[10px] font-bold uppercase text-muted-foreground">
                   Select field to edit
                 </p>
@@ -515,7 +520,7 @@ export function TemplateIdentify() {
                       className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none"
                     >
                       <option value="">Select field</option>
-                      {selectedContext?.fields?.map((field:any) => (
+                      {selectedContext?.fields?.map((field: any) => (
                         <option key={field.path} value={field.path}>
                           {field.name}
                         </option>
@@ -524,6 +529,112 @@ export function TemplateIdentify() {
                   </div>
                 )}
 
+                {/* Transformation Library */}
+                {isDynamic && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                        Transformation Library
+                      </label>
+
+                      <select
+                        disabled={!canUseTransformations}
+                        onChange={(e) => {
+                          const type = e.target.value as Transformation["type"];
+                          if (!type) return;
+
+                          const newTransformation: Transformation = { type };
+
+                          updateChunk(selectedChunkData.id, {
+                            transformations: [
+                              ...(selectedChunkData.transformations || []),
+                              newTransformation,
+                            ],
+                          });
+
+                          e.target.value = "";
+                        }}
+                        className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card"
+                      >
+                        <option value="">Add Transformation</option>
+                        <option value="to_upper">To Upper</option>
+                        <option value="to_lower">To Lower</option>
+                        <option value="concatenate">Concatenate</option>
+                        <option value="format_date">Format Date</option>
+                        <option value="add">Add</option>
+                        <option value="multiply">Multiply</option>
+                        <option value="if_else">If-Then-Else</option>
+                        <option value="default_value">Default Value</option>
+                      </select>
+                    </div>
+                    {selectedChunkData?.transformations?.length > 0 && (
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                          Applied Transformations
+                        </label>
+
+                        {selectedChunkData.transformations.map((t, index) => {
+                          const needsValue = !["to_upper", "to_lower"].includes(t.type);
+
+                          return (
+                            <div
+                              key={index}
+                              className="space-y-2 px-3 py-2 border rounded-lg text-xs"
+                            >
+                              {/* Row Header */}
+                              <div className="flex justify-between items-center">
+                                <span className="font-semibold">{t.type}</span>
+
+                                <button
+                                  onClick={() => {
+                                    const updated = selectedChunkData.transformations!.filter(
+                                      (_, i) => i !== index
+                                    );
+
+                                    updateChunk(selectedChunkData.id, {
+                                      transformations: updated
+                                    });
+                                  }}
+                                  className="text-destructive"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+
+                              {/* Value Input */}
+                              {needsValue && (
+                                <input
+                                  disabled={!canUseTransformations}
+                                  type="text"
+                                  placeholder="Enter value..."
+                                  value={(t as any).value || ""}
+                                  onChange={(e) => {
+                                    const updated = [...selectedChunkData.transformations!];
+
+                                    updated[index] = {
+                                      ...updated[index],
+                                      value: e.target.value
+                                    };
+
+                                    updateChunk(selectedChunkData.id, {
+                                      transformations: updated
+                                    });
+                                  }}
+                                  className="w-full px-2 py-1 border rounded text-xs"
+                                />
+                              )}
+                              {isDynamic && !hasFieldMapping && (
+                                <p className="text-[10px] text-muted-foreground italic">
+                                  Select a SAP field to enable transformations
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
                 {/* Delete */}
                 <Button
                   variant="ghost"
@@ -533,7 +644,7 @@ export function TemplateIdentify() {
                     setSelectedChunk(null);
                   }}
                 >
-                  <Trash2 size={14}/>
+                  <Trash2 size={14} />
                   Delete Field
                 </Button>
               </>
@@ -552,7 +663,7 @@ export function TemplateIdentify() {
           onClick={prevStep}
           className="text-xs font-bold uppercase"
         >
-          <ArrowLeft size={14}/>
+          <ArrowLeft size={14} />
           Back
         </Button>
 
@@ -561,7 +672,7 @@ export function TemplateIdentify() {
           className="bg-accent text-accent-foreground text-xs font-bold uppercase tracking-widest px-8"
         >
           Continue
-          <ArrowRight size={14}/>
+          <ArrowRight size={14} />
         </Button>
 
       </div>

@@ -102,7 +102,9 @@ export async function createLabelConfig(payload: any) {
 }
 
 export async function deleteLabelConfig(id: string) {
-  return request(`/label-configs/${id}`, { method: "DELETE" });
+  return request(`/label-configs/${id}`, {
+    method: "DELETE",
+  });
 }
 
 // Determination

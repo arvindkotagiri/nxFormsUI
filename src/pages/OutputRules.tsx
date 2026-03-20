@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, GitBranch, Edit, Trash2, Play, ChevronDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
-import { getLabelConfigs } from "../lib/api";
+import { deleteLabelConfig, getLabelConfigs } from "../lib/api";
 import LoadingModule from "@/components/LoadingModule";
 
 const rules = [
@@ -84,34 +84,11 @@ export default function OutputRules() {
     return true;
   }
 
-  //   const runTest = () => {
-  //   if (!selectedRule) return;
-
-  //   try {
-  //     const payload = JSON.parse(testJson);
-
-  //     const matches = evaluateRule(selectedRule, payload);
-
-  //     if (matches) {
-  //       setTestResult("match");
-  //       setMatchedRule(
-  //         `${selectedRule.label_id}: ${selectedRule.label_name}`
-  //       );
-  //     } else {
-  //       setTestResult("no-match");
-  //       setMatchedRule("");
-  //     }
-  //   } catch (err) {
-  //     setTestResult("no-match");
-  //     setMatchedRule("Invalid JSON");
-  //   }
-  // };
-
   const runTest = () => {
     try {
       const payload = JSON.parse(testJson);
       setMatchedRulesList([]);
-      console.log("here", matchedRulesList)
+
       const matched = ouputRules
         .filter((rule) => evaluateRule(rule, payload))
         .sort((a, b) => a.priority - b.priority); // ascending priority
@@ -144,8 +121,6 @@ export default function OutputRules() {
         setLoading(false);
       }
     }
-    const timer = setTimeout(load, 30000);
-    return () => clearTimeout(timer);
 
     load();
   }, []);
@@ -231,10 +206,35 @@ export default function OutputRules() {
                           <span className={rule.active ? "badge-success" : "badge-neutral"}>
                             {rule.active ? "Active" : "Disabled"}
                           </span>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/config/${rule.config_id}`); // or your edit logic
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                          >
                             <Edit size={13} />
                           </button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
+
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+
+                              try {
+                                await deleteLabelConfig(rule.config_id);
+
+                                // remove from UI instantly
+                                setouputRules((prev) =>
+                                  prev.filter((r) => r.config_id !== rule.config_id)
+                                );
+
+                              } catch (err) {
+                                console.error(err);
+                                alert("Failed to delete configuration");
+                              }
+                            }}
+                            className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                          >
                             <Trash2 size={13} />
                           </button>
                         </div>

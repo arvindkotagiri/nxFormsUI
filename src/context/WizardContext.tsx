@@ -1,5 +1,17 @@
 import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 
+export type Transformation = {
+  type:
+    | 'to_upper'
+    | 'to_lower'
+    | 'concatenate'
+    | 'format_date'
+    | 'add'
+    | 'multiply'
+    | 'if_else'
+    | 'default_value';
+  value?: string | number;
+};
 export type LabelChunk = {
   id: string;
   type: 'text' | 'barcode' | 'table_cell';
@@ -11,6 +23,7 @@ export type LabelChunk = {
   value?: string;
   isStatic: boolean;
   fieldMapping?: string;
+  transformations?: Transformation[]; 
   barcodeType?: 'code128' | 'code39' | 'itf14' | 'qr';
 };
 
@@ -107,7 +120,8 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         label: field.field_name,
         value: field.value,
         isStatic: field.category === 'static',
-        barcodeType: field.content_type === 'barcode' ? 'code128' : undefined
+        barcodeType: field.content_type === 'barcode' ? 'code128' : undefined,
+        transformations: [],
       };
     });
     setState(prev => ({ ...prev, chunks: mappedChunks, annotatedImage: annotatedImg, cleanImage: cleanImg || null }));
