@@ -28,6 +28,8 @@ export default function OutputRules() {
   const [matchedRule, setMatchedRule] = useState("");
   const [selectedRule, setSelectedRule] = useState<any | null>(null);
   const [matchedRulesList, setMatchedRulesList] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const rulesPerPage = 5;
 
   function buildSamplePayload(rule: any) {
     const sample: any = {};
@@ -138,6 +140,36 @@ export default function OutputRules() {
     return conditions.length ? conditions.join(" AND ") : "true";
   }
 
+  const totalPages = Math.ceil(ouputRules.length / rulesPerPage);
+
+  const paginatedRules = ouputRules
+    .sort((a, b) => a.priority - b.priority)
+    .slice(
+      (currentPage - 1) * rulesPerPage,
+      currentPage * rulesPerPage
+    );
+
+  const visiblePages = 5;
+
+  const getPageNumbers = () => {
+    const pages = [];
+
+    let start = Math.max(1, currentPage - Math.floor(visiblePages / 2));
+    let end = Math.min(totalPages, start + visiblePages - 1);
+
+    if (end - start < visiblePages - 1) {
+      start = Math.max(1, end - visiblePages + 1);
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+
+    return pages;
+  };
+
+  const emptyRows = rulesPerPage - paginatedRules.length;
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -157,103 +189,184 @@ export default function OutputRules() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
         {/* Rules Table */}
-        <div className="lg:col-span-2 card-elevated overflow-hidden">
+        <div className="lg:col-span-2 card-elevated overflow-hidden flex flex-col min-h-[520px]">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between" style={{ background: "hsl(var(--secondary))" }}>
             <h2 className="font-display text-sm font-semibold text-foreground">Active Rules</h2>
             <span className="text-xs text-muted-foreground font-body">{ouputRules.length} rules</span>
           </div>
-          <div className="divide-y divide-border">
+          <div className="divide-y divide-border flex-1">
             {loading ? (
               <LoadingModule message="Please wait loading rules..." />
             ) : (
               <>
-                {ouputRules
+                {/* {ouputRules
                   .sort((a, b) => a.priority - b.priority)
-                  .map((rule, index) => (
-                    <div
-                      key={rule.config_id}
-                      onClick={() => {
-                        setSelectedRule(rule);
-                        setTestJson(buildSamplePayload(rule));
-                        setTestResult(null);
-                        setMatchedRule("");
-                      }}
-                      className={cn(
-                        "p-5 transition-colors table-row-hover cursor-pointer",
-                        selectedRule?.config_id === rule.config_id && "bg-accent/10",
-                        !rule.active && "opacity-60"
-                      )}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold font-display"
-                            style={{
-                              background: rule.priority === 99 ? "hsl(var(--muted))" : "hsl(var(--accent) / 0.12)",
-                              color: rule.priority === 99 ? "hsl(var(--muted-foreground))" : "hsl(var(--accent))",
-                            }}
-                          >
-                            {rule.priority}
-                          </div>
-                          <div>
-                            <div className="font-display text-sm font-semibold text-foreground">{rule.label_name}</div>
-                            <div className="text-xs text-muted-foreground font-body">{rule.label_id}</div>
-                          </div>
+                  .map((rule, index) => ( */}
+                {paginatedRules.map((rule, index) => (
+                  <div
+                    key={rule.config_id}
+                    onClick={() => {
+                      setSelectedRule(rule);
+                      setTestJson(buildSamplePayload(rule));
+                      setTestResult(null);
+                      setMatchedRule("");
+                    }}
+                    className={cn(
+                      "p-5 transition-colors table-row-hover cursor-pointer",
+                      selectedRule?.config_id === rule.config_id && "bg-accent/10",
+                      !rule.active && "opacity-60"
+                    )}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold font-display"
+                          style={{
+                            background: rule.priority === 99 ? "hsl(var(--muted))" : "hsl(var(--accent) / 0.12)",
+                            color: rule.priority === 99 ? "hsl(var(--muted-foreground))" : "hsl(var(--accent))",
+                          }}
+                        >
+                          {rule.priority}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={rule.active ? "badge-success" : "badge-neutral"}>
-                            {rule.active ? "Active" : "Disabled"}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/config/${rule.config_id}`); // or your edit logic
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-                          >
-                            <Edit size={13} />
-                          </button>
-
-                          <button
-                            onClick={async (e) => {
-                              e.stopPropagation();
-
-                              try {
-                                await deleteLabelConfig(rule.config_id);
-
-                                // remove from UI instantly
-                                setouputRules((prev) =>
-                                  prev.filter((r) => r.config_id !== rule.config_id)
-                                );
-
-                              } catch (err) {
-                                console.error(err);
-                                alert("Failed to delete configuration");
-                              }
-                            }}
-                            className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                        <div>
+                          <div className="font-display text-sm font-semibold text-foreground">{rule.label_name}</div>
+                          <div className="text-xs text-muted-foreground font-body">{rule.label_id}</div>
                         </div>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <span className={rule.active ? "badge-success" : "badge-neutral"}>
+                          {rule.active ? "Active" : "Disabled"}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/config/${rule.config_id}`); // or your edit logic
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                        >
+                          <Edit size={13} />
+                        </button>
 
-                      <div className="ml-10 space-y-2">
-                        <div className="flex items-start gap-2 text-xs font-body">
-                          <span className="text-muted-foreground shrink-0">When:</span>
-                          <code className="font-mono bg-muted px-2 py-0.5 rounded text-foreground">{buildCondition(rule)}</code>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-body">
-                          <span className="text-muted-foreground shrink-0">Then:</span>
-                          <pre>Route to {rule.printer || rule.label_id}</pre>
-                          <span className="text-foreground font-medium">{rule.printer || rule.label_id}</span>
-                          {/* <span className="ml-auto text-muted-foreground">{rule.matches.toLocaleString()} matches</span> */}
-                        </div>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+
+                            try {
+                              await deleteLabelConfig(rule.config_id);
+
+                              // remove from UI instantly
+                              setouputRules((prev) =>
+                                prev.filter((r) => r.config_id !== rule.config_id)
+                              );
+
+                            } catch (err) {
+                              console.error(err);
+                              alert("Failed to delete configuration");
+                            }
+                          }}
+                          className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="ml-10 space-y-2">
+                      <div className="flex items-start gap-2 text-xs font-body">
+                        <span className="text-muted-foreground shrink-0">When:</span>
+                        <code className="font-mono bg-muted px-2 py-0.5 rounded text-foreground">{buildCondition(rule)}</code>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs font-body">
+                        <span className="text-muted-foreground shrink-0">Then:</span>
+                        <pre>Route to {rule.printer || rule.label_id}</pre>
+                        <span className="text-foreground font-medium">{rule.printer || rule.label_id}</span>
+                        {/* <span className="ml-auto text-muted-foreground">{rule.matches.toLocaleString()} matches</span> */}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {emptyRows > 0 &&
+                  Array.from({ length: emptyRows }).map((_, i) => (
+                    <div
+                      key={`empty-${i}`}
+                      className="p-5 border-t border-border opacity-30 pointer-events-none"
+                    >
+                      <div className="flex items-center gap-3 ml-10">
+                        <div className="h-4 w-24 bg-muted rounded" />
+                        <div className="h-4 w-16 bg-muted rounded" />
                       </div>
                     </div>
                   ))}
+                {/* <div className="flex items-center justify-between p-4">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 text-xs rounded border border-border disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+
+                  <span className="text-xs text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 text-xs rounded border border-border disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div> */}
+                <div className="flex items-center justify-between px-5 py-4 border-t border-border bg-background shrink-0">
+
+                  {/* Left side */}
+                  <div className="text-xs text-muted-foreground">
+                    Showing {(currentPage - 1) * rulesPerPage + 1}–
+                    {Math.min(currentPage * rulesPerPage, ouputRules.length)} of {ouputRules.length}
+                  </div>
+
+                  {/* Right side */}
+                  <div className="flex items-center gap-1">
+
+                    {/* Previous */}
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="px-2 py-1 rounded-md border border-border text-xs hover:bg-muted disabled:opacity-40"
+                    >
+                      ‹
+                    </button>
+
+                    {/* Page numbers */}
+                    {getPageNumbers().map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={cn(
+                          "px-3 py-1 text-xs rounded-md border transition",
+                          page === currentPage
+                            ? "border-accent bg-accent text-white"
+                            : "border-border hover:bg-muted"
+                        )}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    {/* Next */}
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="px-2 py-1 rounded-md border border-border text-xs hover:bg-muted disabled:opacity-40"
+                    >
+                      ›
+                    </button>
+
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -339,7 +452,7 @@ export default function OutputRules() {
                   {matchedRulesList.length} Matching Labels
                 </h5>
 
-                <div className="space-y-2 max-h-64 overflow-auto">
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
                   {matchedRulesList.map((rule: any) => (
                     <div
                       key={rule.config_id}
