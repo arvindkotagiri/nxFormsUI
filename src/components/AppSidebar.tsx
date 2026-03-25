@@ -214,7 +214,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             </div> */}
             <div className="flex items-center justify-start">
               <img
-                src="logo.png"
+                src="/logo.png"
                 alt="Logo"
                 className="h-14 w-auto object-contain"
               />
