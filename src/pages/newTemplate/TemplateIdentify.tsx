@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useWizard, type Transformation } from '@/context/WizardContext';
-import { Button } from '@/components/ui/button';
+import { useState, useEffect } from "react";
+import { useWizard, type Transformation } from "@/context/WizardContext";
+import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
   ArrowRight,
@@ -9,13 +9,15 @@ import {
   Settings2,
   MousePointer2,
   Lock,
-  Zap
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
+  Zap,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { TransformationModal } from "./TransformationModal";
+import { IfElseBuilder } from "./IfElseBuilder";
+import { TransformationValueModal } from "./TransformationValueModal";
 
 export function TemplateIdentify() {
-
   const {
     uploadedImage,
     cleanImage,
@@ -25,14 +27,20 @@ export function TemplateIdentify() {
     updateChunk,
     nextStep,
     prevStep,
-    selectedContext
+    selectedContext,
   } = useWizard();
 
   const [selectedChunk, setSelectedChunk] = useState<string | null>(null);
   const [imgSize, setImgSize] = useState({
     width: 0,
-    height: 0
+    height: 0,
   });
+  const [openTransformModal, setOpenTransformModal] = useState(false);
+  const [openIfBuilder, setOpenIfBuilder] = useState(false);
+  const [valueModalOpen, setValueModalOpen] = useState(false);
+  const [selectedTransformation, setSelectedTransformation] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (chunks.length > 0 && !selectedChunk) {
@@ -40,7 +48,7 @@ export function TemplateIdentify() {
     }
   }, [chunks, selectedChunk]);
 
-  const selectedChunkData = chunks.find(c => c.id === selectedChunk);
+  const selectedChunkData = chunks.find((c) => c.id === selectedChunk);
 
   const displayImage = cleanImage || uploadedImage;
 
@@ -51,34 +59,29 @@ export function TemplateIdentify() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-
       {/* Header Stats */}
       <div className="flex justify-end gap-3">
         <span className="badge-neutral flex items-center gap-1.5">
           <Lock size={12} />
-          {chunks.filter(c => c.isStatic).length} Static
+          {chunks.filter((c) => c.isStatic).length} Static
         </span>
 
         <span className="badge-info flex items-center gap-1.5">
           <Zap size={12} />
-          {chunks.filter(c => !c.isStatic).length} Dynamic
+          {chunks.filter((c) => !c.isStatic).length} Dynamic
         </span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_320px] gap-5">
-
         {/* LEFT — Field List */}
         <div className="card-elevated flex flex-col">
-
           <div className="p-3 border-b border-border flex items-center gap-2">
             <Layers size={14} />
-            <h3 className="font-display text-xs font-semibold">
-              Fields
-            </h3>
+            <h3 className="font-display text-xs font-semibold">Fields</h3>
           </div>
 
           <div className="p-2 space-y-1 overflow-y-auto max-h-[65vh]">
-            {chunks.map(chunk => (
+            {chunks.map((chunk) => (
               <button
                 key={chunk.id}
                 onClick={() => setSelectedChunk(chunk.id)}
@@ -86,13 +89,14 @@ export function TemplateIdentify() {
                   "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left text-xs font-body transition-all border",
                   selectedChunk === chunk.id
                     ? "bg-accent/10 border-accent"
-                    : "border-transparent hover:border-border"
+                    : "border-transparent hover:border-border",
                 )}
               >
-                {chunk.isStatic
-                  ? <Lock size={12} className="text-primary" />
-                  : <Zap size={12} className="text-destructive" />
-                }
+                {chunk.isStatic ? (
+                  <Lock size={12} className="text-primary" />
+                ) : (
+                  <Zap size={12} className="text-destructive" />
+                )}
 
                 <span className="truncate font-semibold uppercase tracking-tight">
                   {chunk.label}
@@ -100,16 +104,11 @@ export function TemplateIdentify() {
               </button>
             ))}
           </div>
-
         </div>
 
         {/* CENTER — Document Preview */}
         <div className="flex flex-col items-center">
-
-          <div
-            className="card-elevated relative flex justify-center"
-          >
-
+          <div className="card-elevated relative flex justify-center">
             <img
               src={displayImage || ""}
               alt="Template"
@@ -118,41 +117,40 @@ export function TemplateIdentify() {
                 const img = e.target as HTMLImageElement;
                 setImgSize({
                   width: img.clientWidth,
-                  height: img.clientHeight
+                  height: img.clientHeight,
                 });
               }}
             />
 
             {/* Overlay Boxes */}
-            {imgSize.width > 0 && chunks.map(chunk => {
+            {imgSize.width > 0 &&
+              chunks.map((chunk) => {
+                const left = (chunk.x / 100) * imgSize.width;
+                const top = (chunk.y / 100) * imgSize.height;
+                const width = (chunk.width / 100) * imgSize.width;
+                const height = (chunk.height / 100) * imgSize.height;
 
-              const left = (chunk.x / 100) * imgSize.width;
-              const top = (chunk.y / 100) * imgSize.height;
-              const width = (chunk.width / 100) * imgSize.width;
-              const height = (chunk.height / 100) * imgSize.height;
-
-              return (
-                <div
-                  key={chunk.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedChunk(chunk.id);
-                  }}
-                  className={cn(
-                    "absolute border-2 cursor-pointer transition-all",
-                    chunk.isStatic ? "border-primary" : "border-destructive",
-                    selectedChunk === chunk.id && "ring-4 ring-accent/20"
-                  )}
-                  style={{
-                    left,
-                    top,
-                    width,
-                    height
-                  }}
-                />
-              );
-            })}
-
+                return (
+                  <div
+                    key={chunk.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedChunk(chunk.id);
+                    }}
+                    className={cn(
+                      "absolute border-2 cursor-pointer transition-all",
+                      chunk.isStatic ? "border-primary" : "border-destructive",
+                      selectedChunk === chunk.id && "ring-4 ring-accent/20",
+                    )}
+                    style={{
+                      left,
+                      top,
+                      width,
+                      height,
+                    }}
+                  />
+                );
+              })}
           </div>
 
           {uploadedFile?.type === "application/pdf" && (
@@ -160,12 +158,10 @@ export function TemplateIdentify() {
               PDF converted to image for preview
             </p>
           )}
-
         </div>
 
         {/* RIGHT — Properties */}
         <div className="card-elevated flex flex-col">
-
           <div className="p-3 border-b border-border flex items-center gap-2">
             <Settings2 size={14} />
             <h3 className="font-display text-xs font-semibold">
@@ -174,7 +170,6 @@ export function TemplateIdentify() {
           </div>
 
           <div className="p-5 space-y-6">
-
             {!selectedChunkData && (
               <div className="text-center py-16">
                 <MousePointer2 className="mx-auto text-muted-foreground mb-3" />
@@ -196,7 +191,7 @@ export function TemplateIdentify() {
                     value={selectedChunkData.label}
                     onChange={(e) =>
                       updateChunk(selectedChunkData.id, {
-                        label: e.target.value
+                        label: e.target.value,
                       })
                     }
                     className="w-full px-3 py-2 rounded-lg border border-border text-sm font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none"
@@ -218,7 +213,7 @@ export function TemplateIdentify() {
                         "flex-1 py-2 text-[10px] font-bold tracking-wider",
                         selectedChunkData.isStatic
                           ? "bg-background text-primary"
-                          : "bg-muted text-muted-foreground"
+                          : "bg-muted text-muted-foreground",
                       )}
                     >
                       STATIC
@@ -232,7 +227,7 @@ export function TemplateIdentify() {
                         "flex-1 py-2 text-[10px] font-bold tracking-wider",
                         !selectedChunkData.isStatic
                           ? "bg-background text-destructive"
-                          : "bg-muted text-muted-foreground"
+                          : "bg-muted text-muted-foreground",
                       )}
                     >
                       DYNAMIC
@@ -251,7 +246,7 @@ export function TemplateIdentify() {
                       value={selectedChunkData.fieldMapping || ""}
                       onChange={(e) =>
                         updateChunk(selectedChunkData.id, {
-                          fieldMapping: e.target.value
+                          fieldMapping: e.target.value,
                         })
                       }
                       className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none"
@@ -274,7 +269,7 @@ export function TemplateIdentify() {
                         Transformation Library
                       </label>
 
-                      <select
+                      {/* <select
                         disabled={!canUseTransformations}
                         onChange={(e) => {
                           const type = e.target.value as Transformation["type"];
@@ -302,7 +297,14 @@ export function TemplateIdentify() {
                         <option value="multiply">Multiply</option>
                         <option value="if_else">If-Then-Else</option>
                         <option value="default_value">Default Value</option>
-                      </select>
+                      </select> */}
+                      <Button
+                        variant="outline"
+                        className="w-full text-xs"
+                        onClick={() => setOpenTransformModal(true)}
+                      >
+                        + Add Transformation
+                      </Button>
                     </div>
                     {selectedChunkData?.transformations?.length > 0 && (
                       <div className="space-y-2">
@@ -310,64 +312,38 @@ export function TemplateIdentify() {
                           Applied Transformations
                         </label>
 
-                        {selectedChunkData.transformations.map((t, index) => {
-                          const needsValue = !["to_upper", "to_lower"].includes(t.type);
+                        {selectedChunkData.transformations.map((t, index) => (
+                          <div
+                            key={index}
+                            className="border rounded-lg px-3 py-2 text-xs flex justify-between items-center"
+                          >
+                            <div>
+                              <div className="font-semibold">{t.type}</div>
 
-                          return (
-                            <div
-                              key={index}
-                              className="space-y-2 px-3 py-2 border rounded-lg text-xs"
-                            >
-                              {/* Row Header */}
-                              <div className="flex justify-between items-center">
-                                <span className="font-semibold">{t.type}</span>
-
-                                <button
-                                  onClick={() => {
-                                    const updated = selectedChunkData.transformations!.filter(
-                                      (_, i) => i !== index
-                                    );
-
-                                    updateChunk(selectedChunkData.id, {
-                                      transformations: updated
-                                    });
-                                  }}
-                                  className="text-destructive"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-
-                              {/* Value Input */}
-                              {needsValue && (
-                                <input
-                                  disabled={!canUseTransformations}
-                                  type="text"
-                                  placeholder="Enter value..."
-                                  value={(t as any).value || ""}
-                                  onChange={(e) => {
-                                    const updated = [...selectedChunkData.transformations!];
-
-                                    updated[index] = {
-                                      ...updated[index],
-                                      value: e.target.value
-                                    };
-
-                                    updateChunk(selectedChunkData.id, {
-                                      transformations: updated
-                                    });
-                                  }}
-                                  className="w-full px-2 py-1 border rounded text-xs"
-                                />
-                              )}
-                              {isDynamic && !hasFieldMapping && (
-                                <p className="text-[10px] text-muted-foreground italic">
-                                  Select a SAP field to enable transformations
-                                </p>
+                              {t.value && (
+                                <div className="text-muted-foreground">
+                                  Value: {t.value}
+                                </div>
                               )}
                             </div>
-                          );
-                        })}
+
+                            <button
+                              onClick={() => {
+                                const updated =
+                                  selectedChunkData.transformations.filter(
+                                    (_, i) => i !== index,
+                                  );
+
+                                updateChunk(selectedChunkData.id, {
+                                  transformations: updated,
+                                });
+                              }}
+                              className="text-destructive text-xs"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                   </>
@@ -386,15 +362,12 @@ export function TemplateIdentify() {
                 </Button>
               </>
             )}
-
           </div>
         </div>
-
       </div>
 
       {/* Footer Actions */}
       <div className="flex justify-between items-center border-t border-border pt-4">
-
         <Button
           variant="outline"
           onClick={prevStep}
@@ -411,9 +384,60 @@ export function TemplateIdentify() {
           Continue
           <ArrowRight size={14} />
         </Button>
-
       </div>
 
+      <TransformationModal
+        open={openTransformModal}
+        onClose={() => setOpenTransformModal(false)}
+        onSelect={(type) => {
+          if (type === "IF_ELSE") {
+            setOpenIfBuilder(true);
+            return;
+          }
+
+          setSelectedTransformation(type);
+          setValueModalOpen(true);
+        }}
+      />
+      <TransformationValueModal
+        open={valueModalOpen}
+        type={selectedTransformation || ""}
+        onClose={() => setValueModalOpen(false)}
+        onSave={(value) => {
+          const newTransformation: Transformation = {
+            type: selectedTransformation as Transformation["type"],
+            value,
+          };
+
+          updateChunk(selectedChunkData.id, {
+            transformations: [
+              ...(selectedChunkData.transformations || []),
+              newTransformation,
+            ],
+          });
+
+          setValueModalOpen(false);
+        }}
+      />
+      <IfElseBuilder
+        open={openIfBuilder}
+        onClose={() => setOpenIfBuilder(false)}
+        contextFields={selectedContext?.fields || []}
+        targetFields={chunks.map((c) => ({
+          name: c.label,
+          path: c.id,
+        }))}
+        onSave={(data) => {
+          updateChunk(selectedChunkData.id, {
+            transformations: [
+              ...(selectedChunkData.transformations || []),
+              data,
+            ],
+          });
+
+          setOpenIfBuilder(false);
+        }}
+      />
     </div>
   );
 }
