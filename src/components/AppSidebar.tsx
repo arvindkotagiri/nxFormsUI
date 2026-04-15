@@ -68,6 +68,7 @@ const navItems: NavItem[] = [
     ],
   },
   { kind: "link", title: "Settings", url: "/settings", icon: Settings },
+  { kind: "link", title: "Simulation", url: "/simulation", icon: Zap },
 ];
 
 interface AppSidebarProps {

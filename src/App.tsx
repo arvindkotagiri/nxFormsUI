@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import TemplateIndex from "./pages/newTemplate/TemplateIndex";
 import LabelConfigurator from "./pages/newConfiguration/LabelConfigurator";
 import { ConfigDetailPage } from "./pages/newConfiguration/ConfigDetailPage";
+import { SimulationPage } from "./pages/Simulation";
 
 const queryClient = new QueryClient();
 
@@ -47,7 +48,9 @@ const App = () => (
             <Route path="/labelConfigurator" element={<LabelConfigurator />} />
             <Route path="/config/new" element={<ConfigDetailPage />} />
             <Route path="/config/:configId" element={<ConfigDetailPage />} />
-        
+
+            {/* Simulation App Integration */}
+            <Route path="/simulation" element={<SimulationPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

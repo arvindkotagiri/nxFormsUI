@@ -242,7 +242,7 @@ export function TemplateIdentify() {
                       SAP Field Mapping
                     </label>
 
-                    <select
+                    {/* <select
                       value={selectedChunkData.fieldMapping || ""}
                       onChange={(e) =>
                         updateChunk(selectedChunkData.id, {
@@ -257,7 +257,36 @@ export function TemplateIdentify() {
                           {field.name}
                         </option>
                       ))}
-                    </select>
+                    </select> */}
+                    <select
+  value={selectedChunkData.fieldMapping || ""}
+  onChange={(e) => {
+    const value = e.target.value;
+
+    console.log("selectedContext:", selectedContext);
+
+    const selectedField = selectedContext?.fields?.find(
+      (f: any) => f.path === value
+    );
+    console.log("value:", value);
+    console.log("selected field:", selectedField);
+    console.log("field.name:", selectedField?.name);
+    console.log("field.path:", selectedField?.path);
+    const cleanValue = value.split(".").pop();
+    console.log("cleanValue", cleanValue)
+    updateChunk(selectedChunkData.id, {
+      fieldMapping: cleanValue,
+    });
+  }}
+  className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none"
+>
+  <option value="">Select field</option>
+  {selectedContext?.fields?.map((field: any) => (
+    <option key={field.path} value={field.name}>
+      {field.name}
+    </option>
+  ))}
+</select>
                   </div>
                 )}
 

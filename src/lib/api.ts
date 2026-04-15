@@ -14,7 +14,7 @@ let bootstrappingPromise: Promise<void> | null = null;
 const DEV_EMAIL = import.meta.env.VITE_DEV_EMAIL;
 const DEV_PASSWORD = import.meta.env.VITE_DEV_PASSWORD;
 
-async function bootstrapTokenIfMissing() {
+export async function bootstrapTokenIfMissing() {
   const token = getToken();
   if (token) return;
 
