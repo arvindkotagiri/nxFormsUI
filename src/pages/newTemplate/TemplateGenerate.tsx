@@ -25,6 +25,8 @@ export function TemplateGenerate() {
     setGeneratedZPL,
     generatedHTML,
     setGeneratedHTML,
+    generatedXDP,
+    setGeneratedXDP,
     nextStep,
     prevStep,
     uploadedFile,
@@ -35,8 +37,10 @@ export function TemplateGenerate() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoadingZPL, setIsLoadingZPL] = useState(false);
   const [isLoadingHTML, setIsLoadingHTML] = useState(false);
+  const [isLoadingXDP, setIsLoadingXDP] = useState(false);
   const [copiedZPL, setCopiedZPL] = useState(false);
   const [copiedHTML, setCopiedHTML] = useState(false);
+  const [copiedXDP, setCopiedXDP] = useState(false);
 
   // --- API Call: ZPL Generation ---
   const generateZPL = useCallback(async () => {
@@ -44,7 +48,7 @@ export function TemplateGenerate() {
     // If not, use uploadedFile
     const fileToSend = modifiedLabelBlob || uploadedFile;
 
-    if (!fileToSend || (outputMode !== "zpl" && outputMode !== "both")) return;
+    if (!fileToSend || (outputMode !== "zpl" && outputMode !== "all")) return;
 
     setIsLoadingZPL(true);
     const formData = new FormData();
@@ -71,7 +75,7 @@ export function TemplateGenerate() {
   const generateHTML = useCallback(async () => {
     const fileToSend = modifiedLabelBlob || uploadedFile;
 
-    if (!fileToSend || (outputMode !== "html" && outputMode !== "both")) return;
+    if (!fileToSend || (outputMode !== "html" && outputMode !== "all")) return;
     setIsLoadingHTML(true);
     const formData = new FormData();
     formData.append("image", fileToSend);
@@ -92,30 +96,64 @@ export function TemplateGenerate() {
     }
   }, [uploadedFile, modifiedLabelBlob, outputMode, setGeneratedHTML]);
 
+  // --- API Call: XDP Generation ---
+  const generateXDP = useCallback(async () => {
+    const fileToSend = modifiedLabelBlob || uploadedFile;
+
+    if (!fileToSend || (outputMode !== "xdp" && outputMode !== "all")) return;
+    setIsLoadingXDP(true);
+    const formData = new FormData();
+    formData.append("image", fileToSend);
+    try {
+      const res = await fetch(`${flaskAPI}/generate-xdp`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        setGeneratedXDP(data.xdp_code);
+      }
+    } catch (e) {
+      toast.error("XDP Generation Failed");
+    } finally {
+      setIsLoadingXDP(false);
+    }
+  }, [uploadedFile, modifiedLabelBlob, outputMode, setGeneratedXDP]);
+
   // --- Effect: Trigger Generation on Load (with Guardrails) ---
   useEffect(() => {
     if (
-      (outputMode === "zpl" || outputMode === "both") &&
+      (outputMode === "zpl" || outputMode === "all") &&
       !generatedZPL &&
       !isLoadingZPL
     ) {
       generateZPL();
     }
     if (
-      (outputMode === "html" || outputMode === "both") &&
+      (outputMode === "html" || outputMode === "all") &&
       !generatedHTML &&
       !isLoadingHTML
     ) {
       generateHTML();
     }
+    if (
+      (outputMode === "xdp" || outputMode === "all") &&
+      !generatedXDP &&
+      !isLoadingXDP
+    ) {
+      generateXDP();
+    }
   }, [
     outputMode,
     generatedZPL,
     generatedHTML,
+    generatedXDP,
     isLoadingZPL,
     isLoadingHTML,
+    isLoadingXDP,
     generateZPL,
     generateHTML,
+    generateXDP,
   ]);
 
   // --- Actions: Copy & Download ---
@@ -144,6 +182,24 @@ export function TemplateGenerate() {
     URL.revokeObjectURL(url);
   };
 
+  const handleCopyXDP = () => {
+    navigator.clipboard.writeText(generatedXDP || "");
+    setCopiedXDP(true);
+    toast.success("XDP source copied");
+    setTimeout(() => setCopiedXDP(false), 2000);
+  };
+
+  const downloadXDP = () => {
+    if (!generatedXDP) return;
+    const blob = new Blob([generatedXDP], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "generated-template.xdp";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const downloadPDF = () => {
     const iframe = document.getElementById(
       "html-preview-iframe",
@@ -159,11 +215,11 @@ export function TemplateGenerate() {
   return (
     <div className="max-w-7xl mx-auto animate-fade-in pb-32 px-4 space-y-8">
       {/* ZPL SECTION */}
-      {(outputMode === "zpl" || outputMode === "both") && (
+      {(outputMode === "zpl" || outputMode === "all") && (
         <div
           className={cn(
             "grid gap-6",
-            outputMode === "both"
+            outputMode === "all"
               ? "lg:grid-cols-2"
               : "grid-cols-1 max-w-4xl mx-auto",
           )}
@@ -235,11 +291,11 @@ export function TemplateGenerate() {
       )}
 
       {/* HTML SECTION */}
-      {(outputMode === "html" || outputMode === "both") && (
+      {(outputMode === "html" || outputMode === "all") && (
         <div
           className={cn(
             "grid gap-6",
-            outputMode === "both"
+            outputMode === "all"
               ? "lg:grid-cols-2"
               : "grid-cols-1 max-w-4xl mx-auto",
           )}
@@ -325,6 +381,90 @@ export function TemplateGenerate() {
                   Awaiting HTML generation...
                 </div>
               )}
+            </div>
+          </BoxWrapper>
+        </div>
+      )}
+
+      {/* XDP SECTION */}
+      {(outputMode === "xdp" || outputMode === "all") && (
+        <div
+          className={cn(
+            "grid gap-6",
+            outputMode === "all"
+              ? "lg:grid-cols-2"
+              : "grid-cols-1 max-w-4xl mx-auto",
+          )}
+        >
+          <BoxWrapper
+            title="Adobe XDP Source"
+            icon={<FileText className="w-4 h-4" />}
+            actions={
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={generateXDP}
+                  disabled={isLoadingXDP}
+                  className="h-7 text-[10px]"
+                >
+                  <RefreshCw
+                    className={cn(
+                      "w-3 h-3 mr-1",
+                      isLoadingXDP && "animate-spin",
+                    )}
+                  />{" "}
+                  REGENERATE
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyXDP}
+                  className="h-7 text-[10px]"
+                >
+                  {copiedXDP ? (
+                    <Check className="w-3 h-3 mr-1" />
+                  ) : (
+                    <Copy className="w-3 h-3 mr-1" />
+                  )}{" "}
+                  COPY
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={downloadXDP}
+                  disabled={!generatedXDP}
+                  className="h-7 text-[10px]"
+                >
+                  <Download className="w-3 h-3 mr-1" /> XDP
+                </Button>
+              </div>
+            }
+          >
+            <div className="relative bg-slate-900 rounded h-[450px] border border-slate-800">
+              {isLoadingXDP && <LoadingOverlay />}
+              <pre className="p-4 font-mono text-[10px] text-orange-300 overflow-auto h-full scrollbar-thin">
+                {generatedXDP || "Architecting XDP Structure..."}
+              </pre>
+            </div>
+          </BoxWrapper>
+
+          <BoxWrapper
+            title="XDP Preview"
+            icon={<Monitor className="w-4 h-4" />}
+          >
+            <div className="relative bg-white border border-slate-200 rounded h-[450px] overflow-hidden shadow-sm flex items-center justify-center p-6">
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto">
+                   <FileText className="w-8 h-8 text-orange-500" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-tight">XDP Preview Unavailable</h4>
+                  <p className="text-[10px] text-slate-500 font-medium max-w-[240px] leading-relaxed">
+                    XDP rendering requires Adobe Experience Manager or LiveCycle. You can download the source and open it in Adobe Designer.
+                  </p>
+                </div>
+              </div>
             </div>
           </BoxWrapper>
         </div>

@@ -129,7 +129,10 @@ export default function Settings() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(modelConfigs)
         });
-        if (res.ok) alert("AI Model configurations saved successfully!");
+        if (res.ok) {
+           alert("AI Model configurations and API keys saved successfully!");
+           fetchModels(); // Refresh models list with new keys
+        }
     } catch (err) {
         alert("Failed to save model configs");
     }
@@ -269,9 +272,40 @@ export default function Settings() {
       {/* AI Models */}
       {activeTab === 3 && (
         <div className="space-y-4 animate-fade-in">
+          <Section title="AI Engine API Keys">
+            <div className="text-xs text-muted-foreground italic mb-4"> Paste your API keys below. They are stored securely in the local database. </div>
+            <FormRow label="Google Gemini API Key">
+              <input 
+                type="password"
+                value={modelConfigs.api_gemini || ""}
+                onChange={(e) => setModelConfigs(prev => ({...prev, api_gemini: e.target.value}))}
+                className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-64"
+                placeholder="AIzaSy..."
+              />
+            </FormRow>
+            <FormRow label="OpenAI API Key">
+              <input 
+                type="password"
+                value={modelConfigs.api_openai || ""}
+                onChange={(e) => setModelConfigs(prev => ({...prev, api_openai: e.target.value}))}
+                className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-64"
+                placeholder="sk-..."
+              />
+            </FormRow>
+            <FormRow label="Anthropic API Key">
+              <input 
+                type="password"
+                value={modelConfigs.api_anthropic || ""}
+                onChange={(e) => setModelConfigs(prev => ({...prev, api_anthropic: e.target.value}))}
+                className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-64"
+                placeholder="sk-ant-..."
+              />
+            </FormRow>
+          </Section>
+
           <Section title="Process Model Assignment">
             <div className="flex items-center justify-between mb-4">
-                <div className="text-xs text-muted-foreground italic"> Assign specific Gemini models to each core process. </div>
+                <div className="text-xs text-muted-foreground italic"> Assign specific AI models to each core process. </div>
                 <button 
                     onClick={fetchModels}
                     className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-all"
