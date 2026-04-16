@@ -384,7 +384,8 @@ export function TemplateUpload() {
           >
             <option value="zpl">ZPL</option>
             <option value="html">HTML</option>
-            <option value="both">Both</option>
+            <option value="xdp">XDP</option>
+            <option value="all">All (Synchronized)</option>
           </select>
         </div>
 

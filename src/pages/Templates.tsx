@@ -21,6 +21,7 @@ type LabelTemplate = {
   fields: any[];
   html_code: string;
   zpl_code?: string;
+  xdp_code?: string;
   output_mode: string;
   version: number;
   page_dimensions: string;
@@ -103,7 +104,8 @@ export default function Templates() {
   useEffect(() => {
     if (
       selectedTemplate?.output_mode === "zpl" ||
-      selectedTemplate?.output_mode === "both"
+      selectedTemplate?.output_mode === "both" ||
+      selectedTemplate?.output_mode === "all"
     ) {
       loadPreview(selectedTemplate.zpl_code || "");
     }
@@ -111,8 +113,8 @@ export default function Templates() {
   if (view === "editor" && selectedTemplate) {
     const { output_mode } = selectedTemplate;
 
-    const showHtml = output_mode === "html" || output_mode === "both";
-    const showZpl = output_mode === "zpl" || output_mode === "both";
+    const showHtml = output_mode === "html" || output_mode === "both" || output_mode === "all";
+    const showZpl = output_mode === "zpl" || output_mode === "both" || output_mode === "all";
 
     return (
       <div className="space-y-5 animate-fade-in">
@@ -191,14 +193,14 @@ export default function Templates() {
         </div>
         <div
           className={cn(
-            "gap-4",
-            output_mode === "both"
-              ? "grid grid-cols-2 grid-rows-2"
-              : "grid grid-cols-2",
+            "gap-4 grid",
+            (output_mode === "all")
+              ? "grid-cols-2 lg:grid-cols-3"
+              : (output_mode === "both" ? "grid-cols-2 grid-rows-2" : "grid-cols-2")
           )}
         >
           {/* ---------- LEFT SIDE HTML CODE ---------- */}
-          {output_mode !== "zpl" && (
+          {(output_mode === "html" || output_mode === "both" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden flex flex-col h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
                 HTML Code
@@ -218,7 +220,7 @@ export default function Templates() {
           )}
 
           {/* ---------- RIGHT SIDE HTML PREVIEW ---------- */}
-          {output_mode !== "zpl" && (
+          {(output_mode === "html" || output_mode === "both" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
                 <span>HTML Preview</span>
@@ -231,7 +233,7 @@ export default function Templates() {
           )}
 
           {/* ---------- LEFT SIDE ZPL CODE ---------- */}
-          {output_mode !== "html" && (
+          {(output_mode === "zpl" || output_mode === "both" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden flex flex-col h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
                 ZPL Code
@@ -251,7 +253,7 @@ export default function Templates() {
           )}
 
           {/* ---------- RIGHT SIDE ZPL PREVIEW ---------- */}
-          {output_mode !== "html" && (
+          {(output_mode === "zpl" || output_mode === "both" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
                 <span>ZPL Preview</span>
@@ -270,6 +272,26 @@ export default function Templates() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* ---------- XDP CODE ---------- */}
+          {(output_mode === "xdp" || output_mode === "all") && (
+            <div className="card-elevated overflow-hidden flex flex-col h-[70vh]">
+              <div className="px-4 py-2 border-b font-semibold text-xs bg-orange-600 text-white">
+                XDP Code
+              </div>
+
+              <textarea
+                value={selectedTemplate.xdp_code || ""}
+                readOnly
+                className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none"
+                style={{
+                  background: "hsl(var(--background))",
+                  color: "hsl(var(--foreground))",
+                  lineHeight: 1.6,
+                }}
+              />
             </div>
           )}
         </div>

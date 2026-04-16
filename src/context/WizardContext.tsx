@@ -34,8 +34,8 @@ export type LabelSize = {
   height: number;
 };
 
-// Added 'zpl', 'html', or 'both' as valid output modes
-export type OutputMode = 'zpl' | 'html' | 'both';
+// Added 'zpl', 'html', 'xdp', or 'all' as valid output modes
+export type OutputMode = 'zpl' | 'html' | 'xdp' | 'all';
 export type WizardStep = 1 | 2 | 3 | 4 | 5;
 
 interface WizardState {
@@ -52,6 +52,7 @@ interface WizardState {
   modifiedLabelBlob: Blob | null; // Captured from Step 3
   generatedZPL: string | null;
   generatedHTML: string | null;
+  generatedXDP: string | null;
 }
 
 interface WizardContextType extends WizardState {
@@ -74,6 +75,7 @@ interface WizardContextType extends WizardState {
   setModifiedLabelBlob: (blob: Blob | null) => void;
   setGeneratedZPL: (zpl: string | null) => void;
   setGeneratedHTML: (html: string | null) => void;
+  setGeneratedXDP: (xdp: string | null) => void;
   reset: () => void;
 }
 
@@ -87,10 +89,11 @@ const initialState: WizardState = {
   selectedContext: null,
   selectedSize: null,
   labelName: '',
-  outputMode: 'both', // Default
+  outputMode: 'all', // Default to all
   modifiedLabelBlob: null,
   generatedZPL: null,
   generatedHTML: null,
+  generatedXDP: null,
 };
 
 const WizardContext = createContext<WizardContextType | undefined>(undefined);
@@ -143,11 +146,12 @@ export function WizardProvider({ children }: { children: ReactNode }) {
 
   const setGeneratedZPL = (zpl: string | null) => setState(prev => ({ ...prev, generatedZPL: zpl }));
   const setGeneratedHTML = (html: string | null) => setState(prev => ({ ...prev, generatedHTML: html }));
+  const setGeneratedXDP = (xdp: string | null) => setState(prev => ({ ...prev, generatedXDP: xdp }));
 
   const reset = () => setState(initialState);
 
   return (
-    <WizardContext.Provider value={{ ...state, setStep, nextStep, prevStep, setUploadedFile, setUploadedImage, setAnnotatedImage, setCleanImage, setAnalysisResults, setChunks, addChunk, updateChunk, removeChunk, setSelectedContext, setSelectedSize, setLabelName, setOutputMode, setModifiedLabelBlob, setGeneratedZPL, setGeneratedHTML, reset }}>
+    <WizardContext.Provider value={{ ...state, setStep, nextStep, prevStep, setUploadedFile, setUploadedImage, setAnnotatedImage, setCleanImage, setAnalysisResults, setChunks, addChunk, updateChunk, removeChunk, setSelectedContext, setSelectedSize, setLabelName, setOutputMode, setModifiedLabelBlob, setGeneratedZPL, setGeneratedHTML, setGeneratedXDP, reset }}>
       {children}
     </WizardContext.Provider>
   );
