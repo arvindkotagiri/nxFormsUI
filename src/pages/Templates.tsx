@@ -12,6 +12,8 @@ import {
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 const flaskAPI = import.meta.env.VITE_FLASK_API;
+import SimulationModal from "./SimulationModal";
+import { Play } from "lucide-react";
 
 type LabelTemplate = {
   uuid: string;
@@ -37,6 +39,9 @@ export default function Templates() {
   const [labelTemplates, setLabelTemplates] = useState<LabelTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState<string | null>(null);
+  const [simulateOpen, setSimulateOpen] = useState(false);
+  const [simulateForm, setSimulateForm] = useState("");
+  const [formContext, setFormContext] = useState("");
 
   useEffect(() => {
     // fetch("http://localhost:5050/labels")
@@ -417,6 +422,18 @@ export default function Templates() {
                   <Edit size={12} />
                   Edit
                 </button>
+                <button
+                  onClick={() => {
+                    setSimulateForm(t.label_name);
+                    setFormContext(t.context);
+                    setSimulateOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs border hover:bg-muted"
+                >
+                  <Play size={12} />
+                  Simulate
+                </button>
+
                 <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
                   <Eye size={14} />
                 </button>
@@ -428,6 +445,12 @@ export default function Templates() {
           ))}
         </div>
       )}
+      <SimulationModal
+        open={simulateOpen}
+        form={simulateForm}
+        context={formContext}
+        onClose={() => setSimulateOpen(false)}
+      />
     </div>
   );
 }
