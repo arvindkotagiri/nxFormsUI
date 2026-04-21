@@ -1,5 +1,6 @@
 import { bootstrapTokenIfMissing } from "@/lib/api";
 import { useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 const API_URL = import.meta.env.VITE_NODE_API;
 
 type Row = {
@@ -10,7 +11,7 @@ type Row = {
 
 export function SimulationPage() {
     const [rows, setRows] = useState<Row[]>([
-        { id: crypto.randomUUID(), key: "", value: "" },
+        { id: uuidv4(), key: "", value: "" },
     ]);
 
     const [formName, setFormName] = useState("");
@@ -18,7 +19,7 @@ export function SimulationPage() {
     const [loading, setLoading] = useState(false);
 
     const addRow = () => {
-        setRows((r) => [...r, { id: crypto.randomUUID(), key: "", value: "" }]);
+        setRows((r) => [...r, { id: uuidv4(), key: "", value: "" }]);
     };
 
     const deleteRow = (id: string) => {
