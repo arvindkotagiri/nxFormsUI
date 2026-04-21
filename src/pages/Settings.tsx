@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Save, ToggleLeft, ToggleRight, Plus, Trash2, Cpu, BrainCircuit, RefreshCw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Save, ToggleLeft, ToggleRight, RefreshCw, BrainCircuit, Cpu, CheckCircle2, XCircle, Loader2, KeyRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const flaskAPI = import.meta.env.VITE_FLASK_API;
@@ -56,17 +56,24 @@ function TextInput({ defaultValue, type = "text" }: { defaultValue: string; type
   );
 }
 
-function SelectInput({ options, value, onChange }: { options: string[] | {name: string, display_name: string}[], value: string, onChange?: (v: string) => void }) {
+function SelectInput({ options, value, onChange, placeholder }: { options: string[] | {name: string, display_name: string}[], value: string, onChange?: (v: string) => void, placeholder?: string }) {
+  const hasOptions = options.length > 0;
   return (
     <select
       value={value}
       onChange={(e) => onChange?.(e.target.value)}
-      className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-48"
+      className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-56"
     >
+      {!hasOptions && (
+        <option value="" disabled>{placeholder ?? "— No models loaded —"}</option>
+      )}
+      {hasOptions && !value && (
+        <option value="" disabled>{placeholder ?? "Select a model"}</option>
+      )}
       {options.map((o) => {
         const val = typeof o === 'string' ? o : o.name;
         const display = typeof o === 'string' ? o : o.display_name;
-        return <option key={val} value={val}>{display}</option>
+        return <option key={val} value={val}>{display}</option>;
       })}
     </select>
   );
@@ -96,33 +103,65 @@ export default function Settings() {
   const [availableModels, setAvailableModels] = useState<{name: string, display_name: string}[]>([]);
   const [modelConfigs, setModelConfigs] = useState<Record<string, string>>({});
   const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [saveMessage, setSaveMessage] = useState<string>("");
 
+  // On switching to AI Models tab, load using DB-stored keys (GET)
   useEffect(() => {
     if (activeTab === 3) {
-        fetchModels();
+        // Intentionally call without args to use GET (DB-stored keys) on mount
+        fetch(`${flaskAPI}/available-models`)
+            .then(r => r.json())
+            .then(models => setAvailableModels(Array.isArray(models) ? models : []))
+            .catch(() => setAvailableModels([]));
+        fetch(`${flaskAPI}/model-configs`)
+            .then(r => r.json())
+            .then(configs => setModelConfigs(configs || {}))
+            .catch(() => {});
     }
   }, [activeTab]);
 
-  const fetchModels = async () => {
+  const fetchModels = useCallback(async (keysToUse?: Record<string, string>) => {
     setIsLoadingModels(true);
     try {
-        const [modelsRes, configsRes] = await Promise.all([
-            fetch(`${flaskAPI}/available-models`),
-            fetch(`${flaskAPI}/model-configs`)
-        ]);
-        const models = await modelsRes.json();
+        // Use provided keys (unsaved) or fall back to a plain GET (DB keys)
+        const keys = keysToUse ?? modelConfigs;
+        const hasAnyKey = keys.api_gemini || keys.api_openai || keys.api_anthropic;
+
+        let models: {name: string, display_name: string}[] = [];
+        if (hasAnyKey) {
+            // POST with current keys so backend can list models without saving first
+            const res = await fetch(`${flaskAPI}/available-models`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_gemini: keys.api_gemini || "",
+                    api_openai: keys.api_openai || "",
+                    api_anthropic: keys.api_anthropic || ""
+                })
+            });
+            models = await res.json();
+        } else {
+            const res = await fetch(`${flaskAPI}/available-models`);
+            models = await res.json();
+        }
+
+        const configsRes = await fetch(`${flaskAPI}/model-configs`);
         const configs = await configsRes.json();
+
         setAvailableModels(Array.isArray(models) ? models : []);
-        setModelConfigs(configs || {});
+        setModelConfigs(prev => ({ ...prev, ...configs }));
     } catch (err) {
         console.error("Failed to fetch models", err);
         setAvailableModels([]);
     } finally {
         setIsLoadingModels(false);
     }
-  };
+  }, [modelConfigs]);
 
   const handleSaveModelConfigs = async () => {
+    setSaveStatus('saving');
+    setSaveMessage("");
     try {
         const res = await fetch(`${flaskAPI}/model-configs`, {
             method: 'POST',
@@ -130,11 +169,19 @@ export default function Settings() {
             body: JSON.stringify(modelConfigs)
         });
         if (res.ok) {
-           alert("AI Model configurations and API keys saved successfully!");
-           fetchModels(); // Refresh models list with new keys
+           setSaveStatus('success');
+           setSaveMessage("API keys & model assignments saved!");
+           // Refresh model list using now-saved keys
+           await fetchModels(modelConfigs);
+        } else {
+           setSaveStatus('error');
+           setSaveMessage("Save failed — check backend logs.");
         }
     } catch (err) {
-        alert("Failed to save model configs");
+        setSaveStatus('error');
+        setSaveMessage("Network error — could not save.");
+    } finally {
+        setTimeout(() => { setSaveStatus('idle'); setSaveMessage(""); }, 4000);
     }
   };
 
@@ -156,11 +203,12 @@ export default function Settings() {
         </div>
         <button
           onClick={activeTab === 3 ? handleSaveModelConfigs : () => {}}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all"
           style={{ background: "hsl(var(--accent))", color: "white" }}
+          disabled={activeTab === 3 && saveStatus === 'saving'}
         >
-          <Save size={14} />
-          Save Changes
+          {saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          {saveStatus === 'saving' ? 'Saving…' : 'Save Changes'}
         </button>
       </div>
 
@@ -273,45 +321,88 @@ export default function Settings() {
       {activeTab === 3 && (
         <div className="space-y-4 animate-fade-in">
           <Section title="AI Engine API Keys">
-            <div className="text-xs text-muted-foreground italic mb-4"> Paste your API keys below. They are stored securely in the local database. </div>
+            <div className="text-xs text-muted-foreground italic mb-4">Paste your API keys below. They are stored securely in the local database. After entering a key, click <strong>Load Models</strong> to see available models.</div>
+            
+            {/* Save status toast */}
+            {saveMessage && (
+              <div className={cn(
+                "flex items-center gap-2 text-sm px-4 py-3 rounded-xl font-body mb-2",
+                saveStatus === 'success' ? "bg-green-500/10 text-green-600 border border-green-500/30" : "bg-red-500/10 text-red-600 border border-red-500/30"
+              )}>
+                {saveStatus === 'success' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                {saveMessage}
+              </div>
+            )}
+
             <FormRow label="Google Gemini API Key">
-              <input 
-                type="password"
-                value={modelConfigs.api_gemini || ""}
-                onChange={(e) => setModelConfigs(prev => ({...prev, api_gemini: e.target.value}))}
-                className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-64"
-                placeholder="AIzaSy..."
-              />
+              <div className="flex items-center gap-2">
+                <input 
+                  type="password"
+                  value={modelConfigs.api_gemini || ""}
+                  onChange={(e) => setModelConfigs(prev => ({...prev, api_gemini: e.target.value}))}
+                  className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-56"
+                  placeholder="AIzaSy..."
+                />
+                <button
+                  onClick={() => fetchModels(modelConfigs)}
+                  disabled={isLoadingModels}
+                  title="Load models using current keys"
+                  className="p-2 rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-all"
+                >
+                  {isLoadingModels ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
+                </button>
+              </div>
             </FormRow>
             <FormRow label="OpenAI API Key">
-              <input 
-                type="password"
-                value={modelConfigs.api_openai || ""}
-                onChange={(e) => setModelConfigs(prev => ({...prev, api_openai: e.target.value}))}
-                className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-64"
-                placeholder="sk-..."
-              />
+              <div className="flex items-center gap-2">
+                <input 
+                  type="password"
+                  value={modelConfigs.api_openai || ""}
+                  onChange={(e) => setModelConfigs(prev => ({...prev, api_openai: e.target.value}))}
+                  className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-56"
+                  placeholder="sk-..."
+                />
+                <button
+                  onClick={() => fetchModels(modelConfigs)}
+                  disabled={isLoadingModels}
+                  title="Load models using current keys"
+                  className="p-2 rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-all"
+                >
+                  {isLoadingModels ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
+                </button>
+              </div>
             </FormRow>
             <FormRow label="Anthropic API Key">
-              <input 
-                type="password"
-                value={modelConfigs.api_anthropic || ""}
-                onChange={(e) => setModelConfigs(prev => ({...prev, api_anthropic: e.target.value}))}
-                className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-64"
-                placeholder="sk-ant-..."
-              />
+              <div className="flex items-center gap-2">
+                <input 
+                  type="password"
+                  value={modelConfigs.api_anthropic || ""}
+                  onChange={(e) => setModelConfigs(prev => ({...prev, api_anthropic: e.target.value}))}
+                  className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-56"
+                  placeholder="sk-ant-..."
+                />
+                <button
+                  onClick={() => fetchModels(modelConfigs)}
+                  disabled={isLoadingModels}
+                  title="Load models using current keys"
+                  className="p-2 rounded-lg border border-border hover:bg-secondary text-muted-foreground hover:text-foreground transition-all"
+                >
+                  {isLoadingModels ? <Loader2 size={13} className="animate-spin" /> : <KeyRound size={13} />}
+                </button>
+              </div>
             </FormRow>
           </Section>
 
           <Section title="Process Model Assignment">
             <div className="flex items-center justify-between mb-4">
-                <div className="text-xs text-muted-foreground italic"> Assign specific AI models to each core process. </div>
+                <div className="text-xs text-muted-foreground italic">Assign specific AI models to each core process. {availableModels.length === 0 && <span className="text-amber-500 ml-1">⚠ Enter API keys above and click the 🔑 button to load models.</span>}</div>
                 <button 
-                    onClick={fetchModels}
-                    className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-all"
+                    onClick={() => fetchModels(modelConfigs)}
+                    className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-all flex items-center gap-1.5 text-xs"
                     disabled={isLoadingModels}
                 >
-                    <RefreshCw size={14} className={isLoadingModels ? "animate-spin" : ""} />
+                    <RefreshCw size={13} className={isLoadingModels ? "animate-spin" : ""} />
+                    {isLoadingModels ? "Loading…" : `Refresh (${availableModels.length})`}
                 </button>
             </div>
             
@@ -319,6 +410,7 @@ export default function Settings() {
               <SelectInput 
                 options={availableModels} 
                 value={modelConfigs.model_analyze || ""} 
+                placeholder="— save API key & load models —"
                 onChange={(v) => setModelConfigs(prev => ({...prev, model_analyze: v}))}
               />
             </FormRow>
@@ -327,6 +419,7 @@ export default function Settings() {
               <SelectInput 
                 options={availableModels} 
                 value={modelConfigs.model_zpl || ""} 
+                placeholder="— save API key & load models —"
                 onChange={(v) => setModelConfigs(prev => ({...prev, model_zpl: v}))}
               />
             </FormRow>
@@ -335,6 +428,7 @@ export default function Settings() {
               <SelectInput 
                 options={availableModels} 
                 value={modelConfigs.model_invoice || ""} 
+                placeholder="— save API key & load models —"
                 onChange={(v) => setModelConfigs(prev => ({...prev, model_invoice: v}))}
               />
             </FormRow>
@@ -343,6 +437,7 @@ export default function Settings() {
               <SelectInput 
                 options={availableModels} 
                 value={modelConfigs.model_xdp || ""} 
+                placeholder="— save API key & load models —"
                 onChange={(v) => setModelConfigs(prev => ({...prev, model_xdp: v}))}
               />
             </FormRow>
