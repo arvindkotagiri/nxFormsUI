@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Plus, Play, Copy, Eye, EyeOff, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Play, Copy, Eye, EyeOff, ToggleLeft, ToggleRight, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ImportWizard } from "@/components/wizard/ImportWizard";
 
 const APIS = [
   { id: "API-001", name: "ERP-SAP Inbound", endpoint: "https://api.erp.acme.com/v2/events", authType: "OAuth2", status: "Active", lastTest: "2026-02-19 14:00", latency: "82ms" },
@@ -17,6 +18,7 @@ const RESPONSE_MOCK = `{
 }`;
 
 export default function ApiConfigurations() {
+  const [showWizard, setShowWizard] = useState(false);
   const [selectedApi, setSelectedApi] = useState(APIS[0]);
   const [showSecret, setShowSecret] = useState(false);
   const [testResult, setTestResult] = useState<null | "success" | "error">(null);
@@ -26,6 +28,27 @@ export default function ApiConfigurations() {
   const runTest = () => {
     setTestResult("success");
   };
+
+  if (showWizard) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center justify-between">
+          <div>
+            <button 
+              onClick={() => setShowWizard(false)}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
+            >
+              <ArrowLeft size={16} /> Back to APIs
+            </button>
+            <h1 className="font-display text-3xl font-semibold text-foreground">Add New API Connection</h1>
+          </div>
+        </div>
+        <div className="max-w-5xl mx-auto">
+          <ImportWizard onCancel={() => setShowWizard(false)} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -37,7 +60,8 @@ export default function ApiConfigurations() {
           </p>
         </div>
         <button
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body"
+          onClick={() => setShowWizard(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body hover:opacity-90 transition-opacity shadow-sm"
           style={{ background: "hsl(var(--accent))", color: "white" }}
         >
           <Plus size={16} />
@@ -211,3 +235,4 @@ export default function ApiConfigurations() {
     </div>
   );
 }
+
