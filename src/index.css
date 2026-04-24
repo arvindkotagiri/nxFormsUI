@@ -111,6 +111,18 @@
     box-shadow: var(--shadow-card-hover);
   }
 
+  .shadow-soft {
+    box-shadow: var(--shadow-card);
+  }
+
+  .shadow-md {
+    box-shadow: var(--shadow-card-hover);
+  }
+
+  .bg-primary-soft {
+    background-color: hsl(var(--primary) / 0.1);
+  }
+
   .badge-success {
     background: hsl(var(--success-bg));
     color: hsl(var(--success));
