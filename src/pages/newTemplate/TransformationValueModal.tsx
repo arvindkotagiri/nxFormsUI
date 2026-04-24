@@ -6,10 +6,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useEffect } from "react";
 
 interface Props {
     open: boolean;
     type: string;
+    existingValue?: string;
     onClose: () => void;
     onSave: (value: string) => void;
 }
@@ -18,9 +20,15 @@ export function TransformationValueModal({
     open,
     type,
     onClose,
+    existingValue,
     onSave,
 }: Props) {
-    const [value, setValue] = useState("");
+    // const [value, setValue] = useState("");
+    const [value, setValue] = useState(existingValue || "");
+
+    useEffect(() => {
+        setValue(existingValue || "");
+    }, [existingValue]);
 
     return (
         <Dialog open={open} onOpenChange={onClose}>
