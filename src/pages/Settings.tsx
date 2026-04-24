@@ -150,7 +150,17 @@ export default function Settings() {
         const configs = await configsRes.json();
 
         setAvailableModels(Array.isArray(models) ? models : []);
-        setModelConfigs(prev => ({ ...prev, ...configs }));
+        // Merge only non-empty values or keep user-typed values prioritized
+        setModelConfigs(prev => {
+            const newConfigs = { ...prev };
+            for (const [k, v] of Object.entries(configs)) {
+                // Only overwrite if current value is empty OR if we are doing initial load
+                if (!prev[k] || v) {
+                    newConfigs[k] = v as string;
+                }
+            }
+            return newConfigs;
+        });
     } catch (err) {
         console.error("Failed to fetch models", err);
         setAvailableModels([]);
