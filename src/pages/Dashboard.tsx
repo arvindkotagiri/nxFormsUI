@@ -27,7 +27,7 @@ import {
   Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
-const API_URL = import.meta.env.VITE_FLASK_API || "http://localhost:5050";
+const API_URL = import.meta.env.VITE_NODE_API;
 
 // const kpiCards = [
 //   {
@@ -156,7 +156,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchDashboard = async () => {
-      const res = await fetch(`${API_URL}/api/dashboard`);
+      const res = await fetch(`${API_URL}/dashboard`);
       const data = await res.json();
 
       const mappedCards = data.kpiCards.map((card: any) => ({

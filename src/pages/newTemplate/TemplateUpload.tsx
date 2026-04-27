@@ -229,7 +229,7 @@
 //   );
 // }
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useWizard } from '@/context/WizardContext';
 import { BUSINESS_CONTEXTS, LABEL_SIZES } from '@/data/labelData';

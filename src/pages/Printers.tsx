@@ -242,7 +242,7 @@ export default function Printers() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis dataKey="hour" tick={{ fontSize: 11, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: 'hsl(var(--muted)/0.3)' }} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", boxShadow: 'var(--shadow-card)', borderNone: '0' }} />
+              <Tooltip cursor={{ fill: 'hsl(var(--muted)/0.3)' }} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "12px", boxShadow: 'var(--shadow-card)' }} />
               <Bar dataKey="jobs" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} name="Jobs Printed" />
             </BarChart>
           </ResponsiveContainer>
