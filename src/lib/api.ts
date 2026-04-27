@@ -14,31 +14,41 @@ let bootstrappingPromise: Promise<void> | null = null;
 const DEV_EMAIL = import.meta.env.VITE_DEV_EMAIL;
 const DEV_PASSWORD = import.meta.env.VITE_DEV_PASSWORD;
 
+// Helper: check if a JWT is expired (client-side, no secret needed)
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    // `exp` is in seconds; Date.now() is in ms
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true; // treat malformed token as expired
+  }
+}
+
+// Force a fresh login and store the new token
+async function refreshToken(): Promise<void> {
+  if (!DEV_EMAIL || !DEV_PASSWORD) {
+    throw new Error("Missing VITE_DEV_EMAIL / VITE_DEV_PASSWORD in .env");
+  }
+  const res = await fetch(`${API_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email: DEV_EMAIL, password: DEV_PASSWORD }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.detail || "Re-login failed");
+  setToken(data.access_token);
+  localStorage.setItem("user", JSON.stringify(data.user));
+}
+
 export async function bootstrapTokenIfMissing() {
   const token = getToken();
-  if (token) return;
 
-  // Prevent multiple parallel logins from different API calls
+  // ✅ Also re-login if the stored token is expired
+  if (token && !isTokenExpired(token)) return;
+
   if (!bootstrappingPromise) {
-    bootstrappingPromise = (async () => {
-      if (!DEV_EMAIL || !DEV_PASSWORD) {
-        throw new Error(
-          "No access_token found and missing VITE_DEV_EMAIL / VITE_DEV_PASSWORD in .env"
-        );
-      }
-
-      const res = await fetch(`${API_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: DEV_EMAIL, password: DEV_PASSWORD }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || "Dev login failed");
-
-      setToken(data.access_token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-    })().finally(() => {
+    bootstrappingPromise = refreshToken().finally(() => {
       bootstrappingPromise = null;
     });
   }
@@ -47,36 +57,41 @@ export async function bootstrapTokenIfMissing() {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  // Auto-login once if missing token (DEV convenience)
   await bootstrapTokenIfMissing();
 
-  const headers: Record<string, string> = {
+  const buildHeaders = (): Record<string, string> => ({
     "Content-Type": "application/json",
     ...(options.headers as any),
-  };
+    ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+  });
 
-  const token = getToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_URL}${path}`, { ...options, headers: buildHeaders() });
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers });
+  // ✅ If the server says 401, force a token refresh and retry ONCE
+  if (res.status === 401) {
+    await refreshToken();
+    const retryRes = await fetch(`${API_URL}${path}`, { ...options, headers: buildHeaders() });
+    const retryText = await retryRes.text();
+    const retryData = retryText ? JSON.parse(retryText) : null;
+    if (!retryRes.ok) throw new Error(retryData?.detail || retryData?.message || "Request failed after token refresh");
+    return retryData as T;
+  }
 
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
-
-  if (!res.ok) {
-    const msg = data?.detail || data?.message || "Request failed";
-    throw new Error(msg);
-  }
-
+  if (!res.ok) throw new Error(data?.detail || data?.message || "Request failed");
   return data as T;
 }
 
 // Auth
 export async function login(email: string, password: string) {
-  const data = await request<{ access_token: string; user: any }>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
+  const data = await request<{ access_token: string; user: any }>(
+    "/auth/login",
+    {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    },
+  );
   localStorage.setItem("access_token", data.access_token);
   localStorage.setItem("user", JSON.stringify(data.user));
   return data;
@@ -98,7 +113,10 @@ export async function getLabelConfigs(filters: Record<string, any> = {}) {
 }
 
 export async function createLabelConfig(payload: any) {
-  return request(`/label-configs`, { method: "POST", body: JSON.stringify(payload) });
+  return request(`/label-configs`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function deleteLabelConfig(id: string) {
@@ -119,7 +137,7 @@ type DeterminationResult = {
 };
 
 export async function determineLabels(
-  payload: Record<string, any>
+  payload: Record<string, any>,
 ): Promise<DeterminationResult> {
   return request<DeterminationResult>(`/label-determination`, {
     method: "POST",
@@ -127,13 +145,15 @@ export async function determineLabels(
   });
 }
 
-
 export async function getLabelConfig(id: string) {
   return request<any>(`/label-configs/${id}`);
 }
 
 export async function updateLabelConfig(id: string, payload: any) {
-  return request(`/label-configs/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+  return request(`/label-configs/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 // Reference
@@ -143,23 +163,27 @@ export const getWarehouses = () => request<any[]>(`/reference/warehouses`);
 export const getProcessTypes = () => request<any[]>(`/reference/process-types`);
 export const getLabels = () => request<any[]>(`/reference/labels`);
 // export const getPrinters = () => request<any[]>(`/reference/printers`);
-export const getPrinters = () => {return [ {
-        "id": "PRT001",
-        "name": "Printer 01",
-        "description": "Printer in Warehouse A"
+export const getPrinters = () => {
+  return [
+    {
+      id: "PRT001",
+      name: "Printer 01",
+      description: "Printer in Warehouse A",
     },
     {
-        "id": "PRT002",
-        "name": "Printer 02",
-        "description": "Printer in Warehouse B"
+      id: "PRT002",
+      name: "Printer 02",
+      description: "Printer in Warehouse B",
     },
     {
-        "id": "PRT003",
-        "name": "Printer 03",
-        "description": "Printer in Warehouse C"
-    },]};
-
+      id: "PRT003",
+      name: "Printer 03",
+      description: "Printer in Warehouse C",
+    },
+  ];
+};
 
 export const getCompanyCodes = () => request<any[]>(`/reference/company-codes`);
 export const getSalesOrgs = () => request<any[]>(`/reference/sales-orgs`);
-export const getShippingPoints = () => request<any[]>(`/reference/shipping-points`);
+export const getShippingPoints = () =>
+  request<any[]>(`/reference/shipping-points`);

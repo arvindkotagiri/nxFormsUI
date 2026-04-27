@@ -1,12 +1,14 @@
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useEffect } from "react";
 
 interface Props {
     open: boolean;
     onClose: () => void;
     contextFields: any[];
     targetFields: any[];
+    existingConditions?: any[] | null;
     onSave: (data: any) => void;
 }
 
@@ -15,24 +17,41 @@ export function IfElseBuilder({
     onClose,
     contextFields,
     targetFields,
+    existingConditions,
     onSave,
 }: Props) {
     const [activeIndex, setActiveIndex] = useState(0);
 
-    const [conditions, setConditions] = useState<any[]>([
-        {
-            field: "",
-            operator: "==",
-            value: "",
-            then: {
-                targetField: "",
-                value: "",
-            },
-        },
-    ]);
+    // const [conditions, setConditions] = useState<any[]>([
+    //     {
+    //         field: "",
+    //         operator: "==",
+    //         value: "",
+    //         then: {
+    //             targetField: "",
+    //             value: "",
+    //         },
+    //     },
+    // ]);
 
     const [codeMode, setCodeMode] = useState(false);
     const [code, setCode] = useState("");
+    const [conditions, setConditions] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (existingConditions && existingConditions.length) {
+            setConditions(existingConditions);
+        } else {
+            setConditions([
+                {
+                    field: "",
+                    operator: "==",
+                    value: "",
+                    then: { targetField: "", value: "" },
+                },
+            ]);
+        }
+    }, [existingConditions]);
 
     /* ----------------------- CODE GENERATOR ----------------------- */
 
