@@ -1,32 +1,58 @@
-import { useState } from "react";
-import { Plus, Play, Copy, Eye, EyeOff, ToggleLeft, ToggleRight, ArrowLeft } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Eye, Trash2, ArrowLeft, Globe, Shield, Activity, Search, Edit3, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ImportWizard } from "@/components/wizard/ImportWizard";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 
-const APIS = [
-  { id: "API-001", name: "ERP-SAP Inbound", endpoint: "https://api.erp.acme.com/v2/events", authType: "OAuth2", status: "Active", lastTest: "2026-02-19 14:00", latency: "82ms" },
-  { id: "API-002", name: "WMS Webhook", endpoint: "https://hooks.wms.internal/nx/events", authType: "JWT Bearer", status: "Active", lastTest: "2026-02-19 13:45", latency: "44ms" },
-  { id: "API-003", name: "B2B Portal Feed", endpoint: "https://b2b.portal.com/api/outputs", authType: "API Key", status: "Degraded", lastTest: "2026-02-19 12:20", latency: "1.4s" },
-];
-
-const RESPONSE_MOCK = `{
-  "status": "ok",
-  "message": "Connection established",
-  "serverTime": "2026-02-19T14:32:00Z",
-  "version": "2.4.1",
-  "features": ["events", "outputs", "webhooks"]
-}`;
+interface ApiDefinition {
+  id: number;
+  name: string;
+  endpoint: string;
+  auth_type: string;
+  client_id?: string;
+  client_secret?: string;
+  status: string;
+  created_at: string;
+}
 
 export default function ApiConfigurations() {
   const [showWizard, setShowWizard] = useState(false);
-  const [selectedApi, setSelectedApi] = useState(APIS[0]);
-  const [showSecret, setShowSecret] = useState(false);
-  const [testResult, setTestResult] = useState<null | "success" | "error">(null);
-  const [circuitBreaker, setCircuitBreaker] = useState(true);
-  const [autoRetry, setAutoRetry] = useState(true);
+  const [editingApi, setEditingApi] = useState<ApiDefinition | null>(null);
+  const [apis, setApis] = useState<ApiDefinition[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedApi, setSelectedApi] = useState<ApiDefinition | null>(null);
 
-  const runTest = () => {
-    setTestResult("success");
+  const fetchApis = async () => {
+    try {
+      setLoading(true);
+      await fetch("http://localhost:5050/api/catalog-init", { method: "POST" });
+      const res = await fetch("http://localhost:5050/api/catalog");
+      const data = await res.json();
+      setApis(data);
+    } catch (err) {
+      toast.error("Failed to load API catalog");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchApis();
+  }, []);
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this API configuration?")) return;
+    try {
+      const res = await fetch(`http://localhost:5050/api/catalog/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        toast.success("API deleted successfully");
+        fetchApis();
+      }
+    } catch (err) {
+      toast.error("Failed to delete API");
+    }
   };
 
   if (showWizard) {
@@ -35,204 +61,177 @@ export default function ApiConfigurations() {
         <div className="flex items-center justify-between">
           <div>
             <button 
-              onClick={() => setShowWizard(false)}
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2"
+              onClick={() => { setShowWizard(false); setEditingApi(null); }}
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-2 group"
             >
-              <ArrowLeft size={16} /> Back to APIs
+              <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" /> Back to Catalog
             </button>
-            <h1 className="font-display text-3xl font-semibold text-foreground">Add New API Connection</h1>
+            <h1 className="font-display text-3xl font-semibold text-foreground tracking-tight">
+                {editingApi ? `Edit Mapping: ${editingApi.name}` : "API Wizard"}
+            </h1>
           </div>
         </div>
         <div className="max-w-5xl mx-auto">
-          <ImportWizard onCancel={() => setShowWizard(false)} />
+          <ImportWizard 
+            initialData={editingApi}
+            startStep={editingApi ? 3 : 1}
+            onSaved={() => {
+              setShowWizard(false);
+              setEditingApi(null);
+              fetchApis();
+            }} 
+            onCancel={() => {
+                setShowWizard(false);
+                setEditingApi(null);
+            }} 
+          />
         </div>
       </div>
     );
   }
 
+  const filteredApis = apis.filter(api => 
+    api.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    api.endpoint.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
-    <div className="space-y-5 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-semibold text-foreground">API Configurations</h1>
-          <p className="text-sm text-muted-foreground font-body mt-1">
-            External integration endpoints & authentication
-          </p>
+    <div className="space-y-6 animate-fade-in pb-10">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card/50 p-6 rounded-3xl border border-border shadow-sm backdrop-blur-xl">
+        <div className="space-y-1">
+          <h1 className="font-display text-3xl font-semibold text-foreground tracking-tight">Integration Hub</h1>
+          <p className="text-sm text-muted-foreground font-body">Manage your service mesh and external API endpoints.</p>
         </div>
-        <button
-          onClick={() => setShowWizard(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body hover:opacity-90 transition-opacity shadow-sm"
-          style={{ background: "hsl(var(--accent))", color: "white" }}
-        >
-          <Plus size={16} />
-          Add API
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="relative group">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent transition-colors" />
+            <input 
+              type="text" 
+              placeholder="Search APIs..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-xs font-body focus:ring-2 focus:ring-accent/20 outline-none w-[200px] md:w-[260px] transition-all"
+            />
+          </div>
+          <Button onClick={() => setShowWizard(true)} className="bg-accent text-white hover:bg-accent/90 rounded-xl px-5 shadow-lg shadow-accent/20">
+            <Plus size={16} className="mr-2" /> Add API
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* API List */}
-        <div className="space-y-3">
-          {APIS.map((api) => (
-            <div
-              key={api.id}
-              onClick={() => setSelectedApi(api)}
-              className={cn(
-                "card-elevated p-4 cursor-pointer transition-all",
-                selectedApi.id === api.id && "ring-2"
+      <div className="bg-card rounded-3xl border border-border shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-muted/30 border-b border-border">
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">API Connection</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Protocol / Auth</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Status</th>
+                <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/50 font-body">
+              {loading ? (
+                Array(3).fill(0).map((_, i) => (
+                  <tr key={i} className="animate-pulse">
+                    {[1, 2, 3, 4].map(c => <td key={c} className="px-6 py-6"><div className="h-4 bg-muted rounded w-3/4"></div></td>)}
+                  </tr>
+                ))
+              ) : filteredApis.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-16 text-center text-muted-foreground opacity-50">
+                    <Globe size={48} className="mx-auto mb-4" />
+                    <p className="text-sm font-semibold">No APIs found</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredApis.map((api) => (
+                  <tr key={api.id} className="hover:bg-muted/20 transition-colors group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center text-accent">
+                          <Globe size={18} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground tracking-tight">{api.name}</p>
+                          <p className="text-[10px] font-mono text-muted-foreground truncate max-w-[200px] mt-0.5">{api.endpoint}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-foreground">
+                        <Shield size={12} className="text-blue-500" /> {api.auth_type}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-[11px] font-bold uppercase tracking-tighter">Active</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button 
+                          onClick={() => { setEditingApi(api); setShowWizard(true); }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-blue-500/10 text-muted-foreground hover:text-blue-500 transition-all"
+                          title="Edit"
+                        >
+                          <Edit3 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => setSelectedApi(api)}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-accent/10 text-muted-foreground hover:text-accent transition-all"
+                          title="View"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(api.id)}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all"
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
               )}
-              style={selectedApi.id === api.id ? { outline: `2px solid hsl(var(--accent))`, outlineOffset: "-2px", borderRadius: "12px" } : {}}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-display text-sm font-semibold text-foreground">{api.name}</h3>
-                <span className={api.status === "Active" ? "badge-success" : "badge-warning"}>{api.status}</span>
-              </div>
-              <div className="text-xs font-mono text-muted-foreground truncate mb-2">{api.endpoint}</div>
-              <div className="flex items-center justify-between text-xs font-body text-muted-foreground">
-                <span>{api.authType}</span>
-                <span>{api.latency}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Config Form */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="card-elevated p-5 space-y-4">
-            <h2 className="font-display text-base font-semibold text-foreground">Endpoint Details</h2>
-
-            {[
-              { label: "API Name", value: selectedApi.name, type: "text" },
-              { label: "Base URL", value: selectedApi.endpoint, type: "text" },
-            ].map((field) => (
-              <div key={field.label}>
-                <label className="block text-xs font-semibold text-muted-foreground font-body mb-1">{field.label}</label>
-                <input
-                  type={field.type}
-                  defaultValue={field.value}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-                />
-              </div>
-            ))}
-          </div>
-
-          <div className="card-elevated p-5 space-y-4">
-            <h2 className="font-display text-base font-semibold text-foreground">Authentication</h2>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground font-body mb-1">Auth Type</label>
-              <select className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30">
-                <option>OAuth2</option>
-                <option>JWT Bearer</option>
-                <option>API Key</option>
-                <option>Basic Auth</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-muted-foreground font-body mb-1">Client Secret</label>
-              <div className="relative">
-                <input
-                  type={showSecret ? "text" : "password"}
-                  defaultValue="sk_live_••••••••••••••••"
-                  className="w-full px-3 py-2 pr-10 text-sm rounded-xl border border-border bg-background text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-accent/30"
-                />
-                <button
-                  onClick={() => setShowSecret(!showSecret)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {showSecret ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="card-elevated p-5 space-y-4">
-            <h2 className="font-display text-base font-semibold text-foreground">Retry & Timeout</h2>
-
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { label: "Timeout (ms)", value: "5000" },
-                { label: "Max Retries", value: "3" },
-                { label: "Retry Interval (ms)", value: "1000" },
-                { label: "Backoff Factor", value: "2" },
-              ].map((f) => (
-                <div key={f.label}>
-                  <label className="block text-xs font-semibold text-muted-foreground font-body mb-1">{f.label}</label>
-                  <input
-                    type="number"
-                    defaultValue={f.value}
-                    className="w-full px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-                  />
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <div className="text-sm font-semibold text-foreground font-body">Circuit Breaker</div>
-                <div className="text-xs text-muted-foreground font-body">Auto-pause on repeated failures</div>
-              </div>
-              <button onClick={() => setCircuitBreaker(!circuitBreaker)}>
-                {circuitBreaker ? (
-                  <ToggleRight size={28} style={{ color: "hsl(var(--accent))" }} />
-                ) : (
-                  <ToggleLeft size={28} className="text-muted-foreground" />
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Test API */}
-          <div className="card-elevated p-5 space-y-3">
-            <h2 className="font-display text-base font-semibold text-foreground">Connection Test</h2>
-            <button
-              onClick={runTest}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold font-body transition-all"
-              style={{ background: "hsl(var(--accent))", color: "white" }}
-            >
-              <Play size={14} />
-              Test API Connection
-            </button>
-
-            {testResult && (
-              <div className="rounded-xl overflow-hidden">
-                <div
-                  className="px-4 py-2 flex items-center justify-between"
-                  style={{
-                    background: testResult === "success" ? "hsl(var(--success-bg))" : "hsl(var(--error-bg))",
-                  }}
-                >
-                  <span
-                    className="text-xs font-semibold font-display"
-                    style={{ color: testResult === "success" ? "hsl(var(--success))" : "hsl(var(--error))" }}
-                  >
-                    {testResult === "success" ? "✓ 200 OK — 82ms" : "✗ Connection Failed"}
-                  </span>
-                  <button className="text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    <Copy size={12} />
-                  </button>
-                </div>
-                <pre className="p-4 text-xs font-mono" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}>
-                  {RESPONSE_MOCK}
-                </pre>
-              </div>
-            )}
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <button className="px-4 py-2 rounded-lg border border-border text-sm font-body text-muted-foreground hover:text-foreground transition-all">
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all"
-              style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}
-            >
-              Save Configuration
-            </button>
-          </div>
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {selectedApi && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-card w-full max-w-lg rounded-3xl border border-border shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="p-6 border-b border-border bg-muted/30 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-accent flex items-center justify-center text-white"><Globe size={20} /></div>
+                <div>
+                  <h2 className="text-base font-semibold leading-none">{selectedApi.name}</h2>
+                  <p className="text-[11px] text-muted-foreground mt-1.5 font-mono">{selectedApi.endpoint}</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-muted/30 border border-border">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Status</p>
+                  <div className="flex items-center gap-2"><Activity size={14} className="text-green-500" /><span className="text-sm font-semibold">Healthy</span></div>
+                </div>
+                <div className="p-4 rounded-2xl bg-muted/30 border border-border">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Created</p>
+                  <p className="text-sm font-semibold">{new Date(selectedApi.created_at).toLocaleDateString()}</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 bg-muted/30 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => setSelectedApi(null)} className="rounded-xl">Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

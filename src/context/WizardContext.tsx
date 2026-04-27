@@ -12,9 +12,15 @@ export type Transformation = {
     | 'default_value';
   value?: string | number;
 };
+export type TableCell = {
+  value: string;
+  category: 'static' | 'dynamic';
+  fieldMapping?: string;
+};
+
 export type LabelChunk = {
   id: string;
-  type: 'text' | 'barcode' | 'table_cell';
+  type: 'text' | 'barcode' | 'table_cell' | 'table';
   x: number;
   y: number;
   width: number;
@@ -25,6 +31,10 @@ export type LabelChunk = {
   fieldMapping?: string;
   transformations?: Transformation[]; 
   barcodeType?: 'code128' | 'code39' | 'itf14' | 'qr';
+  // Table specific
+  rows?: TableCell[][];
+  headers?: string[];
+  isDynamicTable?: boolean;
 };
 
 export type LabelSize = {
@@ -53,6 +63,7 @@ interface WizardState {
   generatedZPL: string | null;
   generatedHTML: string | null;
   generatedXDP: string | null;
+  lastAnalyzedFile: string | null; // Name + Size + Type
 }
 
 interface WizardContextType extends WizardState {
@@ -94,6 +105,7 @@ const initialState: WizardState = {
   generatedZPL: null,
   generatedHTML: null,
   generatedXDP: null,
+  lastAnalyzedFile: null,
 };
 
 const WizardContext = createContext<WizardContextType | undefined>(undefined);
@@ -113,9 +125,11 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const setAnalysisResults = useCallback((fields: any[], annotatedImg: string, cleanImg?: string) => {
     const mappedChunks: LabelChunk[] = fields.map((field, index) => {
       const [ymin, xmin, ymax, xmax] = field.box_2d;
+      const isTable = field.content_type === 'table';
+      
       return {
         id: `chunk-${index}-${Date.now()}`,
-        type: field.content_type === 'barcode' ? 'barcode' : (field.content_type === 'table_cell' ? 'table_cell' : 'text'),
+        type: isTable ? 'table' : (field.content_type === 'barcode' ? 'barcode' : (field.content_type === 'table_cell' ? 'table_cell' : 'text')),
         x: xmin / 10,
         y: ymin / 10,
         width: (xmax - xmin) / 10,
@@ -125,9 +139,20 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         isStatic: field.category === 'static',
         barcodeType: field.content_type === 'barcode' ? 'code128' : undefined,
         transformations: [],
+        rows: isTable ? field.table_data : undefined,
+        isDynamicTable: isTable,
       };
     });
-    setState(prev => ({ ...prev, chunks: mappedChunks, annotatedImage: annotatedImg, cleanImage: cleanImg || null }));
+    setState(prev => {
+      const fileSignature = prev.uploadedFile ? `${prev.uploadedFile.name}-${prev.uploadedFile.size}-${prev.uploadedFile.lastModified}` : null;
+      return { 
+        ...prev, 
+        chunks: mappedChunks, 
+        annotatedImage: annotatedImg, 
+        cleanImage: cleanImg || null,
+        lastAnalyzedFile: fileSignature
+      };
+    });
   }, []);
 
   const setChunks = (chunks: LabelChunk[]) => setState(prev => ({ ...prev, chunks }));

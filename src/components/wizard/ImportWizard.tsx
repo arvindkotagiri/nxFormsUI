@@ -47,13 +47,27 @@ function buildInitialState(): WizardState {
 }
 
 interface ImportWizardProps {
+  initialData?: any;
+  startStep?: number;
   onSaved?: () => void;
   onCancel?: () => void;
 }
 
-export function ImportWizard({ onSaved, onCancel }: ImportWizardProps) {
-  const [state, setState] = useState<WizardState>(buildInitialState);
-  const [tested, setTested] = useState(false);
+export function ImportWizard({ initialData, startStep, onSaved, onCancel }: ImportWizardProps) {
+  const [state, setState] = useState<WizardState>(() => {
+    const base = buildInitialState();
+    if (initialData) {
+      return {
+        ...base,
+        context: { ...base.context, name: initialData.name || "" },
+        connection: { ...base.connection, baseUrl: initialData.endpoint || "", clientId: initialData.client_id || "", clientSecret: initialData.client_secret || "" },
+        step: startStep || 1
+      };
+    }
+    return base;
+  });
+
+  const [tested, setTested] = useState(!!startStep && startStep > 2);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
 
@@ -89,12 +103,81 @@ export function ImportWizard({ onSaved, onCancel }: ImportWizardProps) {
     setStep(Math.max(state.step - 1, 1));
   }
 
-  function handleSave() {
-    setSaved(true);
-    toast.success("API definition saved", {
-      description: `${state.context.name} is now available in your workspace.`,
+  function handleMetadataLoaded(entities: any[]) {
+    setState(s => {
+      const newEntities: Record<string, EntityConfig> = { ...s.entities };
+      const newFields: Record<string, Record<string, FieldConfig>> = { ...s.fields };
+
+      entities.forEach(e => {
+        newEntities[e.name] = {
+          enabled: true, // Auto-enable if found in metadata
+          label: e.name,
+          description: `Entity Set: ${e.name}`
+        };
+        newFields[e.name] = {};
+        e.fields.forEach((f: any) => {
+          newFields[e.name][f.name] = {
+            enabled: true,
+            label: f.label || f.name,
+            description: `Type: ${f.type}`,
+            path: `${e.name}.${f.name}`
+          };
+        });
+      });
+
+      return {
+        ...s,
+        entities: newEntities,
+        fields: newFields
+      };
     });
-    if (onSaved) onSaved();
+  }
+
+  async function handleSave() {
+    try {
+      const isEdit = !!initialData?.id;
+      const url = isEdit 
+        ? `http://localhost:5050/api/catalog/${initialData.id}`
+        : "http://localhost:5050/api/catalog";
+      
+      // Flatten enabled entities and fields to save
+      const enabledEntities = Object.entries(state.entities)
+        .filter(([_, config]) => config.enabled)
+        .map(([name, config]) => ({ name, ...config }));
+      
+      const enabledFields = Object.entries(state.fields).reduce((acc, [entityName, fields]) => {
+        if (state.entities[entityName]?.enabled) {
+          acc[entityName] = Object.entries(fields)
+            .filter(([_, config]) => config.enabled)
+            .map(([name, config]) => ({ name, ...config }));
+        }
+        return acc;
+      }, {} as any);
+
+      const response = await fetch(url, {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: state.context.name,
+          endpoint: state.connection.baseUrl,
+          auth_type: "OAuth2",
+          client_id: state.connection.clientId,
+          client_secret: state.connection.clientSecret,
+          entities: enabledEntities,
+          fields: enabledFields
+        })
+      });
+
+      if (!response.ok) throw new Error("Failed to save context");
+
+      setSaved(true);
+      toast.success(isEdit ? "Context updated successfully" : "Context definition saved", {
+        description: `${state.context.name} is now available in your workspace.`,
+      });
+      if (onSaved) onSaved();
+    } catch (err) {
+      toast.error("Error saving context configuration");
+    }
   }
 
   function handleReset() {
@@ -141,7 +224,12 @@ export function ImportWizard({ onSaved, onCancel }: ImportWizardProps) {
           <StepConnection
             value={state.connection}
             onChange={(connection) => { setState((s) => ({ ...s, connection })); setTested(false); }}
-            onTested={setTested}
+            onTested={(ok, metadata) => {
+              setTested(ok);
+              if (ok && metadata) {
+                handleMetadataLoaded(metadata);
+              }
+            }}
             tested={tested}
           />
         )}

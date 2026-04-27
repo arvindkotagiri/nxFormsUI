@@ -11,7 +11,7 @@ type TestStatus = "idle" | "connecting" | "token" | "metadata" | "success" | "er
 interface Props {
   value: ConnectionConfig;
   onChange: (next: ConnectionConfig) => void;
-  onTested: (ok: boolean) => void;
+  onTested: (ok: boolean, metadata: any) => void;
   tested: boolean;
 }
 
@@ -25,20 +25,40 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
   async function handleTest() {
     setError(null);
     setStatus("connecting");
-    await new Promise((r) => setTimeout(r, 700));
-    setStatus("token");
-    await new Promise((r) => setTimeout(r, 700));
-    setStatus("metadata");
-    await new Promise((r) => setTimeout(r, 900));
-    // Heuristic: if base url doesn't look like a URL, fail
+    
     if (!/^https?:\/\//i.test(value.baseUrl)) {
       setStatus("error");
       setError("Base URL must start with http:// or https://");
-      onTested(false);
+      onTested(false, null);
       return;
     }
-    setStatus("success");
-    onTested(true);
+
+    try {
+      setStatus("token");
+      // Future: handle real OAuth token generation
+      await new Promise((r) => setTimeout(r, 500));
+      
+      setStatus("metadata");
+      const response = await fetch("http://localhost:5050/api/fetch-metadata", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: value.baseUrl })
+      });
+
+      const data = await response.json();
+      if (data.status === "success") {
+        setStatus("success");
+        onTested(true, data.entities);
+      } else {
+        setStatus("error");
+        setError(data.message || "Failed to fetch metadata");
+        onTested(false, null);
+      }
+    } catch (err) {
+      setStatus("error");
+      setError("Network error connecting to backend");
+      onTested(false, null);
+    }
   }
 
   return (

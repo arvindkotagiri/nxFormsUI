@@ -52,11 +52,6 @@ export function TemplateIdentify() {
 
   const displayImage = cleanImage || uploadedImage;
 
-  const isDynamic = selectedChunkData && !selectedChunkData.isStatic;
-  const hasFieldMapping = !!selectedChunkData?.fieldMapping;
-
-  const canUseTransformations = isDynamic && hasFieldMapping;
-
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header Stats */}
@@ -129,6 +124,7 @@ export function TemplateIdentify() {
                 const top = (chunk.y / 100) * imgSize.height;
                 const width = (chunk.width / 100) * imgSize.width;
                 const height = (chunk.height / 100) * imgSize.height;
+                const isSelected = selectedChunk === chunk.id;
 
                 return (
                   <div
@@ -138,17 +134,25 @@ export function TemplateIdentify() {
                       setSelectedChunk(chunk.id);
                     }}
                     className={cn(
-                      "absolute border-2 cursor-pointer transition-all",
-                      chunk.isStatic ? "border-primary" : "border-destructive",
-                      selectedChunk === chunk.id && "ring-4 ring-accent/20",
+                      "absolute border-2 cursor-pointer transition-all duration-300",
+                      chunk.type === 'table' ? "border-green-500" : (chunk.isStatic ? "border-primary" : "border-destructive"),
+                      isSelected && "ring-8 ring-accent/30 z-10",
                     )}
                     style={{
                       left,
                       top,
                       width,
                       height,
+                      boxShadow: isSelected ? '0 0 25px hsl(var(--accent) / 0.5)' : 'none',
+                      backgroundColor: isSelected ? 'hsl(var(--accent) / 0.05)' : 'transparent',
                     }}
-                  />
+                  >
+                    {isSelected && (
+                      <div className="absolute -top-6 left-0 bg-accent text-white text-[10px] px-2 py-0.5 rounded-t font-bold shadow-lg whitespace-nowrap">
+                        SELECTED: {chunk.label.toUpperCase()}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
           </div>
@@ -158,22 +162,22 @@ export function TemplateIdentify() {
               PDF converted to image for preview
             </p>
           )}
-        </div>
-
-        {/* RIGHT — Properties */}
-        <div className="card-elevated flex flex-col">
-          <div className="p-3 border-b border-border flex items-center gap-2">
-            <Settings2 size={14} />
+        </div>        {/* RIGHT — Properties */}
+        <div className="card-elevated flex flex-col h-full overflow-hidden">
+          <div className="p-3 border-b border-border flex items-center gap-2 bg-muted/30">
+            <Settings2 size={14} className="text-accent" />
             <h3 className="font-display text-xs font-semibold">
               Property Editor
             </h3>
           </div>
 
-          <div className="p-5 space-y-6">
+          <div className="p-5 space-y-6 overflow-y-auto max-h-[75vh] custom-scrollbar">
             {!selectedChunkData && (
               <div className="text-center py-16">
-                <MousePointer2 className="mx-auto text-muted-foreground mb-3" />
-                <p className="text-[10px] font-bold uppercase text-muted-foreground">
+                <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mx-auto mb-4 opacity-50">
+                  <MousePointer2 className="text-muted-foreground" size={20} />
+                </div>
+                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest">
                   Select field to edit
                 </p>
               </div>
@@ -181,10 +185,21 @@ export function TemplateIdentify() {
 
             {selectedChunkData && (
               <>
-                {/* Label */}
+                {/* Visual Label */}
+                <div className="p-3 rounded-xl bg-accent/5 border border-accent/20 flex items-center gap-3">
+                   <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+                      <Layers size={14} className="text-accent" />
+                   </div>
+                   <div className="min-w-0">
+                      <div className="text-[10px] font-bold text-accent uppercase tracking-tight">Active Element</div>
+                      <div className="text-sm font-semibold truncate uppercase">{selectedChunkData.label}</div>
+                   </div>
+                </div>
+
+                {/* Label Input */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Field Label
+                    Field Name
                   </label>
 
                   <input
@@ -194,164 +209,190 @@ export function TemplateIdentify() {
                         label: e.target.value,
                       })
                     }
-                    className="w-full px-3 py-2 rounded-lg border border-border text-sm font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none"
+                    className="w-full px-3 py-2 rounded-lg border border-border text-sm font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none transition-all"
                   />
                 </div>
 
-                {/* Logic Type */}
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                    Logic Type
-                  </label>
+                {/* Table Management */}
+                {selectedChunkData.type === 'table' && (
+                  <div className="p-3 rounded-xl bg-green-500/5 border border-green-500/20 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold uppercase text-green-600">Table Logic</label>
+                      <button 
+                        onClick={() => updateChunk(selectedChunkData.id, { isDynamicTable: !selectedChunkData.isDynamicTable })}
+                        className={cn(
+                          "px-2 py-0.5 rounded text-[9px] font-bold uppercase transition-colors",
+                          selectedChunkData.isDynamicTable ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {selectedChunkData.isDynamicTable ? 'Dynamic Rows' : 'Static Table'}
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                       <label className="text-[9px] text-muted-foreground uppercase font-bold">Cell Mappings (First Row)</label>
+                       <div className="space-y-1">
+                          {(() => {
+                            const firstRow = selectedChunkData.rows?.[0];
+                            if (!firstRow) return <p className="text-[10px] text-muted-foreground italic">No row data found</p>;
 
-                  <div className="flex border border-border rounded-lg overflow-hidden">
-                    <button
-                      onClick={() =>
-                        updateChunk(selectedChunkData.id, { isStatic: true })
-                      }
-                      className={cn(
-                        "flex-1 py-2 text-[10px] font-bold tracking-wider",
-                        selectedChunkData.isStatic
-                          ? "bg-background text-primary"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      STATIC
-                    </button>
+                            // Handle if row is an array
+                            if (Array.isArray(firstRow)) {
+                              return firstRow.map((cell: any, idx: number) => (
+                                <div key={idx} className="flex gap-2 items-center bg-card p-2 rounded-lg border border-border shadow-sm">
+                                   <span className="text-[9px] font-mono text-muted-foreground w-4">C{idx+1}</span>
+                                   <select 
+                                     className="flex-1 bg-transparent text-[11px] font-semibold outline-none"
+                                     value={cell.fieldMapping || ""}
+                                     onChange={(e) => {
+                                         const updatedRows = [...(selectedChunkData.rows || [])];
+                                         updatedRows.forEach(r => {
+                                             if (Array.isArray(r) && r[idx]) r[idx].fieldMapping = e.target.value;
+                                         });
+                                         updateChunk(selectedChunkData.id, { rows: updatedRows });
+                                     }}
+                                   >
+                                     <option value="">Map Column...</option>
+                                     {selectedContext?.fields?.map((field: any) => (
+                                       <option key={field.path} value={field.name}>
+                                         {field.name}
+                                       </option>
+                                     ))}
+                                   </select>
+                                </div>
+                              ));
+                            }
 
-                    <button
-                      onClick={() =>
-                        updateChunk(selectedChunkData.id, { isStatic: false })
-                      }
-                      className={cn(
-                        "flex-1 py-2 text-[10px] font-bold tracking-wider",
-                        !selectedChunkData.isStatic
-                          ? "bg-background text-destructive"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      DYNAMIC
-                    </button>
+                            // Handle if row is an object
+                            return Object.entries(firstRow).map(([key, cell]: [string, any], idx: number) => (
+                              <div key={key} className="flex gap-2 items-center bg-card p-2 rounded-lg border border-border shadow-sm">
+                                <span className="text-[9px] font-mono text-muted-foreground truncate w-16" title={key}>{key}</span>
+                                <select 
+                                  className="flex-1 bg-transparent text-[11px] font-semibold outline-none"
+                                  value={cell.fieldMapping || ""}
+                                  onChange={(e) => {
+                                      const updatedRows = [...(selectedChunkData.rows || [])];
+                                      updatedRows.forEach((r: any) => {
+                                          if (r[key]) r[key].fieldMapping = e.target.value;
+                                      });
+                                      updateChunk(selectedChunkData.id, { rows: updatedRows });
+                                  }}
+                                >
+                                  <option value="">Map Column...</option>
+                                  {selectedContext?.fields?.map((field: any) => (
+                                    <option key={field.path} value={field.name}>
+                                      {field.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ));
+                          })()}
+                       </div>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Logic Type */}
+                {selectedChunkData.type !== 'table' && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                      Logic Type
+                    </label>
+
+                    <div className="flex border border-border rounded-lg overflow-hidden p-0.5 bg-muted">
+                      <button
+                        onClick={() =>
+                          updateChunk(selectedChunkData.id, { isStatic: true })
+                        }
+                        className={cn(
+                          "flex-1 py-1.5 text-[9px] font-bold tracking-wider rounded-md transition-all",
+                          selectedChunkData.isStatic
+                            ? "bg-white shadow-sm text-primary"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        STATIC
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          updateChunk(selectedChunkData.id, { isStatic: false })
+                        }
+                        className={cn(
+                          "flex-1 py-1.5 text-[9px] font-bold tracking-wider rounded-md transition-all",
+                          !selectedChunkData.isStatic
+                            ? "bg-white shadow-sm text-destructive"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        DYNAMIC
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Mapping */}
-                {!selectedChunkData.isStatic && (
+                {!selectedChunkData.isStatic && selectedChunkData.type !== 'table' && (
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold uppercase text-muted-foreground">
                       SAP Field Mapping
                     </label>
 
-                    {/* <select
+                    <select
                       value={selectedChunkData.fieldMapping || ""}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         updateChunk(selectedChunkData.id, {
                           fieldMapping: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none"
+                        });
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none transition-all"
                     >
                       <option value="">Select field</option>
                       {selectedContext?.fields?.map((field: any) => (
-                        <option key={field.path} value={field.path}>
+                        <option key={field.path} value={field.name}>
                           {field.name}
                         </option>
                       ))}
-                    </select> */}
-                    <select
-  value={selectedChunkData.fieldMapping || ""}
-  onChange={(e) => {
-    const value = e.target.value;
-
-    console.log("selectedContext:", selectedContext);
-
-    const selectedField = selectedContext?.fields?.find(
-      (f: any) => f.path === value
-    );
-    console.log("value:", value);
-    console.log("selected field:", selectedField);
-    console.log("field.name:", selectedField?.name);
-    console.log("field.path:", selectedField?.path);
-    const cleanValue = value.split(".").pop();
-    console.log("cleanValue", cleanValue)
-    updateChunk(selectedChunkData.id, {
-      fieldMapping: cleanValue,
-    });
-  }}
-  className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none"
->
-  <option value="">Select field</option>
-  {selectedContext?.fields?.map((field: any) => (
-    <option key={field.path} value={field.name}>
-      {field.name}
-    </option>
-  ))}
-</select>
+                    </select>
                   </div>
                 )}
 
                 {/* Transformation Library */}
-                {isDynamic && (
+                {!selectedChunkData.isStatic && (
                   <>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                        Transformation Library
+                      <label className="text-[10px] font-bold uppercase text-muted-foreground flex items-center justify-between">
+                        Transformations
+                        {selectedChunkData.transformations?.length > 0 && (
+                          <span className="text-[9px] bg-accent/10 text-accent px-1.5 py-0.5 rounded-full">{selectedChunkData.transformations.length}</span>
+                        )}
                       </label>
 
-                      {/* <select
-                        disabled={!canUseTransformations}
-                        onChange={(e) => {
-                          const type = e.target.value as Transformation["type"];
-                          if (!type) return;
-
-                          const newTransformation: Transformation = { type };
-
-                          updateChunk(selectedChunkData.id, {
-                            transformations: [
-                              ...(selectedChunkData.transformations || []),
-                              newTransformation,
-                            ],
-                          });
-
-                          e.target.value = "";
-                        }}
-                        className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card"
-                      >
-                        <option value="">Add Transformation</option>
-                        <option value="to_upper">To Upper</option>
-                        <option value="to_lower">To Lower</option>
-                        <option value="concatenate">Concatenate</option>
-                        <option value="format_date">Format Date</option>
-                        <option value="add">Add</option>
-                        <option value="multiply">Multiply</option>
-                        <option value="if_else">If-Then-Else</option>
-                        <option value="default_value">Default Value</option>
-                      </select> */}
                       <Button
                         variant="outline"
-                        className="w-full text-xs"
+                        className="w-full text-xs h-9 rounded-xl border-dashed border-2 hover:border-accent hover:bg-accent/5 transition-all"
                         onClick={() => setOpenTransformModal(true)}
                       >
-                        + Add Transformation
+                        <Zap size={14} className="mr-2 text-accent" /> Add Transformation
                       </Button>
                     </div>
+                    
                     {selectedChunkData?.transformations?.length > 0 && (
                       <div className="space-y-2">
-                        <label className="text-[10px] font-bold uppercase text-muted-foreground">
-                          Applied Transformations
-                        </label>
-
                         {selectedChunkData.transformations.map((t, index) => (
                           <div
                             key={index}
-                            className="border rounded-lg px-3 py-2 text-xs flex justify-between items-center"
+                            className="bg-muted/50 rounded-xl px-3 py-2 text-[11px] flex justify-between items-center group"
                           >
-                            <div>
-                              <div className="font-semibold">{t.type}</div>
-
+                            <div className="min-w-0">
+                              <div className="font-bold flex items-center gap-1.5">
+                                <span className="w-1 h-1 rounded-full bg-accent" />
+                                {t.type.replace('_', ' ').toUpperCase()}
+                              </div>
                               {t.value && (
-                                <div className="text-muted-foreground">
-                                  Value: {t.value}
+                                <div className="text-[10px] text-muted-foreground truncate">
+                                  Default: {t.value}
                                 </div>
                               )}
                             </div>
@@ -367,9 +408,9 @@ export function TemplateIdentify() {
                                   transformations: updated,
                                 });
                               }}
-                              className="text-destructive text-xs"
+                              className="w-6 h-6 rounded-md bg-transparent hover:bg-destructive/10 text-destructive flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
                             >
-                              Remove
+                              <Trash2 size={12} />
                             </button>
                           </div>
                         ))}
@@ -377,18 +418,21 @@ export function TemplateIdentify() {
                     )}
                   </>
                 )}
+                
                 {/* Delete */}
-                <Button
-                  variant="ghost"
-                  className="w-full text-destructive text-[10px] font-bold uppercase tracking-widest"
-                  onClick={() => {
-                    removeChunk(selectedChunkData.id);
-                    setSelectedChunk(null);
-                  }}
-                >
-                  <Trash2 size={14} />
-                  Delete Field
-                </Button>
+                <div className="pt-4">
+                  <Button
+                    variant="ghost"
+                    className="w-full text-destructive text-[10px] font-bold uppercase tracking-widest hover:bg-destructive/5"
+                    onClick={() => {
+                      removeChunk(selectedChunkData.id);
+                      setSelectedChunk(null);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                    Delete Field
+                  </Button>
+                </div>
               </>
             )}
           </div>

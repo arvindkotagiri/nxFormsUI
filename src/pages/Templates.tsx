@@ -48,9 +48,6 @@ export default function Templates() {
     fetch(`${flaskAPI}/labels`)
       .then((res) => res.json())
       .then((data) => {
-        const cleanHtml = data[1].html_code
-          .replace(/\\n/g, "")
-          .replace(/\\"/g, '"');
         setLabelTemplates(data);
         setLoading(false);
       })
