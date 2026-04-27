@@ -10,7 +10,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-const API_URL = import.meta.env.VITE_NODE_API;
+const API_URL = import.meta.env.VITE_FLASK_API || "http://localhost:5050";
 
 // const events = [
 //   { id: "EVT-00421", source: "ERP-SAP", context: "Invoice", form: "INV-001", status: "Success", ts: "2026-02-19 14:32:11", duration: "138ms", outputs: 3 },
@@ -68,7 +68,7 @@ export default function Events() {
   const [events, setEvents] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`${API_URL}/events`)
+    fetch(`${API_URL}/api/events`)
       .then((res) => res.json())
       .then((data) => setEvents(data))
       .catch((err) => console.error(err));

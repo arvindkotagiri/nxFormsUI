@@ -249,11 +249,48 @@ export function TemplateUpload() {
     selectedContext,
     setSelectedContext,
     selectedSize,
-    setSelectedSize
+    setSelectedSize,
+    chunks,
+    lastAnalyzedFile
   } = useWizard();
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [contexts, setContexts] = useState<any[]>(BUSINESS_CONTEXTS);
+
+  useEffect(() => {
+    const fetchContexts = async () => {
+      try {
+        const response = await fetch(`${flaskAPI || 'http://localhost:5050'}/api/catalog`);
+        const apis = await response.json();
+        
+        const dynamicContexts = [];
+        apis.forEach((api: any) => {
+          if (api.entities && Array.isArray(api.entities)) {
+            api.entities.forEach((entity: any) => {
+              dynamicContexts.push({
+                id: `api-${api.id}-${entity.name}`,
+                name: `${api.name} - ${entity.name}`,
+                entity: entity.name,
+                fields: api.fields?.[entity.name] || []
+              });
+            });
+          } else {
+            dynamicContexts.push({
+              id: `api-${api.id}`,
+              name: api.name,
+              fields: []
+            });
+          }
+        });
+        
+        setContexts([...BUSINESS_CONTEXTS, ...dynamicContexts]);
+      } catch (err) {
+        console.error("Failed to fetch contexts", err);
+      }
+    };
+    fetchContexts();
+  }, []);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -267,22 +304,34 @@ export function TemplateUpload() {
     reader.readAsDataURL(file);
   }, [setUploadedFile, setUploadedImage]);
 
-  const handleUploadAndProcess = async () => {
-    if (!uploadedFile) return;
+  const currentFileSignature = uploadedFile ? `${uploadedFile.name}-${uploadedFile.size}-${uploadedFile.lastModified}` : null;
+  const isAlreadyAnalyzed = lastAnalyzedFile === currentFileSignature && chunks.length > 0;
 
+  const handleUploadAndProcess = async () => {
+    if (!uploadedFile) {
+      console.error("No file uploaded");
+      return;
+    }
+
+    console.log("Triggering analysis for:", uploadedFile.name);
     setIsProcessing(true);
+    setErrorMessage(null);
 
     const formData = new FormData();
     formData.append('image', uploadedFile);
 
+    const targetUrl = `${flaskAPI || 'http://localhost:5050'}/analyze-label`;
+    console.log("Fetching from:", targetUrl);
+
     try {
-      // const response = await fetch('http://localhost:5050/analyze-label', {
-      const response = await fetch(`${flaskAPI}/analyze-label`, {
+      const response = await fetch(targetUrl, {
         method: 'POST',
         body: formData
       });
 
+      console.log("Response status:", response.status);
       const data = await response.json();
+      console.log("Analysis data received:", data);
 
       if (data.status === "success") {
         setAnalysisResults(
@@ -294,7 +343,8 @@ export function TemplateUpload() {
       } else {
         setErrorMessage(data.error || "Analysis failed");
       }
-    } catch {
+    } catch (err) {
+      console.error("Fetch error:", err);
       setErrorMessage("Connection error: backend not reachable.");
     } finally {
       setIsProcessing(false);
@@ -335,13 +385,13 @@ export function TemplateUpload() {
             value={selectedContext?.id || ""}
             onChange={(e) =>
               setSelectedContext(
-                BUSINESS_CONTEXTS.find(c => c.id === e.target.value)
+                contexts.find(c => c.id === e.target.value)
               )
             }
             className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
           >
             <option value="" disabled>Select context...</option>
-            {BUSINESS_CONTEXTS.map(ctx => (
+            {contexts.map(ctx => (
               <option key={ctx.id} value={ctx.id}>
                 {ctx.name}
               </option>
@@ -462,6 +512,8 @@ export function TemplateUpload() {
                 <Loader2 size={14} className="animate-spin" />
                 Analyzing...
               </span>
+            ) : isAlreadyAnalyzed ? (
+              "Continue"
             ) : (
               "Analyze & Continue"
             )}
