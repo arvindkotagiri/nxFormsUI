@@ -412,7 +412,7 @@ export function TemplateIdentify() {
                         onClick={() => setOpenTransformModal(true)}
                         disabled={!canUseTransformations}
                       >
-                        <Zap size={14} className="mr-2 text-accent" /> Add Transformation
+                        <Zap size={14} className="mr-2 text-accent" /> <span className="mr-2 text-accent">Add Transformation</span>
                       </Button>
                     </div>
                     
