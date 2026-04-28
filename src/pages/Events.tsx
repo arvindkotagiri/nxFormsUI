@@ -12,19 +12,6 @@ import {
 import { cn } from "@/lib/utils";
 const API_URL = import.meta.env.VITE_NODE_API;
 
-// const events = [
-//   { id: "EVT-00421", source: "ERP-SAP", context: "Invoice", form: "INV-001", status: "Success", ts: "2026-02-19 14:32:11", duration: "138ms", outputs: 3 },
-//   { id: "EVT-00420", source: "WMS-Core", context: "Dispatch", form: "DSP-200", status: "Failed", ts: "2026-02-19 14:31:58", duration: "412ms", outputs: 1 },
-//   { id: "EVT-00419", source: "POS-System", context: "Receipt", form: "RCT-050", status: "Pending", ts: "2026-02-19 14:31:44", duration: "–", outputs: 2 },
-//   { id: "EVT-00418", source: "ERP-SAP", context: "Label", form: "LBL-300", status: "Success", ts: "2026-02-19 14:30:22", duration: "92ms", outputs: 5 },
-//   { id: "EVT-00417", source: "CRM-SF", context: "Statement", form: "STM-010", status: "Success", ts: "2026-02-19 14:29:48", duration: "205ms", outputs: 1 },
-//   { id: "EVT-00416", source: "WMS-Core", context: "Label", form: "LBL-310", status: "Failed", ts: "2026-02-19 14:28:32", duration: "1.2s", outputs: 0 },
-//   { id: "EVT-00415", source: "ERP-SAP", context: "Invoice", form: "INV-002", status: "Success", ts: "2026-02-19 14:27:19", duration: "144ms", outputs: 2 },
-//   { id: "EVT-00414", source: "B2B-Portal", context: "Report", form: "RPT-100", status: "Success", ts: "2026-02-19 14:26:05", duration: "318ms", outputs: 1 },
-//   { id: "EVT-00413", source: "ERP-SAP", context: "Invoice", form: "INV-003", status: "Pending", ts: "2026-02-19 14:24:50", duration: "–", outputs: 1 },
-//   { id: "EVT-00412", source: "POS-System", context: "Receipt", form: "RCT-051", status: "Success", ts: "2026-02-19 14:23:38", duration: "88ms", outputs: 1 },
-// ];
-
 function StatusBadge({ status }: { status: string }) {
   if (status === "Success") return <span className="badge-success">● Success</span>;
   if (status === "Failed") return <span className="badge-error">● Failed</span>;
@@ -66,6 +53,8 @@ export default function Events() {
   const [search, setSearch] = useState("");
   const [selectedEvent, setSelectedEvent] = useState<typeof EVENT_MOCK | null>(null);
   const [events, setEvents] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const eventsPerPage = 10;
 
   useEffect(() => {
     fetch(`${API_URL}/events`)
@@ -78,15 +67,43 @@ export default function Events() {
     (e) =>
       e.id.toLowerCase().includes(search.toLowerCase()) ||
       e.source.toLowerCase().includes(search.toLowerCase()) ||
-      e.context.toLowerCase().includes(search.toLowerCase())
+      e.context.toLowerCase().includes(search.toLowerCase()),
   );
+
+  const totalPages = Math.ceil(filtered.length / eventsPerPage);
+
+  const paginatedEvents = filtered.slice(
+    (currentPage - 1) * eventsPerPage,
+    currentPage * eventsPerPage,
+  );
+
+  const visiblePages = 5;
+
+  const getPageNumbers = () => {
+    const pages = [];
+
+    let start = Math.max(1, currentPage - Math.floor(visiblePages / 2));
+    let end = Math.min(totalPages, start + visiblePages - 1);
+
+    if (end - start < visiblePages - 1) {
+      start = Math.max(1, end - visiblePages + 1);
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+
+    return pages;
+  };
 
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-foreground">Events</h1>
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            Events
+          </h1>
           <p className="text-sm text-muted-foreground font-body mt-1">
             Incoming trigger events from all sources
           </p>
@@ -102,7 +119,10 @@ export default function Events() {
         {/* Toolbar */}
         <div className="flex items-center gap-3 p-4 border-b border-border bg-secondary/40">
           <div className="relative flex-1 max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
             <input
               type="text"
               placeholder="Search events…"
@@ -123,28 +143,59 @@ export default function Events() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-body">
             <thead>
-              <tr className="border-b border-border" style={{ background: "hsl(var(--secondary))" }}>
-                {["Event ID", "Source", "Context", "Form", "Status", "Timestamp", "Duration", "Outputs", "Actions"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <tr
+                className="border-b border-border"
+                style={{ background: "hsl(var(--secondary))" }}
+              >
+                {[
+                  "Event ID",
+                  "Source",
+                  "Context",
+                  "Form",
+                  "Status",
+                  "Timestamp",
+                  "Duration",
+                  "Outputs",
+                  "Actions",
+                ].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+                  >
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((e, i) => (
+              {paginatedEvents.map((e, i) => (
                 <tr
                   key={e.id}
-                  className={cn("border-b border-border table-row-hover transition-colors", i % 2 === 0 ? "bg-card" : "bg-background")}
+                  className={cn(
+                    "border-b border-border table-row-hover transition-colors",
+                    i % 2 === 0 ? "bg-card" : "bg-background",
+                  )}
                 >
-                  <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">{e.id}</td>
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">
+                    {e.id}
+                  </td>
                   <td className="px-4 py-3 text-foreground">{e.source}</td>
                   <td className="px-4 py-3 text-foreground">{e.context}</td>
-                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{e.form}</td>
-                  <td className="px-4 py-3"><StatusBadge status={e.status} /></td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{e.ts}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{e.duration}</td>
-                  <td className="px-4 py-3 text-center font-semibold text-xs text-foreground">{e.outputs}</td>
+                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
+                    {e.form}
+                  </td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={e.status} />
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {e.ts}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">
+                    {e.duration}
+                  </td>
+                  <td className="px-4 py-3 text-center font-semibold text-xs text-foreground">
+                    {e.outputs}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
                       <button
@@ -173,22 +224,46 @@ export default function Events() {
 
         {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-          <span className="text-xs text-muted-foreground font-body">Showing 1–{filtered.length} of 14,872</span>
+          <span className="text-xs text-muted-foreground font-body">
+            Showing {(currentPage - 1) * eventsPerPage + 1}–
+            {Math.min(currentPage * eventsPerPage, filtered.length)} of{" "}
+            {filtered.length}
+          </span>
+
           <div className="flex items-center gap-1">
-            {[1, 2, 3, "...", 89].map((p, i) => (
+            {/* Prev */}
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+              disabled={currentPage === 1}
+              className="px-2 py-1 rounded-md border border-border text-xs hover:bg-secondary disabled:opacity-40"
+            >
+              ‹
+            </button>
+
+            {/* Pages */}
+            {getPageNumbers().map((page) => (
               <button
-                key={i}
+                key={page}
+                onClick={() => setCurrentPage(page)}
                 className={cn(
-                  "w-7 h-7 rounded-md text-xs font-body transition-colors",
-                  p === 1
-                    ? "text-accent-foreground"
-                    : "text-muted-foreground hover:bg-secondary"
+                  "w-7 h-7 rounded-md text-xs",
+                  page === currentPage
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-secondary",
                 )}
-                style={p === 1 ? { background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" } : {}}
               >
-                {p}
+                {page}
               </button>
             ))}
+
+            {/* Next */}
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="px-2 py-1 rounded-md border border-border text-xs hover:bg-secondary disabled:opacity-40"
+            >
+              ›
+            </button>
           </div>
         </div>
       </div>
@@ -204,9 +279,14 @@ export default function Events() {
             <div className="flex items-center justify-between p-5 border-b border-border">
               <div className="flex items-center gap-2">
                 <Zap size={16} style={{ color: "hsl(var(--accent))" }} />
-                <h3 className="font-display text-lg font-semibold text-foreground">{selectedEvent.id}</h3>
+                <h3 className="font-display text-lg font-semibold text-foreground">
+                  {selectedEvent.id}
+                </h3>
               </div>
-              <button onClick={() => setSelectedEvent(null)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+              <button
+                onClick={() => setSelectedEvent(null)}
+                className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
+              >
                 <X size={16} className="text-muted-foreground" />
               </button>
             </div>
@@ -214,7 +294,9 @@ export default function Events() {
             <div className="p-5 space-y-4">
               {/* Meta */}
               <div className="card-elevated p-4 space-y-3">
-                <h4 className="font-display text-sm font-semibold text-foreground">Event Metadata</h4>
+                <h4 className="font-display text-sm font-semibold text-foreground">
+                  Event Metadata
+                </h4>
                 {[
                   ["Source", selectedEvent.source],
                   ["Context", selectedEvent.context],
@@ -222,7 +304,10 @@ export default function Events() {
                   ["Status", selectedEvent.status],
                   ["Timestamp", selectedEvent.ts],
                 ].map(([k, v]) => (
-                  <div key={k} className="flex items-center justify-between text-sm font-body">
+                  <div
+                    key={k}
+                    className="flex items-center justify-between text-sm font-body"
+                  >
                     <span className="text-muted-foreground">{k}</span>
                     <span className="font-medium text-foreground">{v}</span>
                   </div>
@@ -231,18 +316,28 @@ export default function Events() {
 
               {/* Error */}
               {selectedEvent.error && (
-                <div className="p-4 rounded-xl" style={{ background: "hsl(var(--error-bg))" }}>
-                  <div className="text-xs font-semibold font-display mb-1" style={{ color: "hsl(var(--error))" }}>
+                <div
+                  className="p-4 rounded-xl"
+                  style={{ background: "hsl(var(--error-bg))" }}
+                >
+                  <div
+                    className="text-xs font-semibold font-display mb-1"
+                    style={{ color: "hsl(var(--error))" }}
+                  >
                     Error
                   </div>
-                  <p className="text-xs font-body text-foreground-secondary">{selectedEvent.error}</p>
+                  <p className="text-xs font-body text-foreground-secondary">
+                    {selectedEvent.error}
+                  </p>
                 </div>
               )}
 
               {/* JSON Payload */}
               <div className="card-elevated overflow-hidden">
                 <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <h4 className="font-display text-sm font-semibold text-foreground">Payload</h4>
+                  <h4 className="font-display text-sm font-semibold text-foreground">
+                    Payload
+                  </h4>
                 </div>
                 <pre
                   className="p-4 text-xs overflow-x-auto font-mono"
