@@ -470,11 +470,11 @@ function SelectField({
         onChange={(v) => setField("shipping_point", v)}
       />
 
-      <SelectField label="Printer"
+      {/* <SelectField label="Printer"
         value={formData.printer}
         options={referenceData.printers}
         onChange={(v) => setField("printer", v)}
-      />
+      /> */}
 
     </div>
         </div>
@@ -539,6 +539,17 @@ function SelectField({
             />
           </div>
         </div>
+
+          <div className="card-elevated p-4">
+            <h3 className="font-display text-sm font-semibold text-foreground mb-2">
+              Printer Settings
+            </h3>
+            <SelectField label="Printer"
+              value={formData.printer}
+              options={referenceData.printers}
+              onChange={(v) => setField("printer", v)}
+            />
+          </div>
 
         <div className="card-elevated p-4">
           <h3 className="font-display text-sm font-semibold text-foreground mb-2">
