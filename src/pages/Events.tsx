@@ -67,7 +67,8 @@ export default function Events() {
     (e) =>
       e.id.toLowerCase().includes(search.toLowerCase()) ||
       e.source.toLowerCase().includes(search.toLowerCase()) ||
-      e.context.toLowerCase().includes(search.toLowerCase()),
+      e.context.toLowerCase().includes(search.toLowerCase()) ||
+      e.evt_no?.toString().toLowerCase().includes(search.toLowerCase())
   );
 
   const totalPages = Math.ceil(filtered.length / eventsPerPage);
@@ -95,6 +96,10 @@ export default function Events() {
 
     return pages;
   };
+
+  useEffect(() => {
+  setCurrentPage(1);
+}, [search]);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -148,6 +153,7 @@ export default function Events() {
                 style={{ background: "hsl(var(--secondary))" }}
               >
                 {[
+                  "Event No",
                   "Event ID",
                   "Source",
                   "Context",
@@ -176,6 +182,9 @@ export default function Events() {
                     i % 2 === 0 ? "bg-card" : "bg-background",
                   )}
                 >
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">
+                    {e.evt_no}
+                  </td>
                   <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">
                     {e.id}
                   </td>
