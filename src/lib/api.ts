@@ -161,7 +161,8 @@ export const getCustomers = () => request<any[]>(`/reference/customers`);
 export const getPlants = () => request<any[]>(`/reference/plants`);
 export const getWarehouses = () => request<any[]>(`/reference/warehouses`);
 export const getProcessTypes = () => request<any[]>(`/reference/process-types`);
-export const getLabels = () => request<any[]>(`/reference/labels`);
+// export const getLabels = () => request<any[]>(`/reference/labels`);
+export const getLabels = () => request<any[]>(`/reference/all-labels`);
 // export const getPrinters = () => request<any[]>(`/reference/printers`);
 export const getPrinters = () => {
   return [

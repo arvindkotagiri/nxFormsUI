@@ -1,23 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-
-import {
-  Bar,
-  Button,
-  Card,
-  CardHeader,
-  DatePicker,
-  Form,
-  FormItem,
-  Input,
-  Label,
-  MessageStrip,
-  Option,
-  Select,
-  Switch,
-  Text,
-  Title,
-} from "@ui5/webcomponents-react";
+import { Text } from "@ui5/webcomponents-react";
 
 import "@ui5/webcomponents-icons/dist/nav-back.js";
 import "@ui5/webcomponents-icons/dist/save.js";
@@ -66,13 +49,6 @@ type Props = {
   // pass from your auth/context if you have it
   isConfigurator?: boolean;
 };
-
-// Helper: convert UI5 DatePicker value to ISO date (yyyy-mm-dd) if possible
-function normalizeDate(value: string): string {
-  // UI5 DatePicker often returns yyyy-mm-dd (depends on format settings)
-  // If you configure format, adjust this.
-  return value?.trim() || "";
-}
 
 export function ConfigDetailPage({ isConfigurator = true }: Props) {
   const { configId } = useParams();
@@ -123,11 +99,6 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     valid_from: "",
     valid_to: "",
   });
-
-  const headerTitle = useMemo(
-    () => (isEditMode ? "Edit Configuration" : "New Configuration"),
-    [isEditMode]
-  );
 
   // ---------- Fetch reference data ----------
   const fetchReferenceData = useCallback(async () => {
