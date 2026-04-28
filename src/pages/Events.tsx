@@ -68,7 +68,7 @@ export default function Events() {
   const [events, setEvents] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/events`)
+    fetch(`${API_URL}/events`)
       .then((res) => res.json())
       .then((data) => setEvents(data))
       .catch((err) => console.error(err));
