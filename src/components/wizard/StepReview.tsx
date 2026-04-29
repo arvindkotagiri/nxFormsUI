@@ -1,6 +1,5 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SAMPLE_ENTITIES } from "@/lib/sample-metadata";
 import type { WizardState } from "./types";
 import { CheckCircle2, Database, Layers, Link2, Pencil, Server, Tag } from "lucide-react";
 
@@ -12,9 +11,9 @@ interface Props {
 }
 
 export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
-  const enabledEntities = SAMPLE_ENTITIES.filter((e) => state.entities[e.name]?.enabled);
+  const enabledEntities = Object.values(state.entities).filter((e) => e.enabled);
   const totalFields = enabledEntities.reduce(
-    (sum, e) => sum + Object.values(state.fields[e.name] ?? {}).filter((f) => f.enabled).length,
+    (sum, e) => sum + Object.values(state.fields[e.originalName] ?? {}).filter((f) => f.enabled).length,
     0,
   );
 
@@ -52,16 +51,15 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
         ) : (
           <ul className="divide-y -my-1">
             {enabledEntities.map((entity) => {
-              const cfg = state.entities[entity.name];
-              const sel = Object.values(state.fields[entity.name] ?? {}).filter((f) => f.enabled).length;
+              const sel = Object.values(state.fields[entity.originalName] ?? {}).filter((f) => f.enabled).length;
               return (
-                <li key={entity.name} className="py-3 flex items-center justify-between gap-4">
+                <li key={entity.originalName} className="py-3 flex items-center justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="font-medium text-sm">{cfg.label}</div>
-                    <code className="text-xs text-muted-foreground font-mono truncate">{entity.name}</code>
+                    <div className="font-medium text-sm">{entity.label}</div>
+                    <code className="text-xs text-muted-foreground font-mono truncate">{entity.originalName}</code>
                   </div>
                   <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 shrink-0">
-                    {sel} of {entity.fields.length} fields
+                    {sel} of {entity.fieldCount} fields
                   </Badge>
                 </li>
               );

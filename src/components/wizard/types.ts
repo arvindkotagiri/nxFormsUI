@@ -8,21 +8,34 @@ export type ContextConfig = {
 
 export type ConnectionConfig = {
   baseUrl: string;
+  authType: "OAuth2" | "Basic" | "None";
   tokenUrl: string;
   clientId: string;
   clientSecret: string;
+  username?: string;
+  password?: string;
 };
 
 export type EntityConfig = {
   enabled: boolean;
   label: string;
   description: string;
+  originalName: string;
+  fieldCount: number;
+  keyCount: number;
+  isCore?: boolean;
+  relationships?: string[];
 };
 
 export type FieldConfig = {
   enabled: boolean;
   label: string;
   description: string;
+  originalName: string;
+  type: string;
+  isKey: boolean;
+  hasValueHelp?: boolean;
+  sample?: any;
 };
 
 export type WizardState = {

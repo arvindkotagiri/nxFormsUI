@@ -2,7 +2,6 @@ import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { SAMPLE_ENTITIES } from "@/lib/sample-metadata";
 import type { EntityConfig } from "./types";
 import { Info, KeyRound, Link2, Database } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,7 +30,7 @@ export function StepEntities({ entities, onChange }: Props) {
           </div>
           <Badge variant="secondary" className="bg-primary/10 text-primary border-0 self-start sm:self-auto">
             <Database className="h-3 w-3 mr-1" />
-            {enabledCount} of {SAMPLE_ENTITIES.length} selected
+            {enabledCount} of {Object.keys(entities).length} selected
           </Badge>
         </header>
 
@@ -44,12 +43,10 @@ export function StepEntities({ entities, onChange }: Props) {
             <div className="col-span-1 text-right">Info</div>
           </div>
           <ul className="divide-y">
-            {SAMPLE_ENTITIES.map((entity) => {
-              const cfg = entities[entity.name];
-              if (!cfg) return null;
+            {Object.values(entities).map((cfg) => {
               return (
                 <li
-                  key={entity.name}
+                  key={cfg.originalName}
                   className={cn(
                     "grid grid-cols-12 gap-4 px-5 py-4 items-center transition-colors hover:bg-muted/30",
                     cfg.enabled && "bg-primary/5",
@@ -58,25 +55,25 @@ export function StepEntities({ entities, onChange }: Props) {
                   <div className="col-span-1">
                     <Switch
                       checked={cfg.enabled}
-                      onCheckedChange={(v) => update(entity.name, { enabled: v })}
-                      aria-label={`Toggle ${entity.label}`}
+                      onCheckedChange={(v) => update(cfg.originalName, { enabled: v })}
+                      aria-label={`Toggle ${cfg.label}`}
                     />
                   </div>
                   <div className="col-span-3 min-w-0">
                     <div className="flex items-center gap-2">
-                      <code className="font-mono text-sm font-medium truncate">{entity.name}</code>
-                      {entity.isCore && (
+                      <code className="font-mono text-sm font-medium truncate">{cfg.originalName}</code>
+                      {cfg.isCore && (
                         <Badge variant="secondary" className="bg-accent/15 text-accent border-0 text-[10px] px-1.5 py-0 h-4">CORE</Badge>
                       )}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {entity.fields.length} fields · {entity.fields.filter(f => f.isKey).length} keys
+                      {cfg.fieldCount} fields · {cfg.keyCount} keys
                     </div>
                   </div>
                   <div className="col-span-3">
                     <Input
                       value={cfg.label}
-                      onChange={(e) => update(entity.name, { label: e.target.value })}
+                      onChange={(e) => update(cfg.originalName, { label: e.target.value })}
                       className="h-9 bg-background"
                       disabled={!cfg.enabled}
                     />
@@ -84,7 +81,7 @@ export function StepEntities({ entities, onChange }: Props) {
                   <div className="col-span-4">
                     <Input
                       value={cfg.description}
-                      onChange={(e) => update(entity.name, { description: e.target.value })}
+                      onChange={(e) => update(cfg.originalName, { description: e.target.value })}
                       className="h-9 bg-background"
                       disabled={!cfg.enabled}
                     />
@@ -103,16 +100,16 @@ export function StepEntities({ entities, onChange }: Props) {
                       <TooltipContent side="left" className="max-w-xs">
                         <div className="space-y-2">
                           <div className="text-xs">
-                            <span className="font-semibold">Entity type:</span> {entity.isCore ? "Core" : "Extension"}
+                            <span className="font-semibold">Entity type:</span> {cfg.isCore ? "Core" : "Extension"}
                           </div>
                           <div className="text-xs">
                             <span className="font-semibold flex items-center gap-1"><KeyRound className="h-3 w-3" /> Keys:</span>
-                            {entity.fields.filter(f => f.isKey).map(f => f.name).join(", ")}
+                            {cfg.keyCount} keys
                           </div>
-                          {entity.relationships.length > 0 && (
+                          {cfg.relationships && cfg.relationships.length > 0 && (
                             <div className="text-xs">
                               <span className="font-semibold flex items-center gap-1"><Link2 className="h-3 w-3" /> Relations:</span>
-                              {entity.relationships.join(", ")}
+                              {cfg.relationships.join(", ")}
                             </div>
                           )}
                         </div>

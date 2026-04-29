@@ -266,22 +266,13 @@ export function TemplateUpload() {
         
         const dynamicContexts = [];
         apis.forEach((api: any) => {
-          if (api.entities && Array.isArray(api.entities)) {
-            api.entities.forEach((entity: any) => {
-              dynamicContexts.push({
-                id: `api-${api.id}-${entity.name}`,
-                name: `${api.name} - ${entity.name}`,
-                entity: entity.name,
-                fields: api.fields?.[entity.name] || []
-              });
-            });
-          } else {
-            dynamicContexts.push({
-              id: `api-${api.id}`,
-              name: api.name,
-              fields: []
-            });
-          }
+          dynamicContexts.push({
+            id: `api-${api.id}`,
+            name: api.name,
+            isOData: !!(api.entities && Array.isArray(api.entities) && api.entities.length > 0),
+            entities: api.entities || [],
+            fields: api.fields || {}
+          });
         });
         
         setContexts([...BUSINESS_CONTEXTS, ...dynamicContexts]);
