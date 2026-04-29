@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { SAMPLE_ENTITIES, buildPreviewRows, type ODataEntity } from "@/lib/sample-metadata";
 import type { EntityConfig, FieldConfig } from "./types";
 import { Search, KeyRound, ChevronDown, Eye, Sparkles, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,11 +19,11 @@ type FilterMode = "all" | "selected" | "keys";
 
 export function StepFields({ entities, fields, onChange }: Props) {
   const enabledEntities = useMemo(
-    () => SAMPLE_ENTITIES.filter((e) => entities[e.name]?.enabled),
+    () => Object.values(entities).filter((e) => e.enabled),
     [entities],
   );
-  const [activeName, setActiveName] = useState(enabledEntities[0]?.name ?? "");
-  const active = enabledEntities.find((e) => e.name === activeName) ?? enabledEntities[0];
+  const [activeName, setActiveName] = useState(enabledEntities[0]?.originalName ?? "");
+  const active = enabledEntities.find((e) => e.originalName === activeName) ?? enabledEntities[0];
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterMode>("all");
@@ -41,20 +40,21 @@ export function StepFields({ entities, fields, onChange }: Props) {
     );
   }
 
-  const activeFields = fields[active.name] ?? {};
-  const types = Array.from(new Set(active.fields.map((f) => f.type)));
+  const activeFields = fields[active.originalName] ?? {};
+  const activeFieldsList = Object.values(activeFields);
+  const types = Array.from(new Set(activeFieldsList.map((f) => f.type)));
 
-  const visibleFields = active.fields.filter((f) => {
-    if (search && !f.name.toLowerCase().includes(search.toLowerCase()) && !f.label.toLowerCase().includes(search.toLowerCase())) {
+  const visibleFields = activeFieldsList.filter((f) => {
+    if (search && !f.originalName.toLowerCase().includes(search.toLowerCase()) && !f.label.toLowerCase().includes(search.toLowerCase())) {
       return false;
     }
-    if (filter === "selected" && !activeFields[f.name]?.enabled) return false;
+    if (filter === "selected" && !f.enabled) return false;
     if (filter === "keys" && !f.isKey) return false;
     if (typeFilter !== "all" && f.type !== typeFilter) return false;
     return true;
   });
 
-  const enabledCount = Object.values(activeFields).filter((f) => f.enabled).length;
+  const enabledCount = activeFieldsList.filter((f) => f.enabled).length;
 
   function updateField(entityName: string, fieldName: string, patch: Partial<FieldConfig>) {
     const entFields = { ...(fields[entityName] ?? {}) };
@@ -62,22 +62,20 @@ export function StepFields({ entities, fields, onChange }: Props) {
     onChange({ ...fields, [entityName]: entFields });
   }
 
-  function bulk(entity: ODataEntity, mode: "recommended" | "keys" | "clear") {
-    const entFields: Record<string, FieldConfig> = {};
-    entity.fields.forEach((f) => {
-      const current = fields[entity.name]?.[f.name];
+  function bulk(entityName: string, mode: "recommended" | "keys" | "clear") {
+    const entFields: Record<string, FieldConfig> = { ...(fields[entityName] ?? {}) };
+    Object.values(entFields).forEach((f) => {
       const enabled =
         f.isKey ? true :
-        mode === "recommended" ? f.recommended :
+        mode === "recommended" ? false :
         mode === "keys" ? false :
         false;
-      entFields[f.name] = {
+      entFields[f.originalName] = {
+        ...f,
         enabled,
-        label: current?.label ?? f.label,
-        description: current?.description ?? f.description,
       };
     });
-    onChange({ ...fields, [entity.name]: entFields });
+    onChange({ ...fields, [entityName]: entFields });
   }
 
   return (
@@ -98,15 +96,14 @@ export function StepFields({ entities, fields, onChange }: Props) {
             </div>
             <ul className="max-h-[520px] overflow-y-auto">
               {enabledEntities.map((entity) => {
-                const cfg = entities[entity.name];
-                const sel = Object.values(fields[entity.name] ?? {}).filter((f) => f.enabled).length;
-                const total = entity.fields.length;
-                const isActive = entity.name === active.name;
+                const sel = Object.values(fields[entity.originalName] ?? {}).filter((f) => f.enabled).length;
+                const total = entity.fieldCount;
+                const isActive = entity.originalName === active.originalName;
                 return (
-                  <li key={entity.name}>
+                  <li key={entity.originalName}>
                     <button
                       type="button"
-                      onClick={() => setActiveName(entity.name)}
+                      onClick={() => setActiveName(entity.originalName)}
                       className={cn(
                         "w-full text-left px-4 py-3 border-l-2 transition-colors",
                         isActive
@@ -114,8 +111,8 @@ export function StepFields({ entities, fields, onChange }: Props) {
                           : "border-transparent hover:bg-muted/40",
                       )}
                     >
-                      <div className="font-medium text-sm truncate">{cfg.label}</div>
-                      <div className="text-xs text-muted-foreground font-mono truncate mt-0.5">{entity.name}</div>
+                      <div className="font-medium text-sm truncate">{entity.label}</div>
+                      <div className="text-xs text-muted-foreground font-mono truncate mt-0.5">{entity.originalName}</div>
                       <div className="mt-1.5 flex items-center gap-2">
                         <div className="h-1 flex-1 rounded-full bg-border overflow-hidden">
                           <div
@@ -138,12 +135,12 @@ export function StepFields({ entities, fields, onChange }: Props) {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-semibold truncate">{entities[active.name]?.label}</h3>
+                    <h3 className="font-semibold truncate">{active.label}</h3>
                     <Badge variant="secondary" className="bg-primary/10 text-primary border-0">
-                      {enabledCount}/{active.fields.length} fields
+                      {enabledCount}/{active.fieldCount} fields
                     </Badge>
                   </div>
-                  <code className="text-xs text-muted-foreground font-mono">{active.name}</code>
+                  <code className="text-xs text-muted-foreground font-mono">{active.originalName}</code>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}>
                   <Eye className="h-4 w-4 mr-2" />
@@ -182,15 +179,15 @@ export function StepFields({ entities, fields, onChange }: Props) {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" onClick={() => bulk(active, "recommended")} className="bg-accent/10 text-accent hover:bg-accent/20 border-0">
+                <Button size="sm" variant="secondary" onClick={() => bulk(active.originalName, "recommended")} className="bg-accent/10 text-accent hover:bg-accent/20 border-0">
                   <Sparkles className="h-3.5 w-3.5 mr-1" />
                   Select recommended
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => bulk(active, "keys")}>
+                <Button size="sm" variant="outline" onClick={() => bulk(active.originalName, "keys")}>
                   <KeyRound className="h-3.5 w-3.5 mr-1" />
                   Keys only
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => bulk(active, "clear")}>
+                <Button size="sm" variant="ghost" onClick={() => bulk(active.originalName, "clear")}>
                   Clear all
                 </Button>
               </div>
@@ -217,19 +214,18 @@ export function StepFields({ entities, fields, onChange }: Props) {
                     </tr>
                   )}
                   {visibleFields.map((f) => {
-                    const cfg = activeFields[f.name];
                     const locked = f.isKey;
                     return (
-                      <tr key={f.name} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors", cfg?.enabled && "bg-primary/5")}>
+                      <tr key={f.originalName} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors", f.enabled && "bg-primary/5")}>
                         <td className="px-4 py-2.5">
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="inline-block">
                                 <Switch
-                                  checked={cfg?.enabled ?? false}
-                                  onCheckedChange={(v) => !locked && updateField(active.name, f.name, { enabled: v })}
+                                  checked={f.enabled}
+                                  onCheckedChange={(v) => !locked && updateField(active.originalName, f.originalName, { enabled: v })}
                                   disabled={locked}
-                                  aria-label={`Toggle ${f.name}`}
+                                  aria-label={`Toggle ${f.originalName}`}
                                 />
                               </span>
                             </TooltipTrigger>
@@ -240,7 +236,7 @@ export function StepFields({ entities, fields, onChange }: Props) {
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5">
-                            <code className="font-mono text-xs">{f.name}</code>
+                            <code className="font-mono text-xs">{f.originalName}</code>
                             {f.isKey && (
                               <Badge variant="secondary" className="bg-accent/15 text-accent border-0 text-[10px] h-4 px-1.5">
                                 <KeyRound className="h-2.5 w-2.5 mr-0.5" /> KEY
@@ -258,25 +254,25 @@ export function StepFields({ entities, fields, onChange }: Props) {
                         </td>
                         <td className="px-4 py-2.5 min-w-[180px]">
                           <Input
-                            value={cfg?.label ?? f.label}
-                            onChange={(e) => updateField(active.name, f.name, { label: e.target.value })}
+                            value={f.label}
+                            onChange={(e) => updateField(active.originalName, f.originalName, { label: e.target.value })}
                             className="h-8 bg-background"
                           />
                         </td>
                         <td className="px-4 py-2.5">
                           <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
-                            {f.type.replace("Edm.", "")}
+                            {f.type ? f.type.replace("Edm.", "") : ""}
                           </span>
                         </td>
                         <td className="px-4 py-2.5 min-w-[220px]">
                           <Input
-                            value={cfg?.description ?? f.description}
-                            onChange={(e) => updateField(active.name, f.name, { description: e.target.value })}
+                            value={f.description}
+                            onChange={(e) => updateField(active.originalName, f.originalName, { description: e.target.value })}
                             className="h-8 bg-background"
                           />
                         </td>
                         <td className="px-4 py-2.5 text-xs text-muted-foreground font-mono whitespace-nowrap">
-                          {String(f.sample)}
+                          {String(f.sample ?? "")}
                         </td>
                       </tr>
                     );
@@ -287,7 +283,7 @@ export function StepFields({ entities, fields, onChange }: Props) {
           </div>
         </div>
 
-        <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} entity={active} />
+        <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} entity={active} fieldsList={activeFieldsList} />
       </div>
     </TooltipProvider>
   );
@@ -308,7 +304,7 @@ function SegmentBtn({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-function PreviewDialog({ open, onOpenChange, entity }: { open: boolean; onOpenChange: (v: boolean) => void; entity: ODataEntity }) {
+function PreviewDialog({ open, onOpenChange, entity, fieldsList }: { open: boolean; onOpenChange: (v: boolean) => void; entity: EntityConfig, fieldsList: FieldConfig[] }) {
   const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<Record<string, string | number>[]>([]);
 
@@ -316,7 +312,13 @@ function PreviewDialog({ open, onOpenChange, entity }: { open: boolean; onOpenCh
     setLoading(true);
     setRows([]);
     await new Promise((r) => setTimeout(r, 700));
-    setRows(buildPreviewRows(entity, 5));
+    setRows(Array.from({ length: 5 }).map((_, i) => {
+      const row: Record<string, string> = {};
+      fieldsList.slice(0, 6).forEach(f => {
+        row[f.originalName] = `Sample ${i+1}`;
+      });
+      return row;
+    }));
     setLoading(false);
   }
 
@@ -332,7 +334,7 @@ function PreviewDialog({ open, onOpenChange, entity }: { open: boolean; onOpenCh
           <DialogTitle className="flex items-center gap-2">
             Sample data — {entity.label}
             <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 font-mono text-[11px]">
-              GET {entity.name}?$top=5
+              GET {entity.originalName}?$top=5
             </Badge>
           </DialogTitle>
         </DialogHeader>
@@ -346,8 +348,8 @@ function PreviewDialog({ open, onOpenChange, entity }: { open: boolean; onOpenCh
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
-                    {entity.fields.slice(0, 6).map((f) => (
-                      <th key={f.name} className="text-left px-3 py-2 font-medium text-xs text-muted-foreground whitespace-nowrap">
+                    {fieldsList.slice(0, 6).map((f) => (
+                      <th key={f.originalName} className="text-left px-3 py-2 font-medium text-xs text-muted-foreground whitespace-nowrap">
                         {f.label}
                       </th>
                     ))}
@@ -356,9 +358,9 @@ function PreviewDialog({ open, onOpenChange, entity }: { open: boolean; onOpenCh
                 <tbody>
                   {rows.map((r, i) => (
                     <tr key={i} className="border-t hover:bg-muted/30">
-                      {entity.fields.slice(0, 6).map((f) => (
-                        <td key={f.name} className="px-3 py-2 font-mono text-xs whitespace-nowrap">
-                          {String(r[f.name])}
+                      {fieldsList.slice(0, 6).map((f) => (
+                        <td key={f.originalName} className="px-3 py-2 font-mono text-xs whitespace-nowrap">
+                          {String(r[f.originalName])}
                         </td>
                       ))}
                     </tr>
@@ -378,3 +380,4 @@ function PreviewDialog({ open, onOpenChange, entity }: { open: boolean; onOpenCh
     </Dialog>
   );
 }
+

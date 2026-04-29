@@ -5,8 +5,7 @@ import { StepConnection } from "./StepConnection";
 import { StepEntities } from "./StepEntities";
 import { StepFields } from "./StepFields";
 import { StepReview } from "./StepReview";
-import type { WizardState } from "./types";
-import { SAMPLE_ENTITIES } from "@/lib/sample-metadata";
+import type { WizardState, EntityConfig, FieldConfig } from "./types";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -20,29 +19,12 @@ const STEPS = [
 ];
 
 function buildInitialState(): WizardState {
-  const entities: WizardState["entities"] = {};
-  const fields: WizardState["fields"] = {};
-  SAMPLE_ENTITIES.forEach((e) => {
-    entities[e.name] = {
-      enabled: e.isCore,
-      label: e.label,
-      description: e.description,
-    };
-    fields[e.name] = {};
-    e.fields.forEach((f) => {
-      fields[e.name][f.name] = {
-        enabled: f.isKey || f.recommended,
-        label: f.label,
-        description: f.description,
-      };
-    });
-  });
   return {
     step: 1,
     context: { name: "", description: "", environment: "dev" },
     connection: { baseUrl: "", authType: "OAuth2", tokenUrl: "", clientId: "", clientSecret: "", username: "", password: "" },
-    entities,
-    fields,
+    entities: {},
+    fields: {},
   };
 }
 
@@ -117,10 +99,16 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
       const newFields: Record<string, Record<string, FieldConfig>> = { ...s.fields };
 
       entities.forEach(e => {
+        const isCore = true; // By default from API
         newEntities[e.name] = {
           enabled: true, // Auto-enable if found in metadata
           label: e.name,
-          description: `Entity Set: ${e.name}`
+          description: `Entity Set: ${e.name}`,
+          originalName: e.name,
+          fieldCount: e.fields.length,
+          keyCount: e.fields.filter((f: any) => f.isKey).length,
+          isCore,
+          relationships: e.navigation ? e.navigation.map((n: any) => n.name) : []
         };
         newFields[e.name] = {};
         e.fields.forEach((f: any) => {
@@ -128,7 +116,11 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
             enabled: true,
             label: f.label || f.name,
             description: `Type: ${f.type}`,
-            path: `${e.name}.${f.name}`
+            originalName: f.name,
+            type: f.type,
+            isKey: !!f.isKey,
+            hasValueHelp: false,
+            sample: ""
           };
         });
       });
