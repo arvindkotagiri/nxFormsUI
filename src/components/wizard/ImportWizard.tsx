@@ -40,7 +40,7 @@ function buildInitialState(): WizardState {
   return {
     step: 1,
     context: { name: "", description: "", environment: "dev" },
-    connection: { baseUrl: "", tokenUrl: "", clientId: "", clientSecret: "" },
+    connection: { baseUrl: "", authType: "OAuth2", tokenUrl: "", clientId: "", clientSecret: "", username: "", password: "" },
     entities,
     fields,
   };
@@ -60,7 +60,15 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
       return {
         ...base,
         context: { ...base.context, name: initialData.name || "" },
-        connection: { ...base.connection, baseUrl: initialData.endpoint || "", clientId: initialData.client_id || "", clientSecret: initialData.client_secret || "" },
+        connection: { 
+          ...base.connection, 
+          baseUrl: initialData.endpoint || "", 
+          authType: initialData.auth_type || "OAuth2",
+          clientId: initialData.client_id || "", 
+          clientSecret: initialData.client_secret || "",
+          username: initialData.username || "",
+          password: initialData.password || ""
+        },
         step: startStep || 1
       };
     }
@@ -160,9 +168,11 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
         body: JSON.stringify({
           name: state.context.name,
           endpoint: state.connection.baseUrl,
-          auth_type: "OAuth2",
+          auth_type: state.connection.authType,
           client_id: state.connection.clientId,
           client_secret: state.connection.clientSecret,
+          username: state.connection.username,
+          password: state.connection.password,
           entities: enabledEntities,
           fields: enabledFields
         })

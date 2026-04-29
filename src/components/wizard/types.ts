@@ -8,9 +8,12 @@ export type ContextConfig = {
 
 export type ConnectionConfig = {
   baseUrl: string;
+  authType: "OAuth2" | "Basic" | "None";
   tokenUrl: string;
   clientId: string;
   clientSecret: string;
+  username?: string;
+  password?: string;
 };
 
 export type EntityConfig = {

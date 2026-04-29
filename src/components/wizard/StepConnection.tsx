@@ -6,6 +6,8 @@ import type { ConnectionConfig } from "./types";
 import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2, CheckCircle2, XCircle, ShieldCheck, KeyRound, Link2 } from "lucide-react";
 
+import { toast } from "sonner";
+
 type TestStatus = "idle" | "connecting" | "token" | "metadata" | "success" | "error";
 
 interface Props {
@@ -20,7 +22,12 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
   const [status, setStatus] = useState<TestStatus>(tested ? "success" : "idle");
   const [error, setError] = useState<string | null>(null);
 
-  const canTest = value.baseUrl && value.tokenUrl && value.clientId && value.clientSecret;
+  const canTest = Boolean(
+    value.baseUrl &&
+    (value.authType === "None" ||
+    (value.authType === "Basic" && value.username && value.password) ||
+    (value.authType === "OAuth2" && value.tokenUrl && value.clientId && value.clientSecret))
+  );
 
   async function handleTest() {
     setError(null);
@@ -28,35 +35,48 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
     
     if (!/^https?:\/\//i.test(value.baseUrl)) {
       setStatus("error");
-      setError("Base URL must start with http:// or https://");
+      const errMsg = "Base URL must start with http:// or https://";
+      setError(errMsg);
+      toast.error(errMsg);
       onTested(false, null);
       return;
     }
 
     try {
       setStatus("token");
-      // Future: handle real OAuth token generation
-      await new Promise((r) => setTimeout(r, 500));
       
       setStatus("metadata");
       const response = await fetch("http://localhost:5050/api/fetch-metadata", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: value.baseUrl })
+        body: JSON.stringify({ 
+          url: value.baseUrl,
+          authType: value.authType,
+          tokenUrl: value.tokenUrl,
+          clientId: value.clientId,
+          clientSecret: value.clientSecret,
+          username: value.username,
+          password: value.password,
+        })
       });
 
       const data = await response.json();
-      if (data.status === "success") {
+      if (data.status === "success" && data.entities?.length > 0) {
         setStatus("success");
+        toast.success("Connection verified successfully!");
         onTested(true, data.entities);
       } else {
         setStatus("error");
-        setError(data.message || "Failed to fetch metadata");
+        const errMsg = data.message || "Failed to fetch metadata. No entities found.";
+        setError(errMsg);
+        toast.error(`Connection Error: ${errMsg}`);
         onTested(false, null);
       }
     } catch (err) {
       setStatus("error");
-      setError("Network error connecting to backend");
+      const errMsg = "Network error connecting to backend";
+      setError(errMsg);
+      toast.error(`Connection Error: ${errMsg}`);
       onTested(false, null);
     }
   }
@@ -66,7 +86,7 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
       <header>
         <h2 className="text-2xl font-semibold tracking-tight">Connect to SAP S/4HANA</h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          We use OAuth 2.0 Client Credentials to securely fetch your OData metadata. Credentials are never stored in plain text.
+          Configure authentication to securely fetch your OData metadata. Credentials are never stored in plain text.
         </p>
       </header>
 
@@ -80,50 +100,109 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
           onChange={(v) => onChange({ ...value, baseUrl: v })}
           help="Root path of the OData service. We'll append /$metadata to it."
         />
-        <Field
-          icon={<ShieldCheck className="h-4 w-4" />}
-          id="token-url"
-          label="OAuth Token URL"
-          placeholder="https://auth.s4hana.cloud/oauth/token"
-          value={value.tokenUrl}
-          onChange={(v) => onChange({ ...value, tokenUrl: v })}
-          help="Endpoint that issues the OAuth access token."
-        />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Field
-            icon={<KeyRound className="h-4 w-4" />}
-            id="client-id"
-            label="Client ID"
-            placeholder="sb-mygo-integration!t12345"
-            value={value.clientId}
-            onChange={(v) => onChange({ ...value, clientId: v })}
-          />
-          <div className="space-y-2">
-            <Label htmlFor="client-secret" className="text-sm font-medium flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-muted-foreground" />
-              Client Secret
-            </Label>
-            <div className="relative">
-              <Input
-                id="client-secret"
-                type={showSecret ? "text" : "password"}
-                placeholder="••••••••••••••••"
-                value={value.clientSecret}
-                onChange={(e) => onChange({ ...value, clientSecret: e.target.value })}
-                className="h-11 pr-10 font-mono"
-              />
-              <button
-                type="button"
-                onClick={() => setShowSecret((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                aria-label={showSecret ? "Hide secret" : "Show secret"}
-              >
-                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            <p className="text-xs text-muted-foreground">Stored encrypted at rest.</p>
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="auth-type" className="text-sm font-medium flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            Authentication Type
+          </Label>
+          <select
+            id="auth-type"
+            value={value.authType}
+            onChange={(e) => onChange({ ...value, authType: e.target.value as any })}
+            className="flex h-11 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="OAuth2">OAuth 2.0 (Client Credentials)</option>
+            <option value="Basic">Basic Authentication</option>
+            <option value="None">No Authentication</option>
+          </select>
         </div>
+
+        {value.authType === "OAuth2" && (
+          <>
+            <Field
+              icon={<ShieldCheck className="h-4 w-4" />}
+              id="token-url"
+              label="OAuth Token URL"
+              placeholder="https://auth.s4hana.cloud/oauth/token"
+              value={value.tokenUrl}
+              onChange={(v) => onChange({ ...value, tokenUrl: v })}
+              help="Endpoint that issues the OAuth access token."
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <Field
+                icon={<KeyRound className="h-4 w-4" />}
+                id="client-id"
+                label="Client ID"
+                placeholder="sb-mygo-integration!t12345"
+                value={value.clientId}
+                onChange={(v) => onChange({ ...value, clientId: v })}
+              />
+              <div className="space-y-2">
+                <Label htmlFor="client-secret" className="text-sm font-medium flex items-center gap-2">
+                  <KeyRound className="h-4 w-4 text-muted-foreground" />
+                  Client Secret
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="client-secret"
+                    type={showSecret ? "text" : "password"}
+                    placeholder="••••••••••••••••"
+                    value={value.clientSecret}
+                    onChange={(e) => onChange({ ...value, clientSecret: e.target.value })}
+                    className="h-11 pr-10 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecret((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={showSecret ? "Hide secret" : "Show secret"}
+                  >
+                    {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">Stored encrypted at rest.</p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {value.authType === "Basic" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <Field
+              icon={<KeyRound className="h-4 w-4" />}
+              id="username"
+              label="Username"
+              placeholder="API_USER"
+              value={value.username || ""}
+              onChange={(v) => onChange({ ...value, username: v })}
+            />
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-muted-foreground" />
+                Password
+              </Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showSecret ? "text" : "password"}
+                  placeholder="••••••••••••••••"
+                  value={value.password || ""}
+                  onChange={(e) => onChange({ ...value, password: e.target.value })}
+                  className="h-11 pr-10 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecret((s) => !s)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={showSecret ? "Hide secret" : "Show secret"}
+                >
+                  {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">Stored encrypted at rest.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border bg-card p-5 shadow-sm">
@@ -149,18 +228,20 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
 
         {status !== "idle" && (
           <ul className="mt-5 space-y-2.5">
-            <StatusLine
-              label="Generating OAuth token"
-              state={
-                status === "connecting" ? "loading" :
-                status === "token" || status === "metadata" || status === "success" ? "done" :
-                status === "error" ? "done" : "idle"
-              }
-            />
+            {value.authType === "OAuth2" && (
+              <StatusLine
+                label="Generating OAuth token"
+                state={
+                  status === "connecting" ? "loading" :
+                  status === "token" || status === "metadata" || status === "success" ? "done" :
+                  status === "error" ? "done" : "idle"
+                }
+              />
+            )}
             <StatusLine
               label="Fetching $metadata"
               state={
-                status === "token" ? "loading" :
+                (value.authType === "OAuth2" && status === "token") || (value.authType !== "OAuth2" && status === "connecting") ? "loading" :
                 status === "metadata" || status === "success" ? "done" :
                 status === "error" ? "error" : "idle"
               }
