@@ -37,6 +37,8 @@ export function TemplateIdentify() {
   const [openIfBuilder, setOpenIfBuilder] = useState(false);
   const [valueModalOpen, setValueModalOpen] = useState(false);
 
+  const selectedChunkData = chunks.find((c) => c.id === selectedChunk);
+
   const [selectedTransformation, setSelectedTransformation] = useState<
     string | null
   >(null);
@@ -57,8 +59,6 @@ export function TemplateIdentify() {
       setSelectedEntity(null);
     }
   }, [selectedChunk, selectedChunkData?.fieldMapping]);
-
-  const selectedChunkData = chunks.find((c) => c.id === selectedChunk);
 
   const displayImage = cleanImage || uploadedImage;
 
