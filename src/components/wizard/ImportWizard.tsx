@@ -9,6 +9,7 @@ import type { WizardState, EntityConfig, FieldConfig } from "./types";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+const flaskAPI = import.meta.env.VITE_FLASK_API;
 
 const STEPS = [
   { id: 1, title: "Context", subtitle: "Name & environment" },
@@ -137,8 +138,8 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
     try {
       const isEdit = !!initialData?.id;
       const url = isEdit 
-        ? `http://localhost:5050/api/catalog/${initialData.id}`
-        : "http://localhost:5050/api/catalog";
+        ? `${flaskAPI}/api/catalog/${initialData.id}`
+        : `${flaskAPI}/api/catalog`;
       
       // Flatten enabled entities and fields to save
       const enabledEntities = Object.entries(state.entities)

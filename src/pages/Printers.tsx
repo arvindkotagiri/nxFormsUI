@@ -6,6 +6,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
+const flaskAPI = import.meta.env.VITE_FLASK_API;
+
 type PrinterData = {
   id: string;
   name: string;
@@ -44,9 +46,9 @@ export default function Printers() {
     try {
       setLoading(true);
       // Ensure DB tables exist
-      await fetch("http://localhost:5050/api/init-db", { method: "POST" });
+      await fetch(`${flaskAPI}/api/init-db`, { method: "POST" });
       
-      const res = await fetch("http://localhost:5050/api/printers");
+      const res = await fetch(`${flaskAPI}/api/printers`);
       const data = await res.json();
       setPrinters(data);
     } catch (err) {
@@ -64,7 +66,7 @@ export default function Printers() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch("http://localhost:5050/api/printers", {
+      const res = await fetch(`${flaskAPI}/api/printers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newPrinter),
@@ -84,7 +86,7 @@ export default function Printers() {
   const deletePrinter = async (id: string) => {
     if (!confirm("Are you sure you want to delete this printer?")) return;
     try {
-      await fetch(`http://localhost:5050/api/printers/${id}`, { method: "DELETE" });
+      await fetch(`${flaskAPI}/api/printers/${id}`, { method: "DELETE" });
       toast.success("Printer deleted");
       fetchPrinters();
       if (selected?.id === id) setSelected(null);
@@ -96,7 +98,7 @@ export default function Printers() {
   const testPrint = async (printer: PrinterData) => {
     try {
       const testZpl = "^XA^FO50,50^A0N,50,50^FDTest Print^FS^FO50,120^ADN,36,20^FDPrinter: " + printer.name + "^FS^XZ";
-      const res = await fetch("http://localhost:5050/api/print-zpl", {
+      const res = await fetch(`${flaskAPI}/api/print-zpl`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
