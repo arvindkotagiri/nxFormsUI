@@ -186,9 +186,9 @@ export function IfElseBuilder({
                                 </p>
 
                                 <div className="space-y-1">
-                                    {contextFields.map((field) => (
+                                    {contextFields.map((field, index) => (
                                         <button
-                                            key={field.path}
+                                            key={field.path ?? `${field.name}-${index}`}
                                             onClick={() =>
                                                 updateCondition(activeIndex, "field", field.name)
                                             }
@@ -315,9 +315,9 @@ export function IfElseBuilder({
                                 </p>
 
                                 <div className="space-y-1">
-                                    {targetFields.map((field) => (
+                                    {targetFields.map((field, index) => (
                                         <button
-                                            key={field.path}
+                                            key={field.path ?? `${field.name}-${index}`}
                                             onClick={() =>
                                                 updateThen(activeIndex, "targetField", field.name)
                                             }

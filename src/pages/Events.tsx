@@ -157,7 +157,7 @@ export default function Events() {
                   "Event ID",
                   "Source",
                   "Context",
-                  "Form",
+                  // "Form",
                   "Status",
                   "Timestamp",
                   "Duration",
@@ -190,9 +190,9 @@ export default function Events() {
                   </td>
                   <td className="px-4 py-3 text-foreground">{e.source}</td>
                   <td className="px-4 py-3 text-foreground">{e.context}</td>
-                  <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
+                  {/* <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
                     {e.form}
-                  </td>
+                  </td> */}
                   <td className="px-4 py-3">
                     <StatusBadge status={e.status} />
                   </td>
@@ -309,7 +309,7 @@ export default function Events() {
                 {[
                   ["Source", selectedEvent.source],
                   ["Context", selectedEvent.context],
-                  ["Form", selectedEvent.form],
+                  // ["Form", selectedEvent.form],
                   ["Status", selectedEvent.status],
                   ["Timestamp", selectedEvent.ts],
                 ].map(([k, v]) => (

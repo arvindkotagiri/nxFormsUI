@@ -226,6 +226,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         process_type: formData.process_type ? formData.process_type : null,
         valid_from: formData.valid_from ? formData.valid_from : null,
         valid_to: formData.valid_to ? formData.valid_to : null,
+        printer: formData.printer ? formData.printer : null,
       };
 
       if (isEditMode && configId) {

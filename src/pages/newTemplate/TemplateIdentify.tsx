@@ -602,7 +602,11 @@ export function TemplateIdentify() {
       <IfElseBuilder
         open={openIfBuilder}
         existingConditions={existingTransformation?.conditions}
-        contextFields={selectedContext?.fields || []}
+        contextFields={
+  selectedContext?.isOData
+    ? Object.values(selectedContext.fields).flat()
+    : selectedContext?.fields || []
+}
         targetFields={chunks.map((c) => ({
           name: c.label,
           path: c.id,
