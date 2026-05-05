@@ -9,6 +9,7 @@ import type { WizardState, EntityConfig, FieldConfig } from "./types";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+const flaskAPI = import.meta.env.VITE_FLASK_API;
 
 const STEPS = [
   { id: 1, title: "Context", subtitle: "Name & environment" },

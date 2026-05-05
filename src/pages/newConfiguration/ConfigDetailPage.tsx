@@ -98,6 +98,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     active: true,
     valid_from: "",
     valid_to: "",
+    printer: "",
   });
 
   // ---------- Fetch reference data ----------
@@ -164,6 +165,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         active: data.active ?? true,
         valid_from: data.valid_from || "",
         valid_to: data.valid_to || "",
+        printer: data.printer || "",
       });
     } catch (e: any) {
       setErrorBanner(e?.message || "Failed to load configuration");
@@ -226,6 +228,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         process_type: formData.process_type ? formData.process_type : null,
         valid_from: formData.valid_from ? formData.valid_from : null,
         valid_to: formData.valid_to ? formData.valid_to : null,
+        printer: formData.printer ? formData.printer : null,
       };
 
       if (isEditMode && configId) {

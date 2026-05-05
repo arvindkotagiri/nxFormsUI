@@ -40,6 +40,8 @@ export function TemplateIdentify() {
   const [openIfBuilder, setOpenIfBuilder] = useState(false);
   const [valueModalOpen, setValueModalOpen] = useState(false);
 
+  const selectedChunkData = chunks.find((c) => c.id === selectedChunk);
+
   const [selectedTransformation, setSelectedTransformation] = useState<
     string | null
   >(null);
@@ -47,7 +49,6 @@ export function TemplateIdentify() {
     any | null
   >(null);
 
-  const selectedChunkData = chunks.find((c) => c.id === selectedChunk);
   const displayImage = cleanImage || uploadedImage;
   const isDynamic = selectedChunkData && !selectedChunkData.isStatic;
   const hasFieldMapping = !!selectedChunkData?.fieldMapping;

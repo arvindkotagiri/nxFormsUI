@@ -6,6 +6,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
+const flaskAPI = import.meta.env.VITE_FLASK_API;
+
 type PrinterData = {
   id: string;
   name: string;
@@ -65,7 +67,6 @@ export default function Printers() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const flaskAPI = import.meta.env.VITE_FLASK_API;
       const res = await fetch(`${flaskAPI}/api/printers`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -86,7 +87,6 @@ export default function Printers() {
   const deletePrinter = async (id: string) => {
     if (!confirm("Are you sure you want to delete this printer?")) return;
     try {
-      const flaskAPI = import.meta.env.VITE_FLASK_API;
       await fetch(`${flaskAPI}/api/printers/${id}`, { method: "DELETE" });
       toast.success("Printer deleted");
       fetchPrinters();

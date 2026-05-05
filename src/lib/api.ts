@@ -163,26 +163,7 @@ export const getWarehouses = () => request<any[]>(`/reference/warehouses`);
 export const getProcessTypes = () => request<any[]>(`/reference/process-types`);
 // export const getLabels = () => request<any[]>(`/reference/labels`);
 export const getLabels = () => request<any[]>(`/reference/all-labels`);
-// export const getPrinters = () => request<any[]>(`/reference/printers`);
-export const getPrinters = () => {
-  return [
-    {
-      id: "PRT001",
-      name: "Printer 01",
-      description: "Printer in Warehouse A",
-    },
-    {
-      id: "PRT002",
-      name: "Printer 02",
-      description: "Printer in Warehouse B",
-    },
-    {
-      id: "PRT003",
-      name: "Printer 03",
-      description: "Printer in Warehouse C",
-    },
-  ];
-};
+export const getPrinters = () => request<any[]>(`/reference/printers`);
 
 export const getCompanyCodes = () => request<any[]>(`/reference/company-codes`);
 export const getSalesOrgs = () => request<any[]>(`/reference/sales-orgs`);

@@ -10,6 +10,8 @@ import { toast } from "sonner";
 
 type TestStatus = "idle" | "connecting" | "token" | "metadata" | "success" | "error";
 
+const flaskAPI = import.meta.env.VITE_FLASK_API;
+
 interface Props {
   value: ConnectionConfig;
   onChange: (next: ConnectionConfig) => void;
@@ -46,7 +48,7 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
       setStatus("token");
       
       setStatus("metadata");
-      const flaskAPI = import.meta.env.VITE_FLASK_API;
+
       const response = await fetch(`${flaskAPI}/api/fetch-metadata`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
