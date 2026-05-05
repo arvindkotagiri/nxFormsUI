@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useWizard, type Transformation } from "@/context/WizardContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   MousePointer2,
   Lock,
   Zap,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TransformationModal } from "./TransformationModal";
@@ -103,10 +104,13 @@ export function TemplateIdentify() {
   // -------------------------------------------------
   // PREFETCH STEP 3 (OPTIMIZATION)
   // -------------------------------------------------
+  const [isPrefetching, setIsPrefetching] = useState(false);
+
   useEffect(() => {
     const prefetchHTML = async () => {
-      if (generatedHTML || !uploadedFile || chunks.length === 0) return;
+      if (generatedHTML || !uploadedFile || chunks.length === 0 || isPrefetching) return;
       
+      setIsPrefetching(true);
       const formData = new FormData();
       formData.append("image", uploadedFile);
 
@@ -128,13 +132,15 @@ export function TemplateIdentify() {
         }
       } catch (err) {
         console.warn("Prefetch HTML failed", err);
+      } finally {
+        setIsPrefetching(false);
       }
     };
     
     // Small delay to ensure step 2 UI is snappy first
     const timer = setTimeout(prefetchHTML, 1000);
     return () => clearTimeout(timer);
-  }, [generatedHTML, uploadedFile, chunks, setGeneratedHTML]);
+  }, [generatedHTML, uploadedFile, chunks, setGeneratedHTML, isPrefetching]);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -520,10 +526,20 @@ export function TemplateIdentify() {
 
         <Button
           onClick={nextStep}
+          disabled={isPrefetching}
           className="bg-accent text-accent-foreground text-xs font-bold uppercase tracking-widest px-8"
         >
-          Continue
-          <ArrowRight size={14} />
+          {isPrefetching ? (
+            <>
+              <Loader2 className="w-3 h-3 mr-2 animate-spin" />
+              Generating Canvas...
+            </>
+          ) : (
+            <>
+              Continue
+              <ArrowRight size={14} />
+            </>
+          )}
         </Button>
       </div>
 
