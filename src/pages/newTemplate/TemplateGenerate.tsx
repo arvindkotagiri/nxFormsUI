@@ -41,6 +41,7 @@ export function TemplateGenerate() {
   const [copiedZPL, setCopiedZPL] = useState(false);
   const [copiedHTML, setCopiedHTML] = useState(false);
   const [copiedXDP, setCopiedXDP] = useState(false);
+  const [xdpLayout, setXdpLayout] = useState<any[]>([]);
 
   // --- API Call: ZPL Generation ---
   const generateZPL = useCallback(async () => {
@@ -112,6 +113,7 @@ export function TemplateGenerate() {
       const data = await res.json();
       if (data.status === "success") {
         setGeneratedXDP(data.xdp_code);
+        setXdpLayout(data.layout_preview || []);
       }
     } catch (e) {
       toast.error("XDP Generation Failed");
@@ -450,21 +452,54 @@ export function TemplateGenerate() {
           </BoxWrapper>
 
           <BoxWrapper
-            title="XDP Preview"
+            title="XDP Structural Preview"
             icon={<Monitor className="w-4 h-4" />}
           >
-            <div className="relative bg-white border border-slate-200 rounded h-[450px] overflow-hidden shadow-sm flex items-center justify-center p-6">
-              <div className="text-center space-y-4">
-                <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto">
-                   <FileText className="w-8 h-8 text-orange-500" />
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-slate-800 uppercase tracking-tight">XDP Preview Unavailable</h4>
-                  <p className="text-[10px] text-slate-500 font-medium max-w-[240px] leading-relaxed">
-                    XDP rendering requires Adobe Experience Manager or LiveCycle. You can download the source and open it in Adobe Designer.
-                  </p>
-                </div>
-              </div>
+            <div className="relative bg-slate-50 border border-slate-200 rounded h-[450px] overflow-hidden shadow-inner flex flex-col items-center justify-center">
+               {isLoadingXDP && <LoadingOverlay />}
+               
+               {generatedXDP ? (
+                 <div className="relative h-full w-full p-4 flex items-center justify-center">
+                    <div className="relative border shadow-lg bg-white max-h-full">
+                       <img src={uploadedImage || ""} className="max-h-[380px] object-contain opacity-40" alt="XDP Base" />
+                       
+                       <div className="absolute inset-0 pointer-events-none">
+                          {xdpLayout.map((f, i) => (
+                             <div 
+                                key={i}
+                                className="absolute border border-orange-500 bg-orange-500/10 flex items-center justify-center overflow-hidden"
+                                style={{
+                                   left: f.x,
+                                   top: f.y,
+                                   width: f.w || 'auto',
+                                   height: f.h || 'auto',
+                                   minWidth: '4px',
+                                   minHeight: '4px'
+                                }}
+                             >
+                                <span className="text-[6px] font-bold text-orange-700 truncate px-0.5">{f.name}</span>
+                             </div>
+                          ))}
+                       </div>
+                    </div>
+                    
+                    <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded text-[8px] font-bold text-slate-500 border shadow-sm">
+                       {xdpLayout.length} Fields Mapped
+                    </div>
+                 </div>
+               ) : (
+                 <div className="text-center space-y-4">
+                    <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto">
+                       <FileText className="w-8 h-8 text-orange-500" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-bold text-slate-800 uppercase tracking-tight">XDP Preview Awaiting</h4>
+                      <p className="text-[10px] text-slate-500 font-medium max-w-[240px] leading-relaxed">
+                        The AI is architecting the XDP structure. Once complete, a structural "Ghost Preview" will appear here.
+                      </p>
+                    </div>
+                 </div>
+               )}
             </div>
           </BoxWrapper>
         </div>
