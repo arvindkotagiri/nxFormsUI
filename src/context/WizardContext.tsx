@@ -20,7 +20,7 @@ export type TableCell = {
 
 export type LabelChunk = {
   id: string;
-  type: 'text' | 'barcode' | 'table_cell' | 'table';
+  type: 'text' | 'barcode' | 'table_cell' | 'table' | 'logo' | 'signature';
   x: number;
   y: number;
   width: number;
@@ -35,6 +35,7 @@ export type LabelChunk = {
   rows?: TableCell[][];
   headers?: string[];
   isDynamicTable?: boolean;
+  cropped_b64?: string;
 };
 
 export type LabelSize = {
@@ -138,7 +139,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       
       return {
         id: `chunk-${index}-${Date.now()}`,
-        type: isTable ? 'table' : (field.content_type === 'barcode' ? 'barcode' : (field.content_type === 'table_cell' ? 'table_cell' : 'text')),
+        type: isTable ? 'table' : (field.content_type === 'barcode' ? 'barcode' : (field.content_type === 'table_cell' ? 'table_cell' : (field.content_type === 'logo' ? 'logo' : (field.content_type === 'signature' ? 'signature' : 'text')))),
         x: xmin / 10,
         y: ymin / 10,
         width: (xmax - xmin) / 10,
@@ -150,6 +151,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         transformations: [],
         rows: isTable ? field.table_data : undefined,
         isDynamicTable: isTable,
+        cropped_b64: field.cropped_b64,
       };
     });
     setState(prev => {

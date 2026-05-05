@@ -326,6 +326,7 @@ export function TemplateAdapt() {
 
     const {
         uploadedFile,
+        chunks,
         generatedHTML,
         setGeneratedHTML,
         nextStep,
@@ -364,6 +365,12 @@ export function TemplateAdapt() {
 
         const formData = new FormData();
         formData.append("image", uploadedFile);
+
+        // Add pre-detected crops
+        const logo = chunks.find(c => c.type === 'logo')?.cropped_b64;
+        const sig = chunks.find(c => c.type === 'signature')?.cropped_b64;
+        if (logo) formData.append("logo_b64", logo);
+        if (sig) formData.append("signature_b64", sig);
 
         try {
 

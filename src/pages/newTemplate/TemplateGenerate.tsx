@@ -30,9 +30,12 @@ export function TemplateGenerate() {
     nextStep,
     prevStep,
     uploadedFile,
+    uploadedImage,
     outputMode,
-    modifiedLabelBlob, // Get modified blob
+    modifiedLabelBlob,
   } = useWizard();
+
+  const baseUrl = flaskAPI || 'http://localhost:5050';
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoadingZPL, setIsLoadingZPL] = useState(false);
@@ -56,7 +59,7 @@ export function TemplateGenerate() {
     formData.append("image", fileToSend);
     try {
       // const res = await fetch('http://localhost:5050/generate-zpl', { method: 'POST', body: formData });
-      const res = await fetch(`${flaskAPI}/generate-zpl`, {
+      const res = await fetch(`${baseUrl}/generate-zpl`, {
         method: "POST",
         body: formData,
       });
@@ -82,7 +85,7 @@ export function TemplateGenerate() {
     formData.append("image", fileToSend);
     try {
       // const res = await fetch('http://localhost:5050/replicate-invoice', { method: 'POST', body: formData });
-      const res = await fetch(`${flaskAPI}/replicate-invoice`, {
+      const res = await fetch(`${baseUrl}/replicate-invoice`, {
         method: "POST",
         body: formData,
       });
@@ -106,7 +109,7 @@ export function TemplateGenerate() {
     const formData = new FormData();
     formData.append("image", fileToSend);
     try {
-      const res = await fetch(`${flaskAPI}/generate-xdp`, {
+      const res = await fetch(`${baseUrl}/generate-xdp`, {
         method: "POST",
         body: formData,
       });
