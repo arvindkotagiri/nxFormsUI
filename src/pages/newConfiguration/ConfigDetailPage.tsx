@@ -98,6 +98,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     active: true,
     valid_from: "",
     valid_to: "",
+    printer: "",
   });
 
   // ---------- Fetch reference data ----------
@@ -164,6 +165,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         active: data.active ?? true,
         valid_from: data.valid_from || "",
         valid_to: data.valid_to || "",
+        printer: data.printer || "",
       });
     } catch (e: any) {
       setErrorBanner(e?.message || "Failed to load configuration");
