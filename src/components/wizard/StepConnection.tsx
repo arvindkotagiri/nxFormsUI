@@ -46,7 +46,8 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
       setStatus("token");
       
       setStatus("metadata");
-      const response = await fetch("http://localhost:5050/api/fetch-metadata", {
+      const flaskAPI = import.meta.env.VITE_FLASK_API;
+      const response = await fetch(`${flaskAPI}/api/fetch-metadata`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 

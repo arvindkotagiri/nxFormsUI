@@ -27,8 +27,9 @@ export default function ApiConfigurations() {
   const fetchApis = async () => {
     try {
       setLoading(true);
-      await fetch("http://localhost:5050/api/catalog-init", { method: "POST" });
-      const res = await fetch("http://localhost:5050/api/catalog");
+      const flaskAPI = import.meta.env.VITE_FLASK_API;
+      await fetch(`${flaskAPI}/api/catalog-init`, { method: "POST" });
+      const res = await fetch(`${flaskAPI}/api/catalog`);
       const data = await res.json();
       setApis(data);
     } catch (err) {
@@ -45,7 +46,8 @@ export default function ApiConfigurations() {
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this API configuration?")) return;
     try {
-      const res = await fetch(`http://localhost:5050/api/catalog/${id}`, { method: "DELETE" });
+      const flaskAPI = import.meta.env.VITE_FLASK_API;
+      const res = await fetch(`${flaskAPI}/api/catalog/${id}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("API deleted successfully");
         fetchApis();

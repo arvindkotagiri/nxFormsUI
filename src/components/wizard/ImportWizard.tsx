@@ -39,6 +39,44 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
   const [state, setState] = useState<WizardState>(() => {
     const base = buildInitialState();
     if (initialData) {
+      // Rehydrate entities and fields from backend format (arrays) to wizard format (Records)
+      const entitiesRecord: Record<string, EntityConfig> = {};
+      if (Array.isArray(initialData.entities)) {
+        initialData.entities.forEach((e: any) => {
+          entitiesRecord[e.name] = {
+            enabled: true, // If it's in the backend, it's enabled
+            label: e.label || e.name,
+            description: e.description || "",
+            originalName: e.name,
+            fieldCount: e.fieldCount || 0,
+            keyCount: e.keyCount || 0,
+            isCore: e.isCore,
+            relationships: e.relationships || []
+          };
+        });
+      }
+
+      const fieldsRecord: Record<string, Record<string, FieldConfig>> = {};
+      if (initialData.fields && typeof initialData.fields === 'object') {
+        Object.entries(initialData.fields).forEach(([entityName, fields]: [string, any]) => {
+          fieldsRecord[entityName] = {};
+          if (Array.isArray(fields)) {
+            fields.forEach((f: any) => {
+              fieldsRecord[entityName][f.name] = {
+                enabled: true,
+                label: f.label || f.name,
+                description: f.description || "",
+                originalName: f.name,
+                type: f.type || "",
+                isKey: !!f.isKey,
+                hasValueHelp: f.hasValueHelp,
+                sample: f.sample
+              };
+            });
+          }
+        });
+      }
+
       return {
         ...base,
         context: { ...base.context, name: initialData.name || "" },
@@ -51,6 +89,8 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
           username: initialData.username || "",
           password: initialData.password || ""
         },
+        entities: entitiesRecord,
+        fields: fieldsRecord,
         step: startStep || 1
       };
     }
@@ -99,29 +139,39 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
       const newFields: Record<string, Record<string, FieldConfig>> = { ...s.fields };
 
       entities.forEach(e => {
-        const isCore = true; // By default from API
-        newEntities[e.name] = {
-          enabled: true, // Auto-enable if found in metadata
-          label: e.name,
-          description: `Entity Set: ${e.name}`,
-          originalName: e.name,
-          fieldCount: e.fields.length,
-          keyCount: e.fields.filter((f: any) => f.isKey).length,
-          isCore,
-          relationships: e.navigation ? e.navigation.map((n: any) => n.name) : []
-        };
-        newFields[e.name] = {};
-        e.fields.forEach((f: any) => {
-          newFields[e.name][f.name] = {
-            enabled: true,
-            label: f.label || f.name,
-            description: `Type: ${f.type}`,
-            originalName: f.name,
-            type: f.type,
-            isKey: !!f.isKey,
-            hasValueHelp: false,
-            sample: ""
+        // Only update if not already existing, or update counts
+        if (!newEntities[e.name]) {
+          newEntities[e.name] = {
+            enabled: false, // Default to disabled, user must pick
+            label: e.name,
+            description: `Entity Set: ${e.name}`,
+            originalName: e.name,
+            fieldCount: e.fields.length,
+            keyCount: e.fields.filter((f: any) => f.isKey).length,
+            isCore: true,
+            relationships: e.navigation ? e.navigation.map((n: any) => n.name) : []
           };
+        } else {
+            // Update counts if entity exists
+            newEntities[e.name].fieldCount = e.fields.length;
+            newEntities[e.name].keyCount = e.fields.filter((f: any) => f.isKey).length;
+        }
+
+        if (!newFields[e.name]) newFields[e.name] = {};
+        
+        e.fields.forEach((f: any) => {
+          if (!newFields[e.name][f.name]) {
+            newFields[e.name][f.name] = {
+              enabled: true, // Default fields to enabled if entity is picked
+              label: f.label || f.name,
+              description: `Type: ${f.type}`,
+              originalName: f.name,
+              type: f.type,
+              isKey: !!f.isKey,
+              hasValueHelp: false,
+              sample: ""
+            };
+          }
         });
       });
 
@@ -135,10 +185,11 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
 
   async function handleSave() {
     try {
+      const flaskAPI = import.meta.env.VITE_FLASK_API;
       const isEdit = !!initialData?.id;
       const url = isEdit 
-        ? `http://localhost:5050/api/catalog/${initialData.id}`
-        : "http://localhost:5050/api/catalog";
+        ? `${flaskAPI}/api/catalog/${initialData.id}`
+        : `${flaskAPI}/api/catalog`;
       
       // Flatten enabled entities and fields to save
       const enabledEntities = Object.entries(state.entities)

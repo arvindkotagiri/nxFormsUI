@@ -27,6 +27,8 @@ export function TemplateIdentify() {
     nextStep,
     prevStep,
     selectedContext,
+    generatedHTML,
+    setGeneratedHTML,
   } = useWizard();
 
   const [selectedChunk, setSelectedChunk] = useState<string | null>(null);
@@ -44,6 +46,12 @@ export function TemplateIdentify() {
     any | null
   >(null);
 
+  const selectedChunkData = chunks.find((c) => c.id === selectedChunk);
+  const displayImage = cleanImage || uploadedImage;
+  const isDynamic = selectedChunkData && !selectedChunkData.isStatic;
+  const hasFieldMapping = !!selectedChunkData?.fieldMapping;
+  const canUseTransformations = isDynamic && hasFieldMapping;
+
   useEffect(() => {
     if (chunks.length > 0 && !selectedChunk) {
       setSelectedChunk(chunks[0].id);
@@ -57,15 +65,6 @@ export function TemplateIdentify() {
       setSelectedEntity(null);
     }
   }, [selectedChunk, selectedChunkData?.fieldMapping]);
-
-  const selectedChunkData = chunks.find((c) => c.id === selectedChunk);
-
-  const displayImage = cleanImage || uploadedImage;
-
-  const isDynamic = selectedChunkData && !selectedChunkData.isStatic;
-  const hasFieldMapping = !!selectedChunkData?.fieldMapping;
-
-  const canUseTransformations = isDynamic && hasFieldMapping;
 
   const handleTransformationSelect = (type: string) => {
     if (!selectedChunkData) return;
@@ -98,6 +97,35 @@ export function TemplateIdentify() {
 
     setExistingTransformation(null);
   };
+
+  // -------------------------------------------------
+  // PREFETCH STEP 3 (OPTIMIZATION)
+  // -------------------------------------------------
+  useEffect(() => {
+    const prefetchHTML = async () => {
+      if (generatedHTML || !uploadedFile) return;
+      
+      const formData = new FormData();
+      formData.append("image", uploadedFile);
+      const baseUrl = import.meta.env.VITE_FLASK_API || 'http://localhost:5050';
+      try {
+        const res = await fetch(`${baseUrl}/replicate-invoice`, {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          setGeneratedHTML(data.full_html);
+        }
+      } catch (err) {
+        console.warn("Prefetch HTML failed", err);
+      }
+    };
+    
+    // Small delay to ensure step 2 UI is snappy first
+    const timer = setTimeout(prefetchHTML, 1000);
+    return () => clearTimeout(timer);
+  }, [generatedHTML, uploadedFile, setGeneratedHTML]);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -602,7 +630,23 @@ export function TemplateIdentify() {
       <IfElseBuilder
         open={openIfBuilder}
         existingConditions={existingTransformation?.conditions}
-        contextFields={selectedContext?.fields || []}
+        contextFields={(() => {
+          if (!selectedContext?.fields) return [];
+          if (Array.isArray(selectedContext.fields)) return selectedContext.fields;
+          
+          const flat: any[] = [];
+          Object.entries(selectedContext.fields).forEach(([entity, fields]: [string, any]) => {
+            if (Array.isArray(fields)) {
+              fields.forEach(f => {
+                flat.push({
+                  name: f.name || f,
+                  path: `${entity}.${f.path || f.name || f}`
+                });
+              });
+            }
+          });
+          return flat;
+        })()}
         targetFields={chunks.map((c) => ({
           name: c.label,
           path: c.id,

@@ -232,7 +232,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useWizard } from '@/context/WizardContext';
-import { BUSINESS_CONTEXTS, LABEL_SIZES } from '@/data/labelData';
+import { LABEL_SIZES } from '@/data/labelData';
 import { Upload, Loader2 } from 'lucide-react';
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 
@@ -256,26 +256,26 @@ export function TemplateUpload() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [contexts, setContexts] = useState<any[]>(BUSINESS_CONTEXTS);
+  const [contexts, setContexts] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchContexts = async () => {
       try {
         const response = await fetch(`${flaskAPI || 'http://localhost:5050'}/api/catalog`);
         const apis = await response.json();
-        
-        const dynamicContexts = [];
-        apis.forEach((api: any) => {
-          dynamicContexts.push({
+        if (Array.isArray(apis)) {
+          const dynamicContexts = apis.map((api: any) => ({
             id: `api-${api.id}`,
             name: api.name,
             isOData: !!(api.entities && Array.isArray(api.entities) && api.entities.length > 0),
             entities: api.entities || [],
             fields: api.fields || {}
-          });
-        });
-        
-        setContexts([...BUSINESS_CONTEXTS, ...dynamicContexts]);
+          }));
+          setContexts(dynamicContexts);
+        } else {
+          console.warn("API Catalog returned non-array response:", apis);
+          setContexts([]);
+        }
       } catch (err) {
         console.error("Failed to fetch contexts", err);
       }
@@ -299,12 +299,13 @@ export function TemplateUpload() {
   const isAlreadyAnalyzed = lastAnalyzedFile === currentFileSignature && chunks.length > 0;
 
   const handleUploadAndProcess = async () => {
-    if (!uploadedFile) {
-      console.error("No file uploaded");
+    if (!uploadedFile) return;
+
+    if (isAlreadyAnalyzed) {
+      nextStep();
       return;
     }
 
-    console.log("Triggering analysis for:", uploadedFile.name);
     setIsProcessing(true);
     setErrorMessage(null);
 

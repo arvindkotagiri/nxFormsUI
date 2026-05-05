@@ -123,8 +123,17 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const setCleanImage = (image: string | null) => setState(prev => ({ ...prev, cleanImage: image }));
 
   const setAnalysisResults = useCallback((fields: any[], annotatedImg: string, cleanImg?: string) => {
+    if (!Array.isArray(fields)) {
+      console.warn("setAnalysisResults: fields is not an array", fields);
+      return;
+    }
     const mappedChunks: LabelChunk[] = fields.map((field, index) => {
-      const [ymin, xmin, ymax, xmax] = field.box_2d;
+      // Safety check for box_2d
+      const box = Array.isArray(field.box_2d) && field.box_2d.length === 4 
+        ? field.box_2d 
+        : [0, 0, 0, 0];
+        
+      const [ymin, xmin, ymax, xmax] = box;
       const isTable = field.content_type === 'table';
       
       return {
@@ -134,8 +143,8 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         y: ymin / 10,
         width: (xmax - xmin) / 10,
         height: (ymax - ymin) / 10,
-        label: field.field_name,
-        value: field.value,
+        label: field.field_name || `field_${index}`,
+        value: field.value || "",
         isStatic: field.category === 'static',
         barcodeType: field.content_type === 'barcode' ? 'code128' : undefined,
         transformations: [],
