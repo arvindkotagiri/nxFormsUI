@@ -45,6 +45,7 @@ export default function Printers() {
   const fetchPrinters = async () => {
     try {
       setLoading(true);
+      const flaskAPI = import.meta.env.VITE_FLASK_API;
       // Ensure DB tables exist
       await fetch(`${flaskAPI}/api/init-db`, { method: "POST" });
       
@@ -97,6 +98,7 @@ export default function Printers() {
 
   const testPrint = async (printer: PrinterData) => {
     try {
+      const flaskAPI = import.meta.env.VITE_FLASK_API;
       const testZpl = "^XA^FO50,50^A0N,50,50^FDTest Print^FS^FO50,120^ADN,36,20^FDPrinter: " + printer.name + "^FS^XZ";
       const res = await fetch(`${flaskAPI}/api/print-zpl`, {
         method: "POST",

@@ -1,3 +1,4 @@
+import { toBlob } from 'html-to-image';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useWizard } from '@/context/WizardContext';
 import { Button } from '@/components/ui/button';
@@ -20,10 +21,14 @@ export function TemplateAdapt() {
 
     const {
         uploadedFile,
+        chunks,
         generatedHTML,
         setGeneratedHTML,
         nextStep,
-        prevStep
+        prevStep,
+        setModifiedLabelBlob,
+        setGeneratedZPL,
+        setGeneratedXDP
     } = useWizard();
 
     const [isLoading, setIsLoading] = useState(false);
@@ -56,6 +61,12 @@ export function TemplateAdapt() {
         const formData = new FormData();
         formData.append("image", uploadedFile);
 
+        // Add pre-detected crops
+        const logo = chunks.find(c => c.type === 'logo')?.cropped_b64;
+        const sig = chunks.find(c => c.type === 'signature')?.cropped_b64;
+        if (logo) formData.append("logo_b64", logo);
+        if (sig) formData.append("signature_b64", sig);
+
         try {
 
             // const res = await fetch(
@@ -64,7 +75,8 @@ export function TemplateAdapt() {
             //         method: "POST",
             //         body: formData
             //     }
-            const res = await fetch(`${flaskAPI}/replicate-invoice`, {
+            const baseUrl = flaskAPI || 'http://localhost:5050';
+            const res = await fetch(`${baseUrl}/replicate-invoice`, {
                 method: "POST",
                 body: formData
              }
@@ -283,15 +295,40 @@ export function TemplateAdapt() {
     // Save
     // -------------------------------------------------
 
-    const handleSave = () => {
-
+    const handleSave = async () => {
         if (editorRef.current) {
+            setIsLoading(true);
+            try {
+                // Clear selection outlines before capturing
+                selectedElements.forEach(el => (el.style.outline = ""));
+                
+                // Capture the current canvas state as a blob for downstream generation (ZPL/XDP)
+                const blob = await toBlob(editorRef.current, {
+                    backgroundColor: '#ffffff',
+                    width: editorRef.current.offsetWidth,
+                    height: editorRef.current.offsetHeight,
+                });
+                
+                if (blob) {
+                    setModifiedLabelBlob(blob);
+                    // Reset generated codes so Step 4 regenerates them from the NEW blob
+                    setGeneratedZPL(null);
+                    setGeneratedXDP(null);
+                }
 
-            selectedElements.forEach(el => (el.style.outline = ""));
-            setGeneratedHTML(editorRef.current.innerHTML);
+                setGeneratedHTML(editorRef.current.innerHTML);
+                nextStep();
+            } catch (err) {
+                console.error("Capture Error:", err);
+                toast.error("Failed to capture design snapshot");
+                // Still allow moving forward but warn
+                nextStep();
+            } finally {
+                setIsLoading(false);
+            }
+        } else {
+            nextStep();
         }
-
-        nextStep();
     };
 
     // -------------------------------------------------

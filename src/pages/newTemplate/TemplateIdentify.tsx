@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { TransformationModal } from "./TransformationModal";
 import { IfElseBuilder } from "./IfElseBuilder";
 import { TransformationValueModal } from "./TransformationValueModal";
+import { FieldMappingSelector } from "./FieldMappingSelector";
 
 export function TemplateIdentify() {
   const {
@@ -27,6 +28,8 @@ export function TemplateIdentify() {
     nextStep,
     prevStep,
     selectedContext,
+    generatedHTML,
+    setGeneratedHTML,
   } = useWizard();
 
   const [selectedChunk, setSelectedChunk] = useState<string | null>(null);
@@ -46,6 +49,11 @@ export function TemplateIdentify() {
     any | null
   >(null);
 
+  const displayImage = cleanImage || uploadedImage;
+  const isDynamic = selectedChunkData && !selectedChunkData.isStatic;
+  const hasFieldMapping = !!selectedChunkData?.fieldMapping;
+  const canUseTransformations = isDynamic && hasFieldMapping;
+
   useEffect(() => {
     if (chunks.length > 0 && !selectedChunk) {
       setSelectedChunk(chunks[0].id);
@@ -59,13 +67,6 @@ export function TemplateIdentify() {
       setSelectedEntity(null);
     }
   }, [selectedChunk, selectedChunkData?.fieldMapping]);
-
-  const displayImage = cleanImage || uploadedImage;
-
-  const isDynamic = selectedChunkData && !selectedChunkData.isStatic;
-  const hasFieldMapping = !!selectedChunkData?.fieldMapping;
-
-  const canUseTransformations = isDynamic && hasFieldMapping;
 
   const handleTransformationSelect = (type: string) => {
     if (!selectedChunkData) return;
@@ -98,6 +99,42 @@ export function TemplateIdentify() {
 
     setExistingTransformation(null);
   };
+
+  // -------------------------------------------------
+  // PREFETCH STEP 3 (OPTIMIZATION)
+  // -------------------------------------------------
+  useEffect(() => {
+    const prefetchHTML = async () => {
+      if (generatedHTML || !uploadedFile || chunks.length === 0) return;
+      
+      const formData = new FormData();
+      formData.append("image", uploadedFile);
+
+      // Add pre-detected crops
+      const logo = chunks.find(c => c.type === 'logo')?.cropped_b64;
+      const sig = chunks.find(c => c.type === 'signature')?.cropped_b64;
+      if (logo) formData.append("logo_b64", logo);
+      if (sig) formData.append("signature_b64", sig);
+
+      const baseUrl = import.meta.env.VITE_FLASK_API || 'http://localhost:5050';
+      try {
+        const res = await fetch(`${baseUrl}/replicate-invoice`, {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          setGeneratedHTML(data.full_html);
+        }
+      } catch (err) {
+        console.warn("Prefetch HTML failed", err);
+      }
+    };
+    
+    // Small delay to ensure step 2 UI is snappy first
+    const timer = setTimeout(prefetchHTML, 1000);
+    return () => clearTimeout(timer);
+  }, [generatedHTML, uploadedFile, chunks, setGeneratedHTML]);
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -288,34 +325,20 @@ export function TemplateIdentify() {
                               return firstRow.map((cell: any, idx: number) => (
                                 <div key={idx} className="flex gap-2 items-center bg-card p-2 rounded-lg border border-border shadow-sm">
                                    <span className="text-[9px] font-mono text-muted-foreground w-4">C{idx+1}</span>
-                                   <select 
-                                     className="flex-1 bg-transparent text-[11px] font-semibold outline-none"
+                                   <FieldMappingSelector 
                                      value={cell.fieldMapping || ""}
-                                     onChange={(e) => {
+                                     selectedContext={selectedContext}
+                                     onSelect={(full, field) => {
                                          const updatedRows = [...(selectedChunkData.rows || [])];
                                          updatedRows.forEach(r => {
-                                             if (Array.isArray(r) && r[idx]) r[idx].fieldMapping = e.target.value;
+                                             if (Array.isArray(r) && r[idx]) {
+                                                r[idx].fieldMapping = full;
+                                                r[idx].value = field;
+                                             }
                                          });
                                          updateChunk(selectedChunkData.id, { rows: updatedRows });
                                      }}
-                                   >
-                                     <option value="">Map Column...</option>
-                                     {selectedContext?.isOData ? (
-                                       Object.entries(selectedContext.fields).flatMap(([entName, flds]: [string, any]) => 
-                                         flds.map((f: any) => (
-                                           <option key={`${entName}.${f.name}`} value={`${entName}.${f.name}`}>
-                                             {entName}.{f.name}
-                                           </option>
-                                         ))
-                                       )
-                                     ) : (
-                                       selectedContext?.fields?.map((field: any) => (
-                                         <option key={field.path} value={field.name}>
-                                           {field.name}
-                                         </option>
-                                       ))
-                                     )}
-                                   </select>
+                                   />
                                 </div>
                               ));
                             }
@@ -323,34 +346,20 @@ export function TemplateIdentify() {
                             return Object.entries(firstRow).map(([key, cell]: [string, any], idx: number) => (
                               <div key={key} className="flex gap-2 items-center bg-card p-2 rounded-lg border border-border shadow-sm">
                                 <span className="text-[9px] font-mono text-muted-foreground truncate w-16" title={key}>{key}</span>
-                                <select 
-                                  className="flex-1 bg-transparent text-[11px] font-semibold outline-none"
+                                <FieldMappingSelector 
                                   value={cell.fieldMapping || ""}
-                                  onChange={(e) => {
+                                  selectedContext={selectedContext}
+                                  onSelect={(full, field) => {
                                       const updatedRows = [...(selectedChunkData.rows || [])];
                                       updatedRows.forEach((r: any) => {
-                                          if (r[key]) r[key].fieldMapping = e.target.value;
+                                          if (r[key]) {
+                                            r[key].fieldMapping = full;
+                                            r[key].value = field; // Visual part
+                                          }
                                       });
                                       updateChunk(selectedChunkData.id, { rows: updatedRows });
                                   }}
-                                >
-                                  <option value="">Map Column...</option>
-                                   {selectedContext?.isOData ? (
-                                      Object.entries(selectedContext.fields).flatMap(([entName, flds]: [string, any]) => 
-                                        flds.map((f: any) => (
-                                          <option key={`${entName}.${f.name}`} value={`${entName}.${f.name}`}>
-                                            {entName}.{f.name}
-                                          </option>
-                                        ))
-                                      )
-                                   ) : (
-                                     selectedContext?.fields?.map((field: any) => (
-                                       <option key={field.path} value={field.name}>
-                                         {field.name}
-                                       </option>
-                                     ))
-                                   )}
-                                </select>
+                                />
                               </div>
                             ));
                           })()}
@@ -405,77 +414,16 @@ export function TemplateIdentify() {
                       SAP Field Mapping
                     </label>
 
-                    {selectedContext?.isOData ? (
-                      <div className="space-y-3">
-                        {!selectedEntity ? (
-                          <div className="space-y-2">
-                            <p className="text-[9px] text-muted-foreground uppercase font-bold">Select Entity Set</p>
-                            <div className="grid grid-cols-1 gap-1 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
-                              {selectedContext.entities.map((ent: any) => (
-                                <button
-                                  key={ent.name}
-                                  onClick={() => setSelectedEntity(ent.name)}
-                                  className="text-left px-3 py-2 rounded-lg border border-border hover:border-accent hover:bg-accent/5 text-xs font-semibold transition-all"
-                                >
-                                  {ent.label || ent.name}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-2 animate-in fade-in slide-in-from-right-2 duration-300">
-                            <div className="flex items-center justify-between">
-                              <p className="text-[9px] text-accent uppercase font-bold truncate max-w-[150px]" title={selectedEntity}>
-                                Entity: {selectedEntity}
-                              </p>
-                              <button 
-                                onClick={() => setSelectedEntity(null)}
-                                className="text-[9px] text-muted-foreground hover:text-primary uppercase font-bold shrink-0"
-                              >
-                                Back
-                              </button>
-                            </div>
-                            <select
-                              value={selectedChunkData.fieldMapping?.split('.')[1] || ""}
-                              onChange={(e) => {
-                                const fieldName = e.target.value;
-                                const fullMapping = `${selectedEntity}.${fieldName}`;
-                                updateChunk(selectedChunkData.id, {
-                                  fieldMapping: fullMapping,
-                                  label: fieldName // Image/Preview shows only field name
-                                });
-                              }}
-                              className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none transition-all"
-                            >
-                              <option value="">Select field...</option>
-                              {selectedContext.fields[selectedEntity]?.map((field: any) => (
-                                <option key={field.name} value={field.name}>
-                                  {field.label || field.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <select
-                        value={selectedChunkData.fieldMapping || ""}
-                        onChange={(e) => {
-                          updateChunk(selectedChunkData.id, {
-                            fieldMapping: e.target.value,
-                            label: e.target.value
-                          });
-                        }}
-                        className="w-full px-3 py-2 rounded-lg border border-border text-xs font-semibold bg-card focus:ring-2 focus:ring-accent/30 outline-none transition-all"
-                      >
-                        <option value="">Select field</option>
-                        {selectedContext?.fields?.map((field: any) => (
-                          <option key={field.path} value={field.name}>
-                            {field.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    <FieldMappingSelector 
+                      value={selectedChunkData.fieldMapping || ""}
+                      selectedContext={selectedContext}
+                      onSelect={(full, field) => {
+                        updateChunk(selectedChunkData.id, {
+                          fieldMapping: full,
+                          label: field // Image/Preview shows only field name
+                        });
+                      }}
+                    />
                   </div>
                 )}
 
@@ -602,11 +550,23 @@ export function TemplateIdentify() {
       <IfElseBuilder
         open={openIfBuilder}
         existingConditions={existingTransformation?.conditions}
-        contextFields={
-  selectedContext?.isOData
-    ? Object.values(selectedContext.fields).flat()
-    : selectedContext?.fields || []
-}
+        contextFields={(() => {
+          if (!selectedContext?.fields) return [];
+          if (Array.isArray(selectedContext.fields)) return selectedContext.fields;
+          
+          const flat: any[] = [];
+          Object.entries(selectedContext.fields).forEach(([entity, fields]: [string, any]) => {
+            if (Array.isArray(fields)) {
+              fields.forEach(f => {
+                flat.push({
+                  name: f.name || f,
+                  path: `${entity}.${f.path || f.name || f}`
+                });
+              });
+            }
+          });
+          return flat;
+        })()}
         targetFields={chunks.map((c) => ({
           name: c.label,
           path: c.id,

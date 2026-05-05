@@ -25,7 +25,7 @@ export function TemplateSave() {
       // 1. Prepare Data Payload
       const dynamicFields = chunks.filter(c => !c.isStatic && c.fieldMapping);
       const fieldMapping = dynamicFields.reduce((acc, chunk) => {
-        acc[chunk.fieldMapping!] = {
+        acc[chunk.label] = {
           path: chunk.fieldMapping,
           transformations: chunk.transformations || []
         };
