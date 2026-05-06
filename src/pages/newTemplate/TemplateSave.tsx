@@ -38,7 +38,7 @@ export function TemplateSave() {
       const payload = {
         label_id: `LBL-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
         label_name: labelName,
-        context: selectedContext?.id || 'unknown',
+        context: selectedContext?.name || 'unknown',
         field_mapping: fieldMapping,
         bar_code_type: barcodeType,
         zpl_code: generatedZPL || "",

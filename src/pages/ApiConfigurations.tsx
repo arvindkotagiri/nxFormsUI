@@ -73,7 +73,7 @@ export default function ApiConfigurations() {
             </h1>
           </div>
         </div>
-        <div className="max-w-5xl mx-auto">
+        <div className="mx-auto w-full">
           <ImportWizard 
             initialData={editingApi}
             startStep={editingApi ? 3 : 1}

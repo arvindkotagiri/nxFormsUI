@@ -192,8 +192,7 @@ export default function SimulationModal({ open, onClose, form, context }: Props)
                 event_type: "Created",
                 triggered_by: "demo_user",
                 source_system: "S4HANA",
-                form,
-                data: selectedOption.data,
+                print_to_file: 'true',
             };
 
             const res = await fetch(`${API_URL}/events/trigger`, {
@@ -296,8 +295,7 @@ export default function SimulationModal({ open, onClose, form, context }: Props)
                                     event_type: "Created",
                                     triggered_by: "demo_user",
                                     source_system: "S4HANA",
-                                    form,
-                                    data: selectedOption.data,
+                                    Print_to_file: 'true',
                                 },
                                 null,
                                 2,

@@ -41,8 +41,8 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
       <SectionCard title="Connection" onEdit={() => onEdit(2)} icon={<Server className="h-4 w-4" />}>
         <Row label="Base URL" value={<code className="text-xs font-mono break-all">{state.connection.baseUrl}</code>} />
         <Row label="Token URL" value={<code className="text-xs font-mono break-all">{state.connection.tokenUrl}</code>} />
-        <Row label="Client ID" value={<code className="text-xs font-mono">{state.connection.clientId}</code>} />
-        <Row label="Client Secret" value={<code className="text-xs font-mono">{"•".repeat(Math.min(state.connection.clientSecret.length, 16))}</code>} />
+        <Row label={state.connection.authType === "Basic" ? "Username" : "Client ID"} value={<code className="text-xs font-mono">{state.connection.authType === "Basic" ? state.connection.username : state.connection.clientId}</code>} />
+        <Row label={state.connection.authType === "Basic" ? "Password" : "Client Secret"} value={<code className="text-xs font-mono">{state.connection.authType === "Basic" ? "•".repeat(Math.min(state.connection.password.length, 16)) : "•".repeat(Math.min(state.connection.clientSecret.length, 16))}</code>} />
       </SectionCard>
 
       <SectionCard title="Selected entities & fields" onEdit={() => onEdit(3)} icon={<Link2 className="h-4 w-4" />}>

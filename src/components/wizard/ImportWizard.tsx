@@ -22,7 +22,7 @@ const STEPS = [
 function buildInitialState(): WizardState {
   return {
     step: 1,
-    context: { name: "", description: "", environment: "dev" },
+    context: { name: "", description: "", application: "", environment: "", client: "" },
     connection: { baseUrl: "", authType: "OAuth2", tokenUrl: "", clientId: "", clientSecret: "", username: "", password: "" },
     entities: {},
     fields: {},
@@ -80,7 +80,10 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
 
       return {
         ...base,
-        context: { ...base.context, name: initialData.name || "" },
+        context: { ...base.context, name: initialData.name || "" ,
+  application: initialData.application || "",
+  environment: initialData.environment || "",
+  client: initialData.client || "",},
         connection: { 
           ...base.connection, 
           baseUrl: initialData.endpoint || "", 
@@ -115,6 +118,18 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
     if (state.step === 1) {
       if (!state.context.name.trim()) {
         setErrors({ name: "Context name is required" });
+        return;
+      }
+      if (!state.context.application.trim()) {
+        setErrors({ application: "Application is required" });
+        return;
+      }
+      if (!state.context.environment.trim()) {
+        setErrors({ environment: "Environment is required" });
+        return;
+      }
+      if (!state.context.client.trim()) {
+        setErrors({ client: "Client is required" });
         return;
       }
     }
@@ -211,6 +226,9 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: state.context.name,
+  application: state.context.application,
+  environment: state.context.environment,
+  client: state.context.client,
           endpoint: state.connection.baseUrl,
           auth_type: state.connection.authType,
           client_id: state.connection.clientId,
@@ -271,7 +289,7 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
           <StepContext
             value={state.context}
             onChange={(context) => setState((s) => ({ ...s, context }))}
-            errors={errors as { name?: string }}
+            errors={errors as Partial<Record<"name" | "description" | "application" | "environment" | "client", string>>}
           />
         )}
         {state.step === 2 && (

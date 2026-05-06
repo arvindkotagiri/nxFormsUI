@@ -1,10 +1,12 @@
-export type Environment = "dev" | "qa" | "prod";
+export type Environment = "S4Hana" | "ECC" | "NetSuite";
 
-export type ContextConfig = {
+export interface ContextConfig {
   name: string;
   description: string;
-  environment: Environment;
-};
+  application: string;  // add
+  environment: string;  // updated (was Environment enum)
+  client: string;       // add
+}
 
 export type ConnectionConfig = {
   baseUrl: string;
