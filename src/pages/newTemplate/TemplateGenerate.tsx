@@ -47,16 +47,18 @@ export function TemplateGenerate() {
   const [xdpLayout, setXdpLayout] = useState<any[]>([]);
 
   // --- API Call: ZPL Generation ---
-  const generateZPL = useCallback(async () => {
-    // If we have a modified blob, wrap it in a File object (or blob is fine for fetch FormData)
-    // If not, use uploadedFile
-    const fileToSend = modifiedLabelBlob || uploadedFile;
+    const fileToSend = modifiedLabelBlob;
+    if (!fileToSend) {
+      toast.error("Design snapshot missing. Please go back and re-finalize design.");
+      return;
+    }
 
     if (!fileToSend || (outputMode !== "zpl" && outputMode !== "all")) return;
 
     setIsLoadingZPL(true);
     const formData = new FormData();
     formData.append("image", fileToSend);
+    if (generatedHTML) formData.append("html_design", generatedHTML);
     try {
       // const res = await fetch('http://localhost:5050/generate-zpl', { method: 'POST', body: formData });
       const res = await fetch(`${baseUrl}/generate-zpl`, {
@@ -77,7 +79,7 @@ export function TemplateGenerate() {
 
   // --- API Call: HTML Generation ---
   const generateHTML = useCallback(async () => {
-    const fileToSend = modifiedLabelBlob || uploadedFile;
+    const fileToSend = modifiedLabelBlob;
 
     if (!fileToSend || (outputMode !== "html" && outputMode !== "all")) return;
     setIsLoadingHTML(true);
@@ -102,12 +104,12 @@ export function TemplateGenerate() {
 
   // --- API Call: XDP Generation ---
   const generateXDP = useCallback(async () => {
-    const fileToSend = modifiedLabelBlob || uploadedFile;
-
+    const fileToSend = modifiedLabelBlob;
     if (!fileToSend || (outputMode !== "xdp" && outputMode !== "all")) return;
     setIsLoadingXDP(true);
     const formData = new FormData();
     formData.append("image", fileToSend);
+    if (generatedHTML) formData.append("html_design", generatedHTML);
     try {
       const res = await fetch(`${baseUrl}/generate-xdp`, {
         method: "POST",
