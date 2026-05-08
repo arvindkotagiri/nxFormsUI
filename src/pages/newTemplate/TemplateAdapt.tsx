@@ -316,7 +316,7 @@ export function TemplateAdapt() {
                     setGeneratedXDP(null);
                 }
 
-                setGeneratedHTML(editorRef.current.innerHTML);
+                setGeneratedHTML(editorRef.current.outerHTML);
                 nextStep();
             } catch (err) {
                 console.error("Capture Error:", err);
