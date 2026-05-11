@@ -19,6 +19,8 @@ import TemplateIndex from "./pages/newTemplate/TemplateIndex";
 import LabelConfigurator from "./pages/newConfiguration/LabelConfigurator";
 import { ConfigDetailPage } from "./pages/newConfiguration/ConfigDetailPage";
 import { SimulationPage } from "./pages/Simulation";
+import { PrintAgent } from "./components/PrintAgent";
+
 
 const queryClient = new QueryClient();
 
@@ -27,6 +29,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <PrintAgent />
       <BrowserRouter>
         <Routes>
           <Route element={<AppLayout />}>

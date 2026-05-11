@@ -11,6 +11,7 @@ const TABS = [
   "AI Models",
   "Notifications",
   "Data Retention",
+  "Cloud Print",
 ];
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -106,20 +107,62 @@ export default function Settings() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState<string>("");
 
-  // On switching to AI Models tab, load using DB-stored keys (GET)
+  // Load settings once on mount
+  useEffect(() => {
+    fetch(`${flaskAPI}/model-configs`)
+      .then(r => r.json())
+      .then(configs => {
+        setModelConfigs(configs || {});
+        setAgentEnabled(configs.agent_enabled === 'true');
+        setAgentSiteId(configs.agent_site_id || "SITE-001");
+      })
+      .catch(() => {});
+  }, []);
+
+  // Load models when tab 3 is active
   useEffect(() => {
     if (activeTab === 3) {
-        // Intentionally call without args to use GET (DB-stored keys) on mount
-        fetch(`${flaskAPI}/available-models`)
-            .then(r => r.json())
-            .then(models => setAvailableModels(Array.isArray(models) ? models : []))
-            .catch(() => setAvailableModels([]));
-        fetch(`${flaskAPI}/model-configs`)
-            .then(r => r.json())
-            .then(configs => setModelConfigs(configs || {}))
-            .catch(() => {});
+      fetch(`${flaskAPI}/available-models`)
+        .then(r => r.json())
+        .then(models => setAvailableModels(Array.isArray(models) ? models : []))
+        .catch(() => setAvailableModels([]));
     }
   }, [activeTab]);
+
+  const [agentEnabled, setAgentEnabled] = useState(false);
+  const [agentSiteId, setAgentSiteId] = useState("SITE-001");
+  const [agentLogs, setAgentLogs] = useState<{message: string, type: string, timestamp: string}[]>([]);
+
+  useEffect(() => {
+    const handleLog = (e: any) => {
+      setAgentLogs(prev => [e.detail, ...prev].slice(0, 50));
+    };
+    window.addEventListener('agent-log', handleLog);
+    return () => window.removeEventListener('agent-log', handleLog);
+  }, []);
+
+  const handleSaveAgentSettings = async () => {
+    setSaveStatus('saving');
+    try {
+      await fetch(`${flaskAPI}/model-configs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent_enabled: agentEnabled ? 'true' : 'false',
+          agent_site_id: agentSiteId
+        })
+      });
+      setSaveStatus('success');
+      setSaveMessage("Agent settings saved!");
+      // Trigger a storage event so other components (like the background agent) know to update
+      window.dispatchEvent(new Event('storage'));
+    } catch (err) {
+      setSaveStatus('error');
+      setSaveMessage("Failed to save agent settings.");
+    } finally {
+      setTimeout(() => { setSaveStatus('idle'); setSaveMessage(""); }, 3000);
+    }
+  };
 
   const fetchModels = useCallback(async (keysToUse?: Record<string, string>) => {
     setIsLoadingModels(true);
@@ -212,7 +255,7 @@ export default function Settings() {
           </p>
         </div>
         <button
-          onClick={activeTab === 3 ? handleSaveModelConfigs : () => {}}
+          onClick={activeTab === 3 ? handleSaveModelConfigs : activeTab === 6 ? handleSaveAgentSettings : () => {}}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all"
           style={{ background: "hsl(var(--accent))", color: "white" }}
           disabled={activeTab === 3 && saveStatus === 'saving'}
@@ -526,6 +569,84 @@ export default function Settings() {
                 <SelectInput options={["S3 Bucket", "Azure Blob", "GCS Bucket", "Local Disk"]} value="S3 Bucket" />
               </FormRow>
             )}
+          </Section>
+        </div>
+      )}
+
+      {/* Cloud Print */}
+      {activeTab === 6 && (
+        <div className="space-y-4 animate-fade-in">
+          <Section title="Local Print Agent">
+            <div className="text-xs text-muted-foreground italic mb-4">
+              When enabled, this browser session will act as a print agent. It will poll for pending jobs for the specified Site ID and send them to the local network printers via the server.
+            </div>
+            
+            {saveMessage && (
+              <div className={cn(
+                "flex items-center gap-2 text-sm px-4 py-3 rounded-xl font-body mb-2",
+                saveStatus === 'success' ? "bg-green-500/10 text-green-600 border border-green-500/30" : "bg-red-500/10 text-red-600 border border-red-500/30"
+              )}>
+                {saveStatus === 'success' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                {saveMessage}
+              </div>
+            )}
+
+            <FormRow label="Enable Browser Agent" description="Turn this device into a local printing node">
+              <Toggle value={agentEnabled} onChange={setAgentEnabled} />
+            </FormRow>
+            
+            <FormRow label="Agent Site ID" description="Jobs with this site ID will be processed by this agent">
+              <input 
+                type="text"
+                value={agentSiteId}
+                onChange={(e) => setAgentSiteId(e.target.value)}
+                className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-48"
+                placeholder="SITE-001"
+              />
+            </FormRow>
+
+            <div className="mt-6 p-4 rounded-xl bg-accent/5 border border-accent/10 flex items-start gap-3">
+              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent shrink-0">
+                <RefreshCw size={20} className={agentEnabled ? "animate-spin" : ""} />
+              </div>
+              <div>
+                <div className="text-sm font-semibold">Agent Status: {agentEnabled ? "Active & Polling" : "Inactive"}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ensure the device stays connected to the local WiFi and the browser tab remains open to process print jobs in real-time.
+                </p>
+              </div>
+            </div>
+          </Section>
+
+          <Section title="Agent Terminal (Real-time Logs)">
+            <div className="bg-slate-950 rounded-xl p-4 h-64 overflow-y-auto font-mono text-[11px] space-y-1 shadow-inner border border-slate-800 scrollbar-thin scrollbar-thumb-slate-800">
+              {agentLogs.length === 0 ? (
+                <div className="text-slate-600 italic py-4 text-center">No activity logged yet...</div>
+              ) : (
+                agentLogs.map((log, i) => (
+                  <div key={i} className="flex gap-3 animate-in fade-in slide-in-from-left-2 duration-300">
+                    <span className="text-slate-500 shrink-0">[{log.timestamp}]</span>
+                    <span className={cn(
+                      "break-all",
+                      log.type === 'success' ? "text-emerald-400" :
+                      log.type === 'error' ? "text-rose-400" :
+                      "text-blue-300"
+                    )}>
+                      {log.type === 'success' ? '✔' : log.type === 'error' ? '✘' : 'ℹ'} {log.message}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex justify-between items-center px-1">
+                <p className="text-[10px] text-muted-foreground">Showing last 50 events • Updates every 5 seconds</p>
+                <button 
+                  onClick={() => setAgentLogs([])}
+                  className="text-[10px] font-semibold text-accent hover:underline"
+                >
+                  Clear Console
+                </button>
+            </div>
           </Section>
         </div>
       )}
