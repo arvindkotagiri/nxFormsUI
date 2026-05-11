@@ -47,6 +47,7 @@ export function TemplateGenerate() {
   const [xdpLayout, setXdpLayout] = useState<any[]>([]);
 
   // --- API Call: ZPL Generation ---
+  const generateZPL = useCallback(async () => {
     const fileToSend = modifiedLabelBlob;
     if (!fileToSend) {
       toast.error("Design snapshot missing. Please go back and re-finalize design.");
