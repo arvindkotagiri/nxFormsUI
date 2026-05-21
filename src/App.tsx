@@ -21,6 +21,7 @@ import { ConfigDetailPage } from "./pages/newConfiguration/ConfigDetailPage";
 import { SimulationPage } from "./pages/Simulation";
 import { PrintAgent } from "./components/PrintAgent";
 import ImageRetention from "./pages/ImageRetention";
+import { WizardProvider } from "@/context/WizardContext";
 
 
 const queryClient = new QueryClient();
@@ -31,9 +32,10 @@ const App = () => (
       <Toaster />
       <Sonner />
       <PrintAgent />
-      <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
+      <WizardProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/events" element={<Events />} />
             <Route path="/outputs" element={<OutputRules />} />
@@ -62,6 +64,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      </WizardProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );
