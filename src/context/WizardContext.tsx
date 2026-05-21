@@ -169,9 +169,33 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const setChunks = (chunks: LabelChunk[]) => setState(prev => ({ ...prev, chunks }));
   const addChunk = (chunk: LabelChunk) => setState(prev => ({ ...prev, chunks: [...prev.chunks, chunk] }));
   const updateChunk = (id: string, updates: Partial<LabelChunk>) => {
-    setState(prev => ({ ...prev, chunks: prev.chunks.map(c => (c.id === id ? { ...c, ...updates } : c)) }));
+    setState(prev => {
+      const chunk = prev.chunks.find(c => c.id === id);
+      let nextHtml = prev.generatedHTML;
+      if (chunk && updates.label && updates.label !== chunk.label && nextHtml) {
+        nextHtml = nextHtml.replaceAll(`{{${chunk.label}}}`, `{{${updates.label}}}`);
+      }
+      return {
+        ...prev,
+        generatedHTML: nextHtml,
+        chunks: prev.chunks.map(c => (c.id === id ? { ...c, ...updates } : c)),
+      };
+    });
   };
-  const removeChunk = (id: string) => setState(prev => ({ ...prev, chunks: prev.chunks.filter(c => c.id !== id) }));
+  const removeChunk = (id: string) => {
+    setState(prev => {
+      const chunk = prev.chunks.find(c => c.id === id);
+      let nextHtml = prev.generatedHTML;
+      if (chunk && nextHtml) {
+        nextHtml = nextHtml.replaceAll(`{{${chunk.label}}}`, "");
+      }
+      return {
+        ...prev,
+        generatedHTML: nextHtml,
+        chunks: prev.chunks.filter(c => c.id !== id),
+      };
+    });
+  };
 
   const setSelectedContext = (context: any | null) => setState(prev => ({ ...prev, selectedContext: context }));
   const setSelectedSize = (size: LabelSize | null) => setState(prev => ({ ...prev, selectedSize: size }));
