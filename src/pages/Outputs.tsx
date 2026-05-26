@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import {
   Search,
   Filter,
@@ -7,19 +7,200 @@ import {
   XCircle,
   Eye,
   ChevronDown,
+  ChevronUp,
+  ArrowUpDown,
   Download,
+  Columns3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 const API_URL = import.meta.env.VITE_NODE_API;
 
 function StatusBadge({ status }: { status: string }) {
-  if (status === "Success") return <span className="badge-success">● Success</span>;
+  if (status === "Success")
+    return <span className="badge-success">● Success</span>;
   if (status === "Failed") return <span className="badge-error">● Failed</span>;
-  if (status === "Pending") return <span className="badge-warning">◌ Pending</span>;
+  if (status === "Pending")
+    return <span className="badge-warning">◌ Pending</span>;
   return <span className="badge-neutral">{status}</span>;
 }
 
-const OUTPUT_TABS = ["Overview", "Document JSON", "Template Mapping", "Raw Output"];
+const OUTPUT_TABS = [
+  "Overview",
+  "Document JSON",
+  "Template Mapping",
+  "Raw Output",
+];
+
+type SortKey =
+  | "outputNumber"
+  | "evt_no"
+  | "formId"
+  | "printer"
+  | "format"
+  | "status";
+type SortDir = "asc" | "desc";
+type ColumnId =
+  | "outputNumber"
+  | "evt_no"
+  | "formId"
+  | "printer"
+  | "format"
+  | "status"
+  | "retries"
+  | "duration"
+  | "actions";
+
+type TableColumn = {
+  id: ColumnId;
+  label: string;
+  sortKey?: SortKey;
+  render: (o: any) => React.ReactNode;
+};
+
+function getTableColumns(onViewDetail: (o: any) => void): TableColumn[] {
+  return [
+    {
+      id: "outputNumber",
+      label: "Output Number",
+      sortKey: "outputNumber",
+      render: (o) => (
+        <span className="font-mono text-xs font-semibold text-foreground">
+          {o.outputNumber}
+        </span>
+      ),
+    },
+    {
+      id: "evt_no",
+      label: "Event No",
+      sortKey: "evt_no",
+      render: (o) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {o.evt_no}
+        </span>
+      ),
+    },
+    {
+      id: "formId",
+      label: "Form ID",
+      sortKey: "formId",
+      render: (o) => (
+        <span className="font-mono text-xs text-muted-foreground">
+          {o.formId}
+        </span>
+      ),
+    },
+    {
+      id: "printer",
+      label: "Printer",
+      sortKey: "printer",
+      render: (o) => <span className="text-foreground">{o.printer}</span>,
+    },
+    {
+      id: "format",
+      label: "Format",
+      sortKey: "format",
+      render: (o) => <span className="badge-neutral">{o.format}</span>,
+    },
+    {
+      id: "status",
+      label: "Status",
+      sortKey: "status",
+      render: (o) => <StatusBadge status={o.status} />,
+    },
+    {
+      id: "retries",
+      label: "Retries",
+      render: (o) => (
+        <span
+          className="text-center text-xs font-semibold"
+          style={{
+            color:
+              o.retries > 0
+                ? "hsl(var(--accent))"
+                : "hsl(var(--muted-foreground))",
+          }}
+        >
+          {o.retries}
+        </span>
+      ),
+    },
+    {
+      id: "duration",
+      label: "Duration",
+      render: (o) => (
+        <span className="text-muted-foreground text-xs">{o.duration}</span>
+      ),
+    },
+    {
+      id: "actions",
+      label: "Actions",
+      render: (o) => (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onViewDetail(o)}
+            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Eye size={14} />
+          </button>
+          {o.status === "Failed" && (
+            <>
+              <button
+                className="px-2 py-1 rounded-lg text-xs font-semibold transition-all"
+                style={{
+                  background: "hsl(var(--accent))",
+                  color: "hsl(var(--accent-foreground))",
+                }}
+              >
+                Retry
+              </button>
+              <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                <GitBranch size={14} />
+              </button>
+              <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                <XCircle size={14} />
+              </button>
+            </>
+          )}
+        </div>
+      ),
+    },
+  ];
+}
+
+const ALL_COLUMN_IDS: ColumnId[] = [
+  "outputNumber",
+  "evt_no",
+  "formId",
+  "printer",
+  "format",
+  "status",
+  "retries",
+  "duration",
+  "actions",
+];
+
+function compareOutputs(a: any, b: any, key: SortKey, dir: SortDir): number {
+  const av = a[key];
+  const bv = b[key];
+  let cmp = 0;
+
+  if (key === "outputNumber") {
+    const an = Number(av);
+    const bn = Number(bv);
+    cmp =
+      !Number.isNaN(an) && !Number.isNaN(bn)
+        ? an - bn
+        : String(av ?? "").localeCompare(String(bv ?? ""), undefined, {
+          numeric: true,
+        });
+  } else {
+    cmp = String(av ?? "").localeCompare(String(bv ?? ""), undefined, {
+      numeric: true,
+    });
+  }
+
+  return dir === "asc" ? cmp : -cmp;
+}
 
 export default function Outputs() {
   const [selected, setSelected] = useState<string[]>([]);
@@ -27,6 +208,17 @@ export default function Outputs() {
   const [detailOutput, setDetailOutput] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [outputs, setOutputs] = useState<any[]>([]);
+  const [sortKey, setSortKey] = useState<SortKey>("outputNumber");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [visibleColumnIds, setVisibleColumnIds] = useState<Set<ColumnId>>(
+    () => new Set(ALL_COLUMN_IDS),
+  );
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
+  const columnPickerRef = useRef<HTMLDivElement>(null);
+
+  const tableColumns = getTableColumns(setDetailOutput);
+  const visibleColumns = tableColumns.filter((c) => visibleColumnIds.has(c.id));
+  const allColumnsVisible = visibleColumnIds.size === ALL_COLUMN_IDS.length;
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -40,20 +232,38 @@ export default function Outputs() {
       .catch((err) => console.error(err));
   }, []);
 
-  // Filtered + paginated outputs
-  const filtered = outputs.filter(
-    (o) =>
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.evt_no.toLowerCase().includes(search.toLowerCase()) ||
-      o.formId.toLowerCase().includes(search.toLowerCase())
+  const filtered = useMemo(
+    () =>
+      outputs.filter(
+        (o) =>
+          o.id.toLowerCase().includes(search.toLowerCase()) ||
+          o.evt_no.toLowerCase().includes(search.toLowerCase()) ||
+          o.formId.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [outputs, search],
   );
 
-  const totalPages = Math.ceil(filtered.length / outputsPerPage);
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    list.sort((a, b) => compareOutputs(a, b, sortKey, sortDir));
+    return list;
+  }, [filtered, sortKey, sortDir]);
 
-  const paginatedOutputs = filtered.slice(
+  const totalPages = Math.ceil(sorted.length / outputsPerPage);
+
+  const paginatedOutputs = sorted.slice(
     (currentPage - 1) * outputsPerPage,
-    currentPage * outputsPerPage
+    currentPage * outputsPerPage,
   );
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
 
   const getPageNumbers = () => {
     const pages = [];
@@ -68,22 +278,54 @@ export default function Outputs() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [search, sortKey, sortDir]);
+
+  useEffect(() => {
+    if (!columnPickerOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        columnPickerRef.current &&
+        !columnPickerRef.current.contains(e.target as Node)
+      ) {
+        setColumnPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [columnPickerOpen]);
+
+  const toggleColumn = (id: ColumnId) => {
+    setVisibleColumnIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        if (next.size <= 1) return prev;
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const showAllColumns = () => setVisibleColumnIds(new Set(ALL_COLUMN_IDS));
 
   const toggleSelect = (id: string) => {
     setSelected((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
     );
   };
 
-  const allSelected = selected.length === filtered.length && filtered.length > 0;
+  const allSelected =
+    selected.length === filtered.length && filtered.length > 0;
 
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-foreground">Outputs</h1>
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            Outputs
+          </h1>
           <p className="text-sm text-muted-foreground font-body mt-1">
             Operations console — all output records
           </p>
@@ -99,7 +341,10 @@ export default function Outputs() {
         {/* Toolbar */}
         <div className="flex items-center gap-3 p-4 border-b border-border bg-secondary/40">
           <div className="relative flex-1 max-w-xs">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
             <input
               type="text"
               placeholder="Search outputs…"
@@ -114,14 +359,78 @@ export default function Outputs() {
           <button className="pill-filter">
             <Filter size={12} /> Printer <ChevronDown size={12} />
           </button>
-          <div className="ml-auto text-xs text-muted-foreground font-body">{filtered.length} records</div>
+          <div className="relative" ref={columnPickerRef}>
+            <button
+              type="button"
+              onClick={() => setColumnPickerOpen((o) => !o)}
+              className={cn(
+                "pill-filter",
+                columnPickerOpen && "ring-2 ring-accent/30",
+                !allColumnsVisible && "text-foreground",
+              )}
+            >
+              <Columns3 size={12} />
+              Columns
+              {!allColumnsVisible && (
+                <span className="ml-0.5 text-[10px] font-semibold text-accent">
+                  ({visibleColumnIds.size})
+                </span>
+              )}
+              <ChevronDown
+                size={12}
+                className={cn(
+                  "transition-transform",
+                  columnPickerOpen && "rotate-180",
+                )}
+              />
+            </button>
+            {columnPickerOpen && (
+              <div className="absolute left-0 top-full mt-2 z-20 w-56 rounded-xl border border-border bg-card shadow-elevated-lg p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-foreground uppercase tracking-wide">
+                    Show columns
+                  </span>
+                  <button
+                    type="button"
+                    onClick={showAllColumns}
+                    disabled={allColumnsVisible}
+                    className="text-xs text-accent hover:underline disabled:opacity-40 disabled:no-underline"
+                  >
+                    Select all
+                  </button>
+                </div>
+                <div className="space-y-1 max-h-64 overflow-y-auto">
+                  {tableColumns.map((col) => (
+                    <label
+                      key={col.id}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary/60 cursor-pointer text-sm font-body"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={visibleColumnIds.has(col.id)}
+                        onChange={() => toggleColumn(col.id)}
+                        className="rounded"
+                      />
+                      <span className="text-foreground">{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="ml-auto text-xs text-muted-foreground font-body">
+            {filtered.length} records
+          </div>
         </div>
 
         {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-body">
             <thead>
-              <tr className="border-b border-border" style={{ background: "hsl(var(--secondary))" }}>
+              <tr
+                className="border-b border-border"
+                style={{ background: "hsl(var(--secondary))" }}
+              >
                 <th className="px-4 py-3 w-8">
                   <input
                     type="checkbox"
@@ -132,11 +441,43 @@ export default function Outputs() {
                     className="rounded"
                   />
                 </th>
-                {["Output ID", "Event No", "Form ID", "Printer", "Format", "Status", "Retries", "Duration", "Actions"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    {h}
-                  </th>
-                ))}
+                {visibleColumns.map(({ id, label, sortKey: key }) =>
+                  key ? (
+                    <th key={id} className="px-4 py-3 text-left">
+                      <button
+                        type="button"
+                        onClick={() => handleSort(key)}
+                        className={cn(
+                          "inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider transition-colors",
+                          sortKey === key
+                            ? "text-foreground"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {label}
+                        {sortKey === key ? (
+                          sortDir === "asc" ? (
+                            <ChevronUp size={14} className="shrink-0" />
+                          ) : (
+                            <ChevronDown size={14} className="shrink-0" />
+                          )
+                        ) : (
+                          <ArrowUpDown
+                            size={13}
+                            className="shrink-0 opacity-40"
+                          />
+                        )}
+                      </button>
+                    </th>
+                  ) : (
+                    <th
+                      key={id}
+                      className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider"
+                    >
+                      {label}
+                    </th>
+                  ),
+                )}
               </tr>
             </thead>
             <tbody>
@@ -146,7 +487,7 @@ export default function Outputs() {
                   className={cn(
                     "border-b border-border table-row-hover transition-colors",
                     i % 2 === 0 ? "bg-card" : "bg-background",
-                    selected.includes(o.id) && "bg-accent/5"
+                    selected.includes(o.id) && "bg-accent/5",
                   )}
                 >
                   <td className="px-4 py-3">
@@ -157,36 +498,11 @@ export default function Outputs() {
                       className="rounded"
                     />
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs font-semibold text-foreground">{o.id}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{o.evt_no}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{o.formId}</td>
-                  <td className="px-4 py-3 text-foreground">{o.printer}</td>
-                  <td className="px-4 py-3"><span className="badge-neutral">{o.format}</span></td>
-                  <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                  <td className="px-4 py-3 text-center text-xs font-semibold" style={{ color: o.retries > 0 ? "hsl(var(--accent))" : "hsl(var(--muted-foreground))" }}>
-                    {o.retries}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">{o.duration}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => setDetailOutput(o)} className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-                        <Eye size={14} />
-                      </button>
-                      {o.status === "Failed" && (
-                        <>
-                          <button className="px-2 py-1 rounded-lg text-xs font-semibold transition-all" style={{ background: "hsl(var(--accent))", color: "hsl(var(--accent-foreground))" }}>
-                            Retry
-                          </button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-                            <GitBranch size={14} />
-                          </button>
-                          <button className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
-                            <XCircle size={14} />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+                  {visibleColumns.map((col) => (
+                    <td key={col.id} className="px-4 py-3">
+                      {col.render(o)}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -197,7 +513,8 @@ export default function Outputs() {
         <div className="flex items-center justify-between px-4 py-3 border-t border-border">
           <span className="text-xs text-muted-foreground font-body">
             Showing {(currentPage - 1) * outputsPerPage + 1}–
-            {Math.min(currentPage * outputsPerPage, filtered.length)} of {filtered.length}
+            {Math.min(currentPage * outputsPerPage, filtered.length)} of{" "}
+            {filtered.length}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -215,7 +532,7 @@ export default function Outputs() {
                   "w-7 h-7 rounded-md text-xs",
                   page === currentPage
                     ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-secondary"
+                    : "text-muted-foreground hover:bg-secondary",
                 )}
               >
                 {page}
@@ -234,26 +551,44 @@ export default function Outputs() {
 
       {/* Bulk action bar */}
       {selected.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-elevated-lg"
-          style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}>
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-elevated-lg"
+          style={{
+            background: "hsl(var(--primary))",
+            color: "hsl(var(--primary-foreground))",
+          }}
+        >
           <span className="text-sm font-body">{selected.length} selected</span>
           <div className="w-px h-4 bg-primary-foreground/20" />
-          <button className="text-sm font-semibold font-body px-3 py-1 rounded-lg" style={{ background: "hsl(var(--accent))", color: "white" }}>
+          <button
+            className="text-sm font-semibold font-body px-3 py-1 rounded-lg"
+            style={{ background: "hsl(var(--accent))", color: "white" }}
+          >
             <RotateCcw size={13} className="inline mr-1" /> Retry All
           </button>
-          <button className="text-sm font-body opacity-70 hover:opacity-100 transition-opacity">Cancel</button>
+          <button className="text-sm font-body opacity-70 hover:opacity-100 transition-opacity">
+            Cancel
+          </button>
         </div>
       )}
 
       {/* Detail modal */}
       {detailOutput && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" onClick={() => setDetailOutput(null)} />
+          <div
+            className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
+            onClick={() => setDetailOutput(null)}
+          />
           <div className="relative w-full max-w-2xl bg-card rounded-2xl shadow-elevated-lg overflow-hidden">
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h3 className="font-display text-lg font-semibold text-foreground">{detailOutput.id}</h3>
-              <button onClick={() => setDetailOutput(null)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+              <h3 className="font-display text-lg font-semibold text-foreground">
+                {detailOutput.id}
+              </h3>
+              <button
+                onClick={() => setDetailOutput(null)}
+                className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
+              >
                 <XCircle size={16} className="text-muted-foreground" />
               </button>
             </div>
@@ -261,7 +596,11 @@ export default function Outputs() {
             {/* Tabs */}
             <div className="flex items-center gap-1 px-6 pt-4">
               {OUTPUT_TABS.map((tab, idx) => (
-                <button key={tab} onClick={() => setActiveTab(idx)} className={cn("tab-pill", activeTab === idx && "active")}>
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(idx)}
+                  className={cn("tab-pill", activeTab === idx && "active")}
+                >
                   {tab}
                 </button>
               ))}
@@ -280,34 +619,54 @@ export default function Outputs() {
                     ["Retries", detailOutput.retries],
                     ["Duration", detailOutput.duration],
                   ].map(([k, v]) => (
-                    <div key={String(k)} className="p-3 rounded-xl bg-background">
-                      <div className="text-xs text-muted-foreground font-body mb-1">{k}</div>
-                      <div className="text-sm font-semibold text-foreground font-body">{String(v)}</div>
+                    <div
+                      key={String(k)}
+                      className="p-3 rounded-xl bg-background"
+                    >
+                      <div className="text-xs text-muted-foreground font-body mb-1">
+                        {k}
+                      </div>
+                      <div className="text-sm font-semibold text-foreground font-body">
+                        {String(v)}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
               {activeTab === 1 && (
-                <pre className="p-4 rounded-xl text-xs font-mono overflow-x-auto" style={{ background: "hsl(var(--primary))", color: "hsl(var(--primary-foreground))" }}>
+                <pre
+                  className="p-4 rounded-xl text-xs font-mono overflow-x-auto"
+                  style={{
+                    background: "hsl(var(--primary))",
+                    color: "hsl(var(--primary-foreground))",
+                  }}
+                >
                   {JSON.stringify(detailOutput, null, 2)}
                 </pre>
               )}
               {activeTab === 2 && (
                 <div className="space-y-2">
-                  {["header", "footer", "lineItems", "totals", "barcode"].map((field) => (
-                    <div key={field} className="flex items-center justify-between p-3 rounded-xl bg-background text-sm font-body">
-                      <span className="font-mono text-xs text-foreground">{field}</span>
-                      <span className="text-muted-foreground text-xs">→ template.{field}</span>
-                      <span className="badge-success">Mapped</span>
-                    </div>
-                  ))}
+                  {["header", "footer", "lineItems", "totals", "barcode"].map(
+                    (field) => (
+                      <div
+                        key={field}
+                        className="flex items-center justify-between p-3 rounded-xl bg-background text-sm font-body"
+                      >
+                        <span className="font-mono text-xs text-foreground">
+                          {field}
+                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          → template.{field}
+                        </span>
+                        <span className="badge-success">Mapped</span>
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
               {activeTab === 3 && (
                 <pre
-                  className="p-4 rounded-xl text-xs font-mono 
-             max-h-[400px] w-full overflow-auto 
-             whitespace-pre"
+                  className="p-4 rounded-xl text-xs font-mono max-h-[400px] w-full overflow-auto whitespace-pre-wrap break-words"
                   style={{
                     background: "hsl(var(--primary))",
                     color: "hsl(var(--primary-foreground))",

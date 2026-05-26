@@ -41,6 +41,7 @@ export default function Templates() {
   const [preview, setPreview] = useState<string | null>(null);
   const [simulateOpen, setSimulateOpen] = useState(false);
   const [simulateForm, setSimulateForm] = useState("");
+  const [simulateFormId, setSimulateFormId] = useState("");
   const [formContext, setFormContext] = useState("");
 
   useEffect(() => {
@@ -422,6 +423,7 @@ export default function Templates() {
                 <button
                   onClick={() => {
                     setSimulateForm(t.label_name);
+                    setSimulateFormId(t.label_id);
                     setFormContext(t.context);
                     setSimulateOpen(true);
                   }}
@@ -444,7 +446,8 @@ export default function Templates() {
       )}
       <SimulationModal
         open={simulateOpen}
-        form={simulateForm}
+        formName={simulateForm}
+        formId={simulateFormId || undefined}
         context={formContext}
         onClose={() => setSimulateOpen(false)}
       />

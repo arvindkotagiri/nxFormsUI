@@ -36,6 +36,7 @@ export type LabelChunk = {
   headers?: string[];
   isDynamicTable?: boolean;
   cropped_b64?: string;
+  originalLabel?: string;
 };
 
 export type LabelSize = {

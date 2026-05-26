@@ -12,6 +12,7 @@ const TABS = [
   "Notifications",
   "Data Retention",
   "Cloud Print",
+  "Image Retention",
 ];
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
