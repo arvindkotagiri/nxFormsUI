@@ -625,7 +625,11 @@ export function TemplateIdentify() {
     selectedContext,
     generatedHTML,
     setGeneratedHTML,
+    cleanImages,
+    uploadedImages
   } = useWizard();
+
+  const [activePageIndex, setActivePageIndex] = useState(0);
 
   const [selectedChunk, setSelectedChunk] = useState<string | null>(null);
   const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
@@ -639,7 +643,7 @@ export function TemplateIdentify() {
   const [selectedTransformation, setSelectedTransformation] = useState<string | null>(null);
   const [existingTransformation, setExistingTransformation] = useState<any | null>(null);
 
-  const displayImage = cleanImage || uploadedImage;
+  const displayImage = (cleanImages && cleanImages.length > 0 ? cleanImages[activePageIndex] : null) || cleanImage || uploadedImage;
   const isDynamic = selectedChunkData && !selectedChunkData.isStatic;
   const hasFieldMapping = !!selectedChunkData?.fieldMapping;
   const canUseTransformations = isDynamic && hasFieldMapping;
@@ -651,8 +655,14 @@ export function TemplateIdentify() {
   }, [chunks, selectedChunk]);
 
   useEffect(() => {
-    if (selectedChunkData?.fieldMapping && selectedChunkData.fieldMapping.includes(".")) {
-      setSelectedEntity(selectedChunkData.fieldMapping.split(".")[0]);
+    if (selectedChunkData && selectedChunkData.pageIndex !== undefined) {
+      setActivePageIndex(selectedChunkData.pageIndex);
+    }
+  }, [selectedChunk, selectedChunkData]);
+
+  useEffect(() => {
+    if (selectedChunkData?.fieldMapping && selectedChunkData.fieldMapping.includes('.')) {
+      setSelectedEntity(selectedChunkData.fieldMapping.split('.')[0]);
     } else {
       setSelectedEntity(null);
     }
@@ -829,19 +839,15 @@ export function TemplateIdentify() {
                 ) : (
                   <Zap size={12} className="text-destructive" />
                 )}
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold uppercase tracking-tight">
-                    {chunk.label}
-                  </div>
-                  {/* Show mapped SAP path as subtitle */}
-                  {!chunk.isStatic && chunk.fieldMapping && (
-                    <div className="truncate text-[9px] text-accent font-normal normal-case tracking-normal">
-                      → {chunk.fieldMapping.split(".").pop()}
-                    </div>
-                  )}
-                </div>
-                {!chunk.isStatic && chunk.fieldMapping && (
-                  <span className="ml-auto flex-shrink-0 w-1.5 h-1.5 rounded-full bg-accent" />
+
+                <span className="truncate font-semibold uppercase tracking-tight flex-1">
+                  {chunk.label}
+                </span>
+
+                {cleanImages && cleanImages.length > 1 && (
+                  <span className="text-[8px] bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold px-1.5 py-0.5 rounded border border-border/60">
+                    P{ (chunk.pageIndex !== undefined ? chunk.pageIndex : 0) + 1 }
+                  </span>
                 )}
               </button>
             ))}
@@ -861,51 +867,76 @@ export function TemplateIdentify() {
               }}
             />
             {imgSize.width > 0 &&
-              chunks.map((chunk) => {
-                const left = (chunk.x / 100) * imgSize.width;
-                const top = (chunk.y / 100) * imgSize.height;
-                const width = (chunk.width / 100) * imgSize.width;
-                const height = (chunk.height / 100) * imgSize.height;
-                const isSelected = selectedChunk === chunk.id;
-                return (
-                  <div
-                    key={chunk.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedChunk(chunk.id);
-                    }}
-                    className={cn(
-                      "absolute border-2 cursor-pointer transition-all duration-300",
-                      chunk.type === "table"
-                        ? "border-green-500"
-                        : chunk.isStatic
-                        ? "border-primary"
-                        : "border-destructive",
-                      isSelected && "ring-8 ring-accent/30 z-10"
-                    )}
-                    style={{
-                      left,
-                      top,
-                      width,
-                      height,
-                      boxShadow: isSelected ? "0 0 25px hsl(var(--accent) / 0.5)" : "none",
-                      backgroundColor: isSelected
-                        ? "hsl(var(--accent) / 0.05)"
-                        : "transparent",
-                    }}
-                  >
-                    {isSelected && (
-                      <div className="absolute -top-6 left-0 bg-accent text-white text-[10px] px-2 py-0.5 rounded-t font-bold shadow-lg whitespace-nowrap">
-                        SELECTED: {chunk.label.toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              chunks
+                .filter((chunk) => (chunk.pageIndex !== undefined ? chunk.pageIndex : 0) === activePageIndex)
+                .map((chunk) => {
+                  const left = (chunk.x / 100) * imgSize.width;
+                  const top = (chunk.y / 100) * imgSize.height;
+                  const width = (chunk.width / 100) * imgSize.width;
+                  const height = (chunk.height / 100) * imgSize.height;
+                  const isSelected = selectedChunk === chunk.id;
+
+                  return (
+                    <div
+                      key={chunk.id}
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedChunk(chunk.id);
+                      }}
+                      className={cn(
+                        "absolute border-2 cursor-pointer transition-all duration-300",
+                        chunk.type === 'table' ? "border-green-500" : (chunk.isStatic ? "border-primary" : "border-destructive"),
+                        isSelected && "ring-8 ring-accent/30 z-10",
+                      )}
+                      style={{
+                        left,
+                        top,
+                        width,
+                        height,
+                        boxShadow: isSelected ? '0 0 25px hsl(var(--accent) / 0.5)' : 'none',
+                        backgroundColor: isSelected ? 'hsl(var(--accent) / 0.05)' : 'transparent',
+                      }}
+                    >
+                      {isSelected && (
+                        <div className="absolute -top-6 left-0 bg-accent text-white text-[10px] px-2 py-0.5 rounded-t font-bold shadow-lg whitespace-nowrap">
+                          SELECTED: {chunk.label.toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
           </div>
+
+          {/* PAGE SELECTOR */}
+          {cleanImages && cleanImages.length > 1 && (
+            <div className="flex items-center gap-4 mt-4 bg-white dark:bg-slate-900 px-4 py-2 rounded-full border border-border shadow-sm select-none">
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={activePageIndex === 0}
+                onClick={() => setActivePageIndex(p => p - 1)}
+                className="h-8 w-8 rounded-full border border-border/40 hover:bg-muted"
+              >
+                <ArrowLeft size={16} />
+              </Button>
+              <span className="text-xs font-semibold font-display">
+                Page {activePageIndex + 1} of {cleanImages.length}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={activePageIndex === cleanImages.length - 1}
+                onClick={() => setActivePageIndex(p => p + 1)}
+                className="h-8 w-8 rounded-full border border-border/40 hover:bg-muted"
+              >
+                <ArrowRight size={16} />
+              </Button>
+            </div>
+          )}
+
           {uploadedFile?.type === "application/pdf" && (
             <p className="text-[10px] text-muted-foreground mt-3 italic">
-              PDF converted to image for preview
+              PDF pages converted to images for preview
             </p>
           )}
         </div>
