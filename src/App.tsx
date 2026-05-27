@@ -36,24 +36,24 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/outputs" element={<OutputRules />} />
-            <Route path="/templates" element={<Templates />} />
-            {/* <Route path="/output-rules" element={<OutputRules />} /> */}
-            <Route path="/printers" element={<Printers />} />
-            <Route path="/api-configurations" element={<ApiConfigurations />} />
-            <Route path="/logs" element={<Logs />} />
-            <Route path="/output-status" element={<Outputs />} />
-            <Route path="/settings" element={<Settings />} />
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/outputs" element={<OutputRules />} />
+              <Route path="/templates" element={<Templates />} />
+              {/* <Route path="/output-rules" element={<OutputRules />} /> */}
+              <Route path="/printers" element={<Printers />} />
+              <Route path="/api-configurations" element={<ApiConfigurations />} />
+              <Route path="/logs" element={<Logs />} />
+              <Route path="/output-status" element={<Outputs />} />
+              <Route path="/settings" element={<Settings />} />
 
-            {/* Forms Wizard App Integration */}
-            <Route path="/templates/new" element={<TemplateIndex />} />
+              {/* Forms Wizard App Integration */}
+              <Route path="/templates/new" element={<TemplateIndex />} />
 
-            {/* Label Configurator App Integration */}
-            <Route path="/labelConfigurator" element={<LabelConfigurator />} />
-            <Route path="/config/new" element={<ConfigDetailPage />} />
-            <Route path="/config/:configId" element={<ConfigDetailPage />} />
+              {/* Label Configurator App Integration */}
+              <Route path="/labelConfigurator" element={<LabelConfigurator />} />
+              <Route path="/config/new" element={<ConfigDetailPage />} />
+              <Route path="/config/:configId" element={<ConfigDetailPage />} />
 
             {/* Simulation App Integration */}
             <Route path="/simulation" element={<SimulationPage />} />
