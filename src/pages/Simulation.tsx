@@ -1,4 +1,4 @@
-import { bootstrapTokenIfMissing, getLabels } from "@/lib/api";
+import { bootstrapTokenIfMissing } from "@/lib/api";
 import { useEffect, useState } from "react";
 
 const API_URL = import.meta.env.VITE_NODE_API;
@@ -9,16 +9,16 @@ type Context = {
   id: string;
   name: string;
   endpoint: string;
-};
-
-type LabelRow = {
-  id: string;
-  name: string;
-  context: string;
-  field_mapping: Record<string, { path: string; transformations: any[] }>;
+  entities?: Array<{ name: string; label?: string }>;
+  fields?: Record<string, Array<{ name: string; type?: string }>>;
 };
 
 type FieldValues = Record<string, string>;
+type InputRow = {
+  entityName: string;
+  fieldName: string;
+  value: string;
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,17 +36,16 @@ async function getAuthHeaders() {
 export function SimulationPage() {
   // Data
   const [contexts, setContexts] = useState<Context[]>([]);
-  const [labels, setLabels] = useState<LabelRow[]>([]);
 
   // Selections
   const [simulationName, setSimulationName] = useState<string>("");
   const [selectedContext, setSelectedContext] = useState<string>("");
-  const [selectedLabel, setSelectedLabel] = useState<string>("");
-  const [fieldValues, setFieldValues] = useState<FieldValues>({});
+  const [fieldRows, setFieldRows] = useState<InputRow[]>([
+    { entityName: "", fieldName: "", value: "" },
+  ]);
 
   // UI state
   const [loadingContexts, setLoadingContexts] = useState(true);
-  const [loadingLabels, setLoadingLabels] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<any>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -67,73 +66,73 @@ export function SimulationPage() {
     })();
   }, []);
 
-  // ── Fetch labels on mount
-  useEffect(() => {
-    (async () => {
-      try {
-        const allLabels = await getLabels();
-        setLabels(allLabels);
-      } catch (e) {
-        console.error("Failed to load labels", e);
-      } finally {
-        setLoadingLabels(false);
-      }
-    })();
-  }, []);
+  const selectedContextObj = contexts.find(
+    (c) => c.name.toLowerCase() === selectedContext.toLowerCase()
+  );
+  const fallbackContextPool = contexts.slice(0, 2);
+  const entityOptions = Array.from(
+    new Set(
+      (
+        selectedContextObj?.entities?.map((e) => e.name) ??
+        fallbackContextPool.flatMap((c) =>
+          (c.entities ?? []).map((e: any) => e?.name).filter(Boolean)
+        )
+      ).filter(Boolean)
+    )
+  );
 
-  // ── Derived: labels filtered by selected context
-  const filteredLabels = selectedContext
-    ? labels.filter(
-        (l) => l.context?.toLowerCase() === selectedContext.toLowerCase()
-      )
-    : [];
-
-  // ── Derived: field keys for the selected label
-  const activeLabel = labels.find((l) => l.name === selectedLabel);
-  const fieldKeys: string[] = activeLabel?.field_mapping
-    ? Object.keys(activeLabel.field_mapping)
-    : [];
-
-  // ── When selected label changes, reset field values to empty strings
-  useEffect(() => {
-    if (fieldKeys.length > 0) {
-      const initial: FieldValues = {};
-      fieldKeys.forEach((k) => (initial[k] = ""));
-      setFieldValues(initial);
-    } else {
-      setFieldValues({});
+  const getFieldsForEntity = (entityName: string) => {
+    if (!entityName) return [] as Array<{ name: string; type?: string }>;
+    const fromSelectedContext =
+      selectedContextObj?.fields?.[entityName]?.filter((f) => !!f?.name) ?? [];
+    if (fromSelectedContext.length > 0) return fromSelectedContext;
+    for (const context of fallbackContextPool) {
+      const candidate = context?.fields?.[entityName]?.filter((f) => !!f?.name);
+      if (candidate && candidate.length > 0) return candidate;
     }
-    // Only clear banners when the user is actively changing selections,
-    // not when label is cleared programmatically after a successful save.
-    if (selectedLabel) {
-      setSaveResult(null);
-      setSaveError(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedLabel]);
+    return [] as Array<{ name: string; type?: string }>;
+  };
 
-  // ── When context changes, clear label selection
+  const getFieldType = (entityName: string, fieldName: string) => {
+    if (!entityName || !fieldName) return "";
+    const field = getFieldsForEntity(entityName).find((f) => f.name === fieldName);
+    return field?.type ?? "";
+  };
+
+  // ── When context changes, reset dynamic rows
   useEffect(() => {
-    setSelectedLabel("");
-    // Only clear banners when the user is actively changing context,
-    // not when context is cleared programmatically after a successful save.
+    setFieldRows([{ entityName: "", fieldName: "", value: "" }]);
     if (selectedContext) {
       setSaveResult(null);
       setSaveError(null);
     }
   }, [selectedContext]);
 
-  const handleFieldChange = (key: string, val: string) => {
-    setFieldValues((prev) => ({ ...prev, [key]: val }));
+  const updateRow = (
+    index: number,
+    patch: Partial<InputRow> | ((current: InputRow) => InputRow)
+  ) => {
+    setFieldRows((prev) =>
+      prev.map((row, i) => {
+        if (i !== index) return row;
+        return typeof patch === "function" ? patch(row) : { ...row, ...patch };
+      })
+    );
   };
 
-  // ── Reset: clears everything including context and label
+  const addRow = () => {
+    setFieldRows((prev) => [...prev, { entityName: "", fieldName: "", value: "" }]);
+  };
+
+  const removeRow = (index: number) => {
+    setFieldRows((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ── Reset: clears simulation state and rows
   const handleReset = () => {
     setSimulationName("");
-    setSelectedContext("");  // triggers useEffect → clears selectedLabel
-    setSelectedLabel("");    // triggers useEffect → clears fieldValues
-    // Note: saveResult and saveError are intentionally NOT cleared here.
-    // They are cleared when the user starts a new selection (see useEffects above).
+    setSelectedContext("");
+    setFieldRows([{ entityName: "", fieldName: "", value: "" }]);
   };
 
   const handleSave = async () => {
@@ -143,11 +142,17 @@ export function SimulationPage() {
     try {
       const headers = await getAuthHeaders();
 
+      const inputValues: FieldValues = {};
+      fieldRows.forEach((row) => {
+        if (row.entityName && row.fieldName) {
+          inputValues[`${row.entityName}.${row.fieldName}`] = row.value;
+        }
+      });
       const payload = {
         simulationName,
         context: selectedContext,
-        form: selectedLabel,
-        inputValues: fieldValues,
+        form: "",
+        inputValues,
       };
 
       const res = await fetch(`${API_URL}/simulation`, {
@@ -159,9 +164,6 @@ export function SimulationPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error ?? "Save failed");
 
-      // Set result BEFORE resetting so the useEffects triggered by reset
-      // don't race with it — and since selectedLabel/context will be "",
-      // the guards in useEffects won't clear these banners.
       setSaveResult(json);
       handleReset();
     } catch (e: any) {
@@ -171,15 +173,18 @@ export function SimulationPage() {
     }
   };
 
-  // ── canSave: simulation name, context, label, and all fields must be filled
   const allFieldsFilled =
-    fieldKeys.length === 0 ||
-    fieldKeys.every((k) => fieldValues[k]?.trim() !== "");
+    fieldRows.length > 0 &&
+    fieldRows.every(
+      (row) =>
+        row.entityName.trim() !== "" &&
+        row.fieldName.trim() !== "" &&
+        row.value.trim() !== ""
+    );
 
   const canSave =
     simulationName.trim() &&
     selectedContext &&
-    selectedLabel &&
     allFieldsFilled &&
     !saving;
 
@@ -244,77 +249,119 @@ export function SimulationPage() {
         </div>
       </div>
 
-      {/* ── Step 2: Form / Label ──────────────────────────────────────────── */}
+      {/* ── Step 2: Field inputs ──────────────────────────────────────────── */}
       {selectedContext && (
         <div className="card-elevated p-6 space-y-4 animate-fade-in">
           <SectionHeader
             step="2"
-            title="Form"
-            subtitle="Select the label form for the chosen context"
+            title="Input Values"
+            subtitle="Select entity, field, and value for each row"
           />
-
-          {loadingLabels ? (
-            <SkeletonSelect />
-          ) : filteredLabels.length === 0 ? (
+          {entityOptions.length === 0 ? (
             <p className="text-sm text-muted-foreground font-body">
-              No forms found for <strong>{selectedContext}</strong>.
+              No entities found for <strong>{selectedContext}</strong>.
             </p>
           ) : (
-            <select
-              value={selectedLabel}
-              onChange={(e) => setSelectedLabel(e.target.value)}
-              className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30 text-foreground"
-            >
-              <option value="">— Select a form —</option>
-              {filteredLabels.map((l) => (
-                <option key={l.id} value={l.name}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-3">
+              {fieldRows.map((row, index) => {
+                const availableFields = getFieldsForEntity(row.entityName);
+                const fieldType = getFieldType(row.entityName, row.fieldName);
+                const isBooleanField =
+                  fieldType.toLowerCase() === "edm.boolean" ||
+                  fieldType.toLowerCase() === "boolean";
+
+                return (
+                  <div
+                    key={`field-row-${index}`}
+                    className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end"
+                  >
+                    <select
+                      value={row.entityName}
+                      onChange={(e) =>
+                        updateRow(index, {
+                          entityName: e.target.value,
+                          fieldName: "",
+                          value: "",
+                        })
+                      }
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30 text-foreground"
+                    >
+                      <option value="">— Select entity —</option>
+                      {entityOptions.map((entityName) => (
+                        <option key={entityName} value={entityName}>
+                          {entityName}
+                        </option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={row.fieldName}
+                      onChange={(e) =>
+                        updateRow(index, { fieldName: e.target.value, value: "" })
+                      }
+                      disabled={!row.entityName}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30 text-foreground disabled:opacity-50"
+                    >
+                      <option value="">— Select field —</option>
+                      {availableFields.map((field) => (
+                        <option key={field.name} value={field.name}>
+                          {field.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    {isBooleanField ? (
+                      <select
+                        value={row.value}
+                        onChange={(e) => updateRow(index, { value: e.target.value })}
+                        disabled={!row.fieldName}
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30 text-foreground disabled:opacity-50"
+                      >
+                        <option value="">— Select value —</option>
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder={row.fieldName ? "Enter value" : "Select field first"}
+                        value={row.value}
+                        onChange={(e) => updateRow(index, { value: e.target.value })}
+                        disabled={!row.fieldName}
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30 text-foreground placeholder:text-muted-foreground/50 disabled:opacity-50"
+                      />
+                    )}
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={addRow}
+                        className="h-9 w-9 rounded-lg text-sm font-semibold font-body border border-border hover:bg-muted transition-all"
+                        title="Add row"
+                      >
+                        +
+                      </button>
+                      {fieldRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeRow(index)}
+                          className="h-9 w-9 rounded-lg text-sm font-semibold font-body border border-border hover:bg-muted transition-all"
+                          title="Remove row"
+                        >
+                          -
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
 
-      {/* ── Step 3: Field inputs ──────────────────────────────────────────── */}
-      {selectedLabel && fieldKeys.length > 0 && (
-        <div className="card-elevated p-6 space-y-5 animate-fade-in">
-          <SectionHeader
-            step="3"
-            title="Input Values"
-            subtitle="Provide values for each field in the selected form"
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {fieldKeys.map((key) => (
-              <div key={key} className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground font-body tracking-wide uppercase">
-                  {key} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder={`Enter ${key}`}
-                  value={fieldValues[key] ?? ""}
-                  onChange={(e) => handleFieldChange(key, e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30 text-foreground placeholder:text-muted-foreground/50"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Step 3 empty state ────────────────────────────────────────────── */}
-      {selectedLabel && fieldKeys.length === 0 && (
-        <div className="card-elevated p-6 animate-fade-in">
-          <p className="text-sm text-muted-foreground font-body">
-            No field mappings found for <strong>{selectedLabel}</strong>.
-          </p>
-        </div>
-      )}
-
       {/* ── Actions ───────────────────────────────────────────────────────── */}
-      {selectedLabel && (
+      {selectedContext && (
         <div className="flex gap-3 animate-fade-in">
           <button
             onClick={handleReset}

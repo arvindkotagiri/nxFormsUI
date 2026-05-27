@@ -18,6 +18,7 @@ import {
   Activity,
   FileSearch,
   Layers,
+  Image,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -44,7 +45,7 @@ const navItems: NavItem[] = [
     children: [
       { title: "API Setup", url: "/api-configurations", icon: Plug },
       { title: "Design Forms", url: "/templates", icon: FileText },
-      // { title: "Forms Manager", url: "/output-rules", icon: Layers },
+      { title: "Image Retention", url: "/image-retention", icon: Image },
       // { title: "Label Configurator", url: "/labelConfigurator", icon: GitBranch },
     ],
   },

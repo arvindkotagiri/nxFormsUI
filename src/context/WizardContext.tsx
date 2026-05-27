@@ -61,6 +61,8 @@ interface WizardState {
   selectedSize: LabelSize | null;
   labelName: string;
   outputMode: OutputMode; // New State
+  watermarkName: string;
+  printSystemId: boolean;
   modifiedLabelBlob: Blob | null; // Captured from Step 3
   generatedZPL: string | null;
   generatedHTML: string | null;
@@ -85,6 +87,8 @@ interface WizardContextType extends WizardState {
   setSelectedSize: (size: LabelSize | null) => void;
   setLabelName: (name: string) => void;
   setOutputMode: (mode: OutputMode) => void; // New Action
+  setWatermarkName: (name: string) => void;
+  setPrintSystemId: (enabled: boolean) => void;
   setModifiedLabelBlob: (blob: Blob | null) => void;
   setGeneratedZPL: (zpl: string | null) => void;
   setGeneratedHTML: (html: string | null) => void;
@@ -103,6 +107,8 @@ const initialState: WizardState = {
   selectedSize: null,
   labelName: '',
   outputMode: 'all', // Default to all
+  watermarkName: '',
+  printSystemId: false,
   modifiedLabelBlob: null,
   generatedZPL: null,
   generatedHTML: null,
@@ -178,6 +184,8 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const setSelectedSize = (size: LabelSize | null) => setState(prev => ({ ...prev, selectedSize: size }));
   const setLabelName = (name: string) => setState(prev => ({ ...prev, labelName: name }));
   const setOutputMode = (mode: OutputMode) => setState(prev => ({ ...prev, outputMode: mode }));
+  const setWatermarkName = (name: string) => setState(prev => ({ ...prev, watermarkName: name }));
+  const setPrintSystemId = (enabled: boolean) => setState(prev => ({ ...prev, printSystemId: enabled }));
 
   const setModifiedLabelBlob = (blob: Blob | null) => setState(prev => ({ ...prev, modifiedLabelBlob: blob }));
 
@@ -188,7 +196,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const reset = () => setState(initialState);
 
   return (
-    <WizardContext.Provider value={{ ...state, setStep, nextStep, prevStep, setUploadedFile, setUploadedImage, setAnnotatedImage, setCleanImage, setAnalysisResults, setChunks, addChunk, updateChunk, removeChunk, setSelectedContext, setSelectedSize, setLabelName, setOutputMode, setModifiedLabelBlob, setGeneratedZPL, setGeneratedHTML, setGeneratedXDP, reset }}>
+    <WizardContext.Provider value={{ ...state, setStep, nextStep, prevStep, setUploadedFile, setUploadedImage, setAnnotatedImage, setCleanImage, setAnalysisResults, setChunks, addChunk, updateChunk, removeChunk, setSelectedContext, setSelectedSize, setLabelName, setOutputMode, setWatermarkName, setPrintSystemId, setModifiedLabelBlob, setGeneratedZPL, setGeneratedHTML, setGeneratedXDP, reset }}>
       {children}
     </WizardContext.Provider>
   );

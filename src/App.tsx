@@ -20,6 +20,7 @@ import LabelConfigurator from "./pages/newConfiguration/LabelConfigurator";
 import { ConfigDetailPage } from "./pages/newConfiguration/ConfigDetailPage";
 import { SimulationPage } from "./pages/Simulation";
 import { PrintAgent } from "./components/PrintAgent";
+import ImageRetention from "./pages/ImageRetention";
 
 
 const queryClient = new QueryClient();
@@ -54,6 +55,9 @@ const App = () => (
 
             {/* Simulation App Integration */}
             <Route path="/simulation" element={<SimulationPage />} />
+
+            {/* Additional routes can be added here following the same pattern */}
+            <Route path="/image-retention" element={<ImageRetention />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

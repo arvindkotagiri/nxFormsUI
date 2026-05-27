@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 
 export function TemplateSave() {
-  const { labelName, setLabelName, selectedContext, selectedSize, chunks, generatedZPL, generatedHTML, generatedXDP, outputMode, reset, prevStep } = useWizard();
+  const { labelName, setLabelName, selectedContext, selectedSize, chunks, generatedZPL, generatedHTML, generatedXDP, outputMode, watermarkName, printSystemId, reset, prevStep } = useWizard();
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   console.log("first", useWizard())
@@ -45,6 +45,8 @@ export function TemplateSave() {
         html_code: generatedHTML || "",
         xdp_code: generatedXDP || "",
         output_mode: outputMode,
+        watermark: watermarkName || null,
+        print_system_id: printSystemId,
         page_dimensions: selectedSize.id || "",
         fields: chunks,
         version: 1.0,

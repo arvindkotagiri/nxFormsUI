@@ -91,7 +91,8 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
           clientId: initialData.client_id || "", 
           clientSecret: initialData.client_secret || "",
           username: initialData.username || "",
-          password: initialData.password || ""
+          password: initialData.password || "",
+          tokenUrl: initialData.auth_url || ""
         },
         entities: entitiesRecord,
         fields: fieldsRecord,
@@ -226,9 +227,10 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: state.context.name,
-  application: state.context.application,
-  environment: state.context.environment,
-  client: state.context.client,
+          application: state.context.application,
+          environment: state.context.environment,
+          client: state.context.client,
+          auth_url: state.connection.tokenUrl,
           endpoint: state.connection.baseUrl,
           auth_type: state.connection.authType,
           client_id: state.connection.clientId,

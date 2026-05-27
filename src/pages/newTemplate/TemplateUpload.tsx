@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useWizard } from '@/context/WizardContext';
+import { bootstrapTokenIfMissing } from '@/lib/api';
 import { LABEL_SIZES } from '@/data/labelData';
+import { Switch } from '@/components/ui/switch';
 import { Upload, Loader2 } from 'lucide-react';
 const flaskAPI = import.meta.env.VITE_FLASK_API;
+const nodeAPI = import.meta.env.VITE_NODE_API;
 
 export function TemplateUpload() {
   const {
@@ -15,6 +18,10 @@ export function TemplateUpload() {
     nextStep,
     outputMode,
     setOutputMode,
+    watermarkName,
+    setWatermarkName,
+    printSystemId,
+    setPrintSystemId,
     selectedContext,
     setSelectedContext,
     selectedSize,
@@ -26,6 +33,7 @@ export function TemplateUpload() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [contexts, setContexts] = useState<any[]>([]);
+  const [watermarkOptions, setWatermarkOptions] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchContexts = async () => {
@@ -50,6 +58,39 @@ export function TemplateUpload() {
       }
     };
     fetchContexts();
+  }, []);
+
+  useEffect(() => {
+    const fetchWatermarks = async () => {
+      try {
+        await bootstrapTokenIfMissing();
+        const token = localStorage.getItem("access_token");
+        const response = await fetch(`${nodeAPI}/image-retention`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "Failed to load watermarks");
+        }
+        const names = Array.from(
+          new Set(
+            (Array.isArray(data) ? data : [])
+              .map((row: any) => row?.name)
+              .filter((name: any) => typeof name === "string" && name.trim() !== "")
+          )
+        ) as string[];
+        setWatermarkOptions(names);
+      } catch (err) {
+        console.error("Failed to fetch watermark options", err);
+        setWatermarkOptions([]);
+      }
+    };
+
+    if (!nodeAPI) {
+      setWatermarkOptions([]);
+      return;
+    }
+    fetchWatermarks();
   }, []);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -198,6 +239,42 @@ export function TemplateUpload() {
             <option value="xdp">XDP</option>
             <option value="all">All (Synchronized)</option>
           </select>
+        </div>
+
+        {/* Watermark */}
+        <div className="space-y-2">
+          <label className="text-xs font-body text-muted-foreground">
+            Watermark
+          </label>
+          <select
+            value={watermarkName}
+            onChange={(e) => setWatermarkName(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
+          >
+            <option value="">Select watermark...</option>
+            {watermarkOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Print System ID */}
+        <div className="space-y-2">
+          <label className="text-xs font-body text-muted-foreground">
+            Print System ID
+          </label>
+          <div className="flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2">
+            <span className="text-sm font-body text-foreground">
+              {printSystemId ? "True" : "False"}
+            </span>
+            <Switch
+              checked={printSystemId}
+              onCheckedChange={(checked) => setPrintSystemId(!!checked)}
+              aria-label="Toggle print system id"
+            />
+          </div>
         </div>
 
         {/* Status Badges */}
