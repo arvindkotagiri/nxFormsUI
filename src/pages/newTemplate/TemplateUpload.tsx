@@ -138,8 +138,8 @@ export function TemplateUpload() {
       if (data.status === "success") {
         setAnalysisResults(
           data.extracted_fields,
-          data.annotated_image,
-          data.clean_image
+          data.annotated_images && data.annotated_images.length > 0 ? data.annotated_images : data.annotated_image,
+          data.clean_images && data.clean_images.length > 0 ? data.clean_images : data.clean_image
         );
         nextStep();
       } else {

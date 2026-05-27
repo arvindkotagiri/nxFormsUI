@@ -37,6 +37,7 @@ export type LabelChunk = {
   isDynamicTable?: boolean;
   cropped_b64?: string;
   originalLabel?: string;
+  pageIndex?: number; // Tag representing page (0-indexed)
 };
 
 export type LabelSize = {
@@ -56,6 +57,9 @@ interface WizardState {
   uploadedImage: string | null;
   cleanImage: string | null;
   annotatedImage: string | null;
+  uploadedImages: string[]; // Multi-page support
+  cleanImages: string[]; // Multi-page support
+  annotatedImages: string[]; // Multi-page support
   chunks: LabelChunk[];
   selectedContext: any | null;
   selectedSize: LabelSize | null;
@@ -78,7 +82,7 @@ interface WizardContextType extends WizardState {
   setUploadedImage: (image: string | null) => void;
   setAnnotatedImage: (image: string | null) => void;
   setCleanImage: (image: string | null) => void;
-  setAnalysisResults: (fields: any[], annotatedImg: string, cleanImg?: string) => void;
+  setAnalysisResults: (fields: any[], annotatedImg: string | string[], cleanImg?: string | string[]) => void;
   setChunks: (chunks: LabelChunk[]) => void;
   addChunk: (chunk: LabelChunk) => void;
   updateChunk: (id: string, updates: Partial<LabelChunk>) => void;
@@ -102,6 +106,9 @@ const initialState: WizardState = {
   uploadedImage: null,
   cleanImage: null,
   annotatedImage: null,
+  uploadedImages: [],
+  cleanImages: [],
+  annotatedImages: [],
   chunks: [],
   selectedContext: null,
   selectedSize: null,
@@ -126,15 +133,31 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const prevStep = () => setState(prev => ({ ...prev, currentStep: Math.max(prev.currentStep - 1, 1) as WizardStep }));
 
   const setUploadedFile = (file: File | null) => setState(prev => ({ ...prev, uploadedFile: file }));
-  const setUploadedImage = (image: string | null) => setState(prev => ({ ...prev, uploadedImage: image }));
-  const setAnnotatedImage = (image: string | null) => setState(prev => ({ ...prev, annotatedImage: image }));
-  const setCleanImage = (image: string | null) => setState(prev => ({ ...prev, cleanImage: image }));
+  const setUploadedImage = (image: string | null) => setState(prev => ({ 
+    ...prev, 
+    uploadedImage: image, 
+    uploadedImages: image ? [image] : [] 
+  }));
+  const setAnnotatedImage = (image: string | null) => setState(prev => ({ 
+    ...prev, 
+    annotatedImage: image, 
+    annotatedImages: image ? [image] : [] 
+  }));
+  const setCleanImage = (image: string | null) => setState(prev => ({ 
+    ...prev, 
+    cleanImage: image, 
+    cleanImages: image ? [image] : [] 
+  }));
 
-  const setAnalysisResults = useCallback((fields: any[], annotatedImg: string, cleanImg?: string) => {
+  const setAnalysisResults = useCallback((fields: any[], annotatedImg: string | string[], cleanImg?: string | string[]) => {
     if (!Array.isArray(fields)) {
       console.warn("setAnalysisResults: fields is not an array", fields);
       return;
     }
+
+    const cleanImgs = Array.isArray(cleanImg) ? cleanImg : (cleanImg ? [cleanImg] : []);
+    const annotatedImgs = Array.isArray(annotatedImg) ? annotatedImg : (annotatedImg ? [annotatedImg] : []);
+
     const mappedChunks: LabelChunk[] = fields.map((field, index) => {
       // Safety check for box_2d
       const box = Array.isArray(field.box_2d) && field.box_2d.length === 4 
@@ -159,15 +182,19 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         rows: isTable ? field.table_data : undefined,
         isDynamicTable: isTable,
         cropped_b64: field.cropped_b64,
+        pageIndex: field.page_index !== undefined ? field.page_index : 0
       };
     });
+
     setState(prev => {
       const fileSignature = prev.uploadedFile ? `${prev.uploadedFile.name}-${prev.uploadedFile.size}-${prev.uploadedFile.lastModified}` : null;
       return { 
         ...prev, 
         chunks: mappedChunks, 
-        annotatedImage: annotatedImg, 
-        cleanImage: cleanImg || null,
+        annotatedImage: annotatedImgs[0] || null, 
+        cleanImage: cleanImgs[0] || null,
+        annotatedImages: annotatedImgs,
+        cleanImages: cleanImgs,
         lastAnalyzedFile: fileSignature
       };
     });
@@ -176,9 +203,33 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const setChunks = (chunks: LabelChunk[]) => setState(prev => ({ ...prev, chunks }));
   const addChunk = (chunk: LabelChunk) => setState(prev => ({ ...prev, chunks: [...prev.chunks, chunk] }));
   const updateChunk = (id: string, updates: Partial<LabelChunk>) => {
-    setState(prev => ({ ...prev, chunks: prev.chunks.map(c => (c.id === id ? { ...c, ...updates } : c)) }));
+    setState(prev => {
+      const chunk = prev.chunks.find(c => c.id === id);
+      let nextHtml = prev.generatedHTML;
+      if (chunk && updates.label && updates.label !== chunk.label && nextHtml) {
+        nextHtml = nextHtml.replaceAll(`{{${chunk.label}}}`, `{{${updates.label}}}`);
+      }
+      return {
+        ...prev,
+        generatedHTML: nextHtml,
+        chunks: prev.chunks.map(c => (c.id === id ? { ...c, ...updates } : c)),
+      };
+    });
   };
-  const removeChunk = (id: string) => setState(prev => ({ ...prev, chunks: prev.chunks.filter(c => c.id !== id) }));
+  const removeChunk = (id: string) => {
+    setState(prev => {
+      const chunk = prev.chunks.find(c => c.id === id);
+      let nextHtml = prev.generatedHTML;
+      if (chunk && nextHtml) {
+        nextHtml = nextHtml.replaceAll(`{{${chunk.label}}}`, "");
+      }
+      return {
+        ...prev,
+        generatedHTML: nextHtml,
+        chunks: prev.chunks.filter(c => c.id !== id),
+      };
+    });
+  };
 
   const setSelectedContext = (context: any | null) => setState(prev => ({ ...prev, selectedContext: context }));
   const setSelectedSize = (size: LabelSize | null) => setState(prev => ({ ...prev, selectedSize: size }));

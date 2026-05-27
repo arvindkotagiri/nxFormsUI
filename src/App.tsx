@@ -21,6 +21,7 @@ import { ConfigDetailPage } from "./pages/newConfiguration/ConfigDetailPage";
 import { SimulationPage } from "./pages/Simulation";
 import { PrintAgent } from "./components/PrintAgent";
 import ImageRetention from "./pages/ImageRetention";
+import { WizardProvider } from "@/context/WizardContext";
 
 
 const queryClient = new QueryClient();
@@ -31,27 +32,28 @@ const App = () => (
       <Toaster />
       <Sonner />
       <PrintAgent />
-      <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/events" element={<Events />} />
-            <Route path="/outputs" element={<OutputRules />} />
-            <Route path="/templates" element={<Templates />} />
-            {/* <Route path="/output-rules" element={<OutputRules />} /> */}
-            <Route path="/printers" element={<Printers />} />
-            <Route path="/api-configurations" element={<ApiConfigurations />} />
-            <Route path="/logs" element={<Logs />} />
-            <Route path="/output-status" element={<Outputs />} />
-            <Route path="/settings" element={<Settings />} />
+      <WizardProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/events" element={<Events />} />
+              <Route path="/outputs" element={<OutputRules />} />
+              <Route path="/templates" element={<Templates />} />
+              {/* <Route path="/output-rules" element={<OutputRules />} /> */}
+              <Route path="/printers" element={<Printers />} />
+              <Route path="/api-configurations" element={<ApiConfigurations />} />
+              <Route path="/logs" element={<Logs />} />
+              <Route path="/output-status" element={<Outputs />} />
+              <Route path="/settings" element={<Settings />} />
 
-            {/* Forms Wizard App Integration */}
-            <Route path="/templates/new" element={<TemplateIndex />} />
+              {/* Forms Wizard App Integration */}
+              <Route path="/templates/new" element={<TemplateIndex />} />
 
-            {/* Label Configurator App Integration */}
-            <Route path="/labelConfigurator" element={<LabelConfigurator />} />
-            <Route path="/config/new" element={<ConfigDetailPage />} />
-            <Route path="/config/:configId" element={<ConfigDetailPage />} />
+              {/* Label Configurator App Integration */}
+              <Route path="/labelConfigurator" element={<LabelConfigurator />} />
+              <Route path="/config/new" element={<ConfigDetailPage />} />
+              <Route path="/config/:configId" element={<ConfigDetailPage />} />
 
             {/* Simulation App Integration */}
             <Route path="/simulation" element={<SimulationPage />} />
@@ -62,6 +64,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      </WizardProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

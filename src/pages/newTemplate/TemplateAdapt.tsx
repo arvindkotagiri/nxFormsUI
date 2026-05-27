@@ -335,6 +335,8 @@ export function TemplateAdapt() {
     // Render
     // -------------------------------------------------
 
+    const isMultiPage = localHtml.includes("multi-page-container") || localHtml.includes("pdf-page-wrapper");
+
     return (
         <div className="flex flex-col h-[calc(100vh-140px)] relative select-none">
 
@@ -413,7 +415,12 @@ export function TemplateAdapt() {
                             <div
                                 ref={editorRef}
                                 data-editor-container="true"
-                                className="bg-white shadow-2xl min-h-[11in] w-[8.5in] relative overflow-hidden"
+                                className={cn(
+                                    "relative",
+                                    isMultiPage 
+                                        ? "bg-transparent shadow-none w-auto" 
+                                        : "bg-white shadow-2xl min-h-[11in] w-[8.5in] overflow-hidden"
+                                )}
                                 dangerouslySetInnerHTML={{ __html: localHtml }}
                                 onClick={handleClick}
                                 onMouseDown={handleMouseDown}
