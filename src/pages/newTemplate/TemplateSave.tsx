@@ -11,7 +11,7 @@ export function TemplateSave() {
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   console.log("first", useWizard())
-  console.log("second", selectedSize.id, selectedSize.name)
+  console.log("second", selectedSize?.id, selectedSize?.name)
 
   const handleSave = async () => {
     if (!labelName.trim()) {
@@ -47,7 +47,7 @@ export function TemplateSave() {
         output_mode: outputMode,
         watermark: watermarkName || null,
         print_system_id: printSystemId,
-        page_dimensions: selectedSize.id || "",
+        page_dimensions: selectedSize?.id || "",
         fields: chunks,
         version: 1.0,
         created_by: "System User" // Default

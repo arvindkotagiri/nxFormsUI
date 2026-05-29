@@ -39,9 +39,15 @@ export function WizardLayout() {
       </div>
 
       {/* Main Step Content */}
-      <div className="card-elevated p-6 min-h-[600px]">
-        {renderStep()}
-      </div>
+      {currentStep === 3 ? (
+        <div className="w-full">
+          {renderStep()}
+        </div>
+      ) : (
+        <div className="card-elevated p-6 min-h-[600px]">
+          {renderStep()}
+        </div>
+      )}
 
     </div>
   );
