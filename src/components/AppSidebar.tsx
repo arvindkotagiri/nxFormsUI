@@ -45,7 +45,7 @@ const navItems: NavItem[] = [
     children: [
       { title: "API Setup", url: "/api-configurations", icon: Plug },
       { title: "Design Forms", url: "/templates", icon: FileText },
-      { title: "Image Retention", url: "/image-retention", icon: Image },
+      { title: "Image Library", url: "/image-retention", icon: Image },
       // { title: "Label Configurator", url: "/labelConfigurator", icon: GitBranch },
     ],
   },

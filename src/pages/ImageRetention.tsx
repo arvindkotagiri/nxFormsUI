@@ -233,7 +233,7 @@ export default function ImageRetention() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="font-display text-3xl font-semibold text-foreground">
-          Image Retention
+          Image Library
         </h1>
         <p className="text-sm text-muted-foreground font-body mt-1">
           Import PNG/JPEG images and view extracted metadata.
