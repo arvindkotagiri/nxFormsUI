@@ -13,7 +13,7 @@ const steps = [
 
 export function StepIndicator() {
   // Assuming your setStep type now expects 1-6
-  const { currentStep, setStep } = useWizard();
+  const { currentStep, setStep, uploadedFile, uploadedImage } = useWizard();
 
   return (
     <nav className="w-full py-4" aria-label="Wizard steps">
@@ -21,7 +21,7 @@ export function StepIndicator() {
         {steps.map((step, index) => {
           const isCompleted = currentStep > step.number;
           const isCurrent = currentStep === step.number;
-          const isClickable = step.number <= currentStep;
+          const isClickable = step.number === 1 || (uploadedFile !== null || uploadedImage !== null);
 
           return (
             <li key={step.number} className="flex items-center flex-1 last:flex-none">
