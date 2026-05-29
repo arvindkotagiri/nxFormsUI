@@ -279,13 +279,28 @@ export function TemplateAdapt() {
     };
 
     // -------------------------------------------------
-    // Selection Logic
+    // Selection Logic & Drag Interceptor
     // -------------------------------------------------
-    const handleClick = (e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-        const isContainer = target.getAttribute("data-editor-container") === "true";
+    const getAbsoluteAncestor = (el: HTMLElement | null): HTMLElement | null => {
+        if (!el || !editorRef.current) return null;
+        if (el === editorRef.current) return null;
+        let current: HTMLElement | null = el;
+        let highestAbsolute: HTMLElement | null = null;
+        while (current && current !== editorRef.current) {
+            const style = window.getComputedStyle(current);
+            if (style.position === "absolute" || current.getAttribute("data-editor-element") === "true") {
+                highestAbsolute = current;
+            }
+            current = current.parentElement;
+        }
+        return highestAbsolute;
+    };
 
-        if (isContainer) {
+    const handleClick = (e: React.MouseEvent) => {
+        const rawTarget = e.target as HTMLElement;
+        const target = getAbsoluteAncestor(rawTarget);
+
+        if (!target) {
             if (!e.shiftKey && !e.metaKey) clearSelection();
             return;
         }
@@ -314,15 +329,15 @@ export function TemplateAdapt() {
     // Drag + Move
     // -------------------------------------------------
     const handleMouseDown = (e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-        const isContainer = target.getAttribute("data-editor-container") === "true";
+        const rawTarget = e.target as HTMLElement;
+        const target = getAbsoluteAncestor(rawTarget);
 
         setDragStart({
             x: e.clientX,
             y: e.clientY
         });
 
-        if (!isContainer && selectedElements.includes(target)) {
+        if (target && selectedElements.includes(target)) {
             setIsDragging(true);
             setInitialTransforms(
                 selectedElements.map(el => ({
@@ -330,7 +345,7 @@ export function TemplateAdapt() {
                     ...getTransform(el)
                 }))
             );
-        } else if (isContainer) {
+        } else if (!target) {
             setMarquee({
                 x1: e.clientX,
                 y1: e.clientY,
