@@ -484,6 +484,7 @@ export function TemplateAdapt() {
                 toast.error("Failed to replace image");
             }
         }
+    };
     // -------------------------------------------------
     // Dynamic Studio Text & Mapping Helpers
     // -------------------------------------------------
