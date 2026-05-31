@@ -553,7 +553,12 @@ export function TemplateAdapt() {
                         variant="ghost"
                         size="sm"
                         className="text-slate-600 hover:bg-slate-50 text-[10px] font-bold"
-                        onClick={fetchHtml}
+                        onClick={() => {
+                            if (generatedHTML) {
+                                setLocalHtml(generatedHTML);
+                                toast.info("Canvas reset to initial template");
+                            }
+                        }}
                         disabled={isLoading}
                     >
                         <RefreshCw className={cn("w-3 h-3 mr-2", isLoading && "animate-spin")} />
