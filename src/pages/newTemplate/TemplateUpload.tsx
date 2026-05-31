@@ -18,8 +18,6 @@ export function TemplateUpload() {
     nextStep,
     outputMode,
     setOutputMode,
-    watermarkName,
-    setWatermarkName,
     printSystemId,
     setPrintSystemId,
     selectedContext,
@@ -27,13 +25,14 @@ export function TemplateUpload() {
     selectedSize,
     setSelectedSize,
     chunks,
-    lastAnalyzedFile
+    lastAnalyzedFile,
+    setGeneratedHTML
   } = useWizard();
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [contexts, setContexts] = useState<any[]>([]);
-  const [watermarkOptions, setWatermarkOptions] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchContexts = async () => {
@@ -60,39 +59,6 @@ export function TemplateUpload() {
     fetchContexts();
   }, []);
 
-  useEffect(() => {
-    const fetchWatermarks = async () => {
-      try {
-        await bootstrapTokenIfMissing();
-        const token = localStorage.getItem("access_token");
-        const response = await fetch(`${nodeAPI}/image-retention`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data?.error || "Failed to load watermarks");
-        }
-        const names = Array.from(
-          new Set(
-            (Array.isArray(data) ? data : [])
-              .map((row: any) => row?.name)
-              .filter((name: any) => typeof name === "string" && name.trim() !== "")
-          )
-        ) as string[];
-        setWatermarkOptions(names);
-      } catch (err) {
-        console.error("Failed to fetch watermark options", err);
-        setWatermarkOptions([]);
-      }
-    };
-
-    if (!nodeAPI) {
-      setWatermarkOptions([]);
-      return;
-    }
-    fetchWatermarks();
-  }, []);
-
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
@@ -111,45 +77,76 @@ export function TemplateUpload() {
   const handleUploadAndProcess = async () => {
     if (!uploadedFile) return;
 
-    if (isAlreadyAnalyzed) {
-      nextStep();
-      return;
-    }
-
     setIsProcessing(true);
     setErrorMessage(null);
+    setProcessingStatus("Analyzing layout patterns...");
 
     const formData = new FormData();
     formData.append('image', uploadedFile);
 
-    const targetUrl = `${flaskAPI || 'http://localhost:5050'}/analyze-label`;
-    console.log("Fetching from:", targetUrl);
+    const baseUrl = flaskAPI || 'http://localhost:5050';
+    const analyzeUrl = `${baseUrl}/analyze-label`;
 
     try {
-      const response = await fetch(targetUrl, {
+      // Step A: Perform layout analysis
+      console.log("Combined Step A: Running analysis on:", analyzeUrl);
+      const response = await fetch(analyzeUrl, {
         method: 'POST',
         body: formData
       });
 
-      console.log("Response status:", response.status);
       const data = await response.json();
-      console.log("Analysis data received:", data);
+      console.log("Analysis results received:", data);
 
-      if (data.status === "success") {
-        setAnalysisResults(
-          data.extracted_fields,
-          data.annotated_images && data.annotated_images.length > 0 ? data.annotated_images : data.annotated_image,
-          data.clean_images && data.clean_images.length > 0 ? data.clean_images : data.clean_image
-        );
+      if (data.status !== "success") {
+        setErrorMessage(data.error || "Analysis failed");
+        setIsProcessing(false);
+        setProcessingStatus("");
+        return;
+      }
+
+      // Store layout analysis in context chunks
+      setAnalysisResults(
+        data.extracted_fields,
+        data.annotated_images && data.annotated_images.length > 0 ? data.annotated_images : data.annotated_image,
+        data.clean_images && data.clean_images.length > 0 ? data.clean_images : data.clean_image
+      );
+
+      // Step B: Automatically run HTML Design replication immediately afterwards
+      setProcessingStatus("Generating HTML replica...");
+      const replicateUrl = `${baseUrl}/replicate-invoice`;
+      console.log("Combined Step B: Running replication on:", replicateUrl);
+
+      const repFormData = new FormData();
+      repFormData.append('image', uploadedFile);
+
+      // Pass the pre-cropped logo and signature from Step A's analysis directly to replication
+      const logo = data.extracted_fields?.find((c: any) => c.content_type === 'logo')?.cropped_b64;
+      const signature = data.extracted_fields?.find((c: any) => c.content_type === 'signature')?.cropped_b64;
+
+      if (logo) repFormData.append("logo_b64", logo);
+      if (signature) repFormData.append("signature_b64", signature);
+
+      const repResponse = await fetch(replicateUrl, {
+        method: "POST",
+        body: repFormData
+      });
+
+      const repData = await repResponse.json();
+      console.log("Replication results received:", repData);
+
+      if (repData.status === "success") {
+        setGeneratedHTML(repData.full_html);
         nextStep();
       } else {
-        setErrorMessage(data.error || "Analysis failed");
+        setErrorMessage(repData.error || "HTML design replication failed");
       }
     } catch (err) {
-      console.error("Fetch error:", err);
+      console.error("Combined sequential process error:", err);
       setErrorMessage("Connection error: backend not reachable.");
     } finally {
       setIsProcessing(false);
+      setProcessingStatus("");
     }
   };
 
@@ -241,25 +238,6 @@ export function TemplateUpload() {
           </select>
         </div>
 
-        {/* Watermark */}
-        <div className="space-y-2">
-          <label className="text-xs font-body text-muted-foreground">
-            Watermark
-          </label>
-          <select
-            value={watermarkName}
-            onChange={(e) => setWatermarkName(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-          >
-            <option value="">Select watermark...</option>
-            {watermarkOptions.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </div>
-
         {/* Print System ID */}
         <div className="space-y-2">
           <label className="text-xs font-body text-muted-foreground">
@@ -348,10 +326,8 @@ export function TemplateUpload() {
             {isProcessing ? (
               <span className="flex items-center gap-2">
                 <Loader2 size={14} className="animate-spin" />
-                Analyzing...
+                {processingStatus || "Analyzing..."}
               </span>
-            ) : isAlreadyAnalyzed ? (
-              "Continue"
             ) : (
               "Analyze & Continue"
             )}
