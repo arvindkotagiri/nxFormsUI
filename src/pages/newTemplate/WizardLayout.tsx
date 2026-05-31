@@ -1,7 +1,6 @@
 import { useWizard } from '@/context/WizardContext';
 import { StepIndicator } from './StepIndicator';
 import { TemplateUpload } from './TemplateUpload';
-import { TemplateIdentify } from './TemplateIdentify';
 import { TemplateAdapt } from './TemplateAdapt';
 import { TemplateGenerate } from './TemplateGenerate';
 import { TemplateSave } from './TemplateSave';
@@ -12,10 +11,9 @@ export function WizardLayout() {
   const renderStep = () => {
     switch (currentStep) {
       case 1: return <TemplateUpload />;
-      case 2: return <TemplateIdentify />;
-      case 3: return <TemplateAdapt />;
-      case 4: return <TemplateGenerate />;
-      case 5: return <TemplateSave />;
+      case 2: return <TemplateAdapt />;
+      case 3: return <TemplateGenerate />;
+      case 4: return <TemplateSave />;
       default: return <TemplateUpload />;
     }
   };
@@ -39,7 +37,7 @@ export function WizardLayout() {
       </div>
 
       {/* Main Step Content */}
-      {currentStep === 3 ? (
+      {currentStep === 2 ? (
         <div className="w-full">
           {renderStep()}
         </div>

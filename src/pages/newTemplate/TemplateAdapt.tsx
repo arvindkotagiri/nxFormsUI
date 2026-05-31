@@ -19,10 +19,15 @@ import {
     Compass,
     Move,
     Eye,
-    RotateCw
+    RotateCw,
+    Lock,
+    Zap,
+    Layers
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { FieldMappingSelector } from './FieldMappingSelector';
+import { TransformationModal, type TransformationPayload } from './TransformationModal';
 
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 const nodeAPI = import.meta.env.VITE_NODE_API;
@@ -54,7 +59,8 @@ export function TemplateAdapt() {
         setModifiedLabelBlob,
         setGeneratedZPL,
         setGeneratedXDP,
-        watermarkName
+        watermarkName,
+        selectedContext
     } = useWizard();
 
     const [isLoading, setIsLoading] = useState(false);
@@ -70,6 +76,9 @@ export function TemplateAdapt() {
 
     const [watermarkSrc, setWatermarkSrc] = useState<string | null>(null);
     const [retentionImages, setRetentionImages] = useState<any[]>([]);
+
+    // Mapping & Transformations Modal detailed states
+    const [openTransformModal, setOpenTransformModal] = useState(false);
 
     // Watermark detailed states
     const [isWatermarkEnabled, setIsWatermarkEnabled] = useState(false);
@@ -475,7 +484,109 @@ export function TemplateAdapt() {
                 toast.error("Failed to replace image");
             }
         }
+    // -------------------------------------------------
+    // Dynamic Studio Text & Mapping Helpers
+    // -------------------------------------------------
+    const isTextSelected = selectedElement !== null && 
+        selectedElement.tagName.toLowerCase() !== "img" && 
+        selectedElement.id !== "watermark-element";
+
+    const selectedElementMapping = selectedElement?.getAttribute("data-sap-mapping") || "";
+    const isElementStatic = !selectedElementMapping;
+
+    // Parses JSON string representation of transformations from element attributes
+    const getElementTransformations = (): any[] => {
+        if (!selectedElement) return [];
+        const raw = selectedElement.getAttribute("data-transformations");
+        if (!raw) return [];
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return [];
+        }
     };
+    const elementTransformations = getElementTransformations();
+
+    const handleMappingSelect = (fullPath: string, fieldName: string) => {
+        if (!selectedElement) return;
+        
+        selectedElement.textContent = `{{${fieldName}}}`;
+        selectedElement.setAttribute("data-sap-mapping", fullPath);
+        selectedElement.setAttribute("data-editor-element", "true");
+        
+        if (editorRef.current) {
+            setLocalHtml(editorRef.current.innerHTML);
+        }
+        toast.success(`Mapped to ${fieldName} successfully`);
+    };
+
+    const handleToggleStatic = () => {
+        if (!selectedElement) return;
+        
+        selectedElement.removeAttribute("data-sap-mapping");
+        selectedElement.removeAttribute("data-transformations");
+        
+        // Strip placeholders if present
+        if (selectedElement.textContent?.startsWith("{{") && selectedElement.textContent?.endsWith("}}")) {
+            const inner = selectedElement.textContent.slice(2, -2);
+            selectedElement.textContent = inner;
+        }
+        
+        if (editorRef.current) {
+            setLocalHtml(editorRef.current.innerHTML);
+        }
+        toast.info("Changed mapping to Static text");
+    };
+
+    const handleTextChange = (newVal: string) => {
+        if (!selectedElement) return;
+        selectedElement.textContent = newVal;
+        if (editorRef.current) {
+            setLocalHtml(editorRef.current.innerHTML);
+        }
+    };
+
+    const handleApplyTransformations = (transformations: TransformationPayload[]) => {
+        if (!selectedElement) return;
+        selectedElement.setAttribute("data-transformations", JSON.stringify(transformations));
+        if (editorRef.current) {
+            setLocalHtml(editorRef.current.innerHTML);
+        }
+        setOpenTransformModal(false);
+        toast.success("Applied transformations successfully");
+    };
+
+    const contextFields = (() => {
+        if (!selectedContext?.fields) return [];
+        if (Array.isArray(selectedContext.fields)) return selectedContext.fields;
+        
+        const flat: { name: string; path: string }[] = [];
+        Object.entries(selectedContext.fields).forEach(([entity, fields]: [string, any]) => {
+            if (Array.isArray(fields)) {
+                fields.forEach((f) => {
+                    flat.push({
+                        name: f.name || f,
+                        path: `${entity}.${f.path || f.name || f}`,
+                    });
+                });
+            }
+        });
+        return flat;
+    })();
+
+    const targetFields = (() => {
+        if (!editorRef.current) return [];
+        const elements = Array.from(editorRef.current.querySelectorAll("[data-editor-element], [data-sap-mapping]")) as HTMLElement[];
+        return elements.map((el, index) => {
+            const mapping = el.getAttribute("data-sap-mapping");
+            const label = mapping ? mapping.split('.').pop()! : (el.textContent || `Element ${index}`);
+            return {
+                name: label,
+                path: mapping || `element-${index}`
+            };
+        });
+    })();
+    // -------------------------------------------------
 
     // -------------------------------------------------
     // Save (Absolute Coordinates Translation)
@@ -667,6 +778,19 @@ export function TemplateAdapt() {
                                     onClick={handleClick}
                                     onMouseDown={handleMouseDown}
                                 />
+
+                                <style dangerouslySetInnerHTML={{ __html: `
+                                    [data-editor-container] * {
+                                        transition: outline 0.08s ease-in-out;
+                                    }
+                                    [data-editor-container] *:hover {
+                                        outline: 1.5px dashed #3b82f6 !important;
+                                        cursor: pointer;
+                                    }
+                                    [data-editor-container] [data-sap-mapping] {
+                                        border-bottom: 2px double #f43f5e;
+                                    }
+                                `}} />
 
                                 {marquee && (
                                     <div
@@ -954,14 +1078,138 @@ export function TemplateAdapt() {
                         </div>
                     )}
 
-                    {/* Default state */}
-                    {!isImageSelected && (
+                    {/* Text Field Properties & Mapping Panel */}
+                    {isTextSelected && (
+                        <div className="space-y-4 rounded-2xl border border-blue-100 p-5 bg-gradient-to-b from-blue-50/20 to-white shadow-sm animate-in slide-in-from-right duration-300">
+                            <div className="flex items-center gap-2 text-blue-600 font-extrabold text-[10px] uppercase tracking-widest border-b border-blue-100/50 pb-2">
+                                <Type className="w-3.5 h-3.5 text-blue-500" />
+                                Text Field Properties
+                            </div>
+
+                            {/* Static / Dynamic Toggle */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase text-slate-500 block">Logic Type</label>
+                                <div className="flex border border-slate-200 rounded-lg overflow-hidden p-0.5 bg-slate-100">
+                                    <button
+                                        onClick={handleToggleStatic}
+                                        className={cn(
+                                            "flex-1 py-1 text-[9px] font-bold tracking-wider rounded-md transition-all uppercase flex items-center justify-center gap-1",
+                                            isElementStatic
+                                                ? "bg-white shadow-sm text-slate-800"
+                                                : "text-slate-400 hover:text-slate-600"
+                                        )}
+                                    >
+                                        <Lock className="w-2.5 h-2.5" /> Static Text
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (selectedElement && isElementStatic) {
+                                                selectedElement.setAttribute("data-sap-mapping", "unmapped");
+                                                if (editorRef.current) setLocalHtml(editorRef.current.innerHTML);
+                                            }
+                                        }}
+                                        className={cn(
+                                            "flex-1 py-1 text-[9px] font-bold tracking-wider rounded-md transition-all uppercase flex items-center justify-center gap-1",
+                                            !isElementStatic
+                                                ? "bg-white shadow-sm text-rose-600"
+                                                : "text-slate-400 hover:text-slate-600"
+                                        )}
+                                    >
+                                        <Zap className="w-2.5 h-2.5 text-rose-500" /> Dynamic SAP
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Static Text Input */}
+                            {isElementStatic ? (
+                                <div className="space-y-2 animate-in fade-in duration-200">
+                                    <label className="text-[10px] font-bold uppercase text-slate-500 block">Text Value</label>
+                                    <textarea
+                                        value={selectedElement?.textContent || ""}
+                                        onChange={(e) => handleTextChange(e.target.value)}
+                                        rows={3}
+                                        className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-body focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm font-medium"
+                                    />
+                                    <p className="text-[9px] text-slate-400 leading-normal">
+                                        Edit the visual static label directly. Changes are automatically updated in ZPL/HTML.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4 animate-in fade-in duration-200">
+                                    {/* SAP Field Mapping Dropdown */}
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-bold uppercase text-slate-500 block">SAP Field Mapping</label>
+                                        <FieldMappingSelector 
+                                            value={selectedElementMapping === "unmapped" ? "" : selectedElementMapping}
+                                            selectedContext={selectedContext}
+                                            onSelect={handleMappingSelect}
+                                        />
+                                        <p className="text-[9px] text-slate-400 leading-normal">
+                                            Choose an SAP field from the active catalog to replace this text block with a dynamic templated value.
+                                        </p>
+                                    </div>
+
+                                    {/* Transformations */}
+                                    <div className="space-y-2 border-t border-slate-100 pt-3">
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-bold uppercase text-slate-500">Transformations</label>
+                                            {elementTransformations.length > 0 && (
+                                                <span className="text-[9px] font-bold bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded-full animate-pulse">
+                                                    {elementTransformations.length}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => setOpenTransformModal(true)}
+                                            disabled={!selectedElementMapping || selectedElementMapping === "unmapped"}
+                                            className="w-full text-xs h-9 rounded-xl border-dashed border-2 hover:border-blue-500 hover:bg-blue-50/10 transition-all font-semibold flex items-center justify-center gap-1.5"
+                                        >
+                                            <Zap className="w-3.5 h-3.5 text-rose-500 animate-bounce" />
+                                            Add Transformation
+                                        </Button>
+
+                                        {elementTransformations.length > 0 && (
+                                            <div className="space-y-1.5 pt-2">
+                                                {elementTransformations.map((t: any, index: number) => (
+                                                    <div key={index} className="bg-slate-50 rounded-xl px-3 py-2 text-[10px] font-medium flex justify-between items-center border border-slate-100">
+                                                        <div className="min-w-0">
+                                                            <div className="font-bold flex items-center gap-1.5 uppercase text-slate-700">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                                                {t.type.replace('_', ' ')}
+                                                            </div>
+                                                            {t.value && (
+                                                                <div className="text-[9px] text-slate-400 truncate">Value: {t.value}</div>
+                                                            )}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                const updated = elementTransformations.filter((_, i) => i !== index);
+                                                                selectedElement.setAttribute("data-transformations", JSON.stringify(updated));
+                                                                if (editorRef.current) setLocalHtml(editorRef.current.innerHTML);
+                                                            }}
+                                                            className="w-5 h-5 rounded-md hover:bg-red-50 text-red-500 flex items-center justify-center transition-all"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Default state Help Inspector */}
+                    {!isImageSelected && !isTextSelected && (
                         <div className="space-y-4 text-center py-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 animate-in fade-in duration-300 shadow-sm">
                             <HelpCircle className="w-8 h-8 text-slate-400 mx-auto animate-pulse" />
                             <div className="space-y-1.5 px-5">
-                                <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Help Inspector</h4>
+                                <h4 className="text-[11px] font-bold text-slate-700 uppercase tracking-widest">Studio Inspector</h4>
                                 <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                                    Click any text block, barcode, or image on the canvas to edit or swap placeholders.
+                                    Click any text block, barcode, watermark, or logo on the canvas to configure properties or map data.
                                 </p>
                             </div>
                         </div>
@@ -972,12 +1220,22 @@ export function TemplateAdapt() {
                 <div className="border-t border-slate-100 pt-4 bg-slate-50/30 p-3.5 rounded-2xl border mt-6">
                     <h5 className="text-[10px] font-extrabold text-slate-600 uppercase tracking-widest mb-1.5">Canvas Guidelines</h5>
                     <ul className="text-[9px] text-slate-500 space-y-1.5 list-disc pl-4.5 leading-normal">
-                        <li>Shift+Click to multi-select and delete elements.</li>
+                        <li>Hover elements to inspect. Click any element to map or edit.</li>
+                        <li>Dynamic database fields are marked with a double underline.</li>
                         <li>Drag elements freely; coordinates are saved automatically.</li>
-                        <li>Watermarks are slight in contrast to ensure clean binarized printing outputs.</li>
                     </ul>
                 </div>
             </div>
+
+            {/* Transformations builder Modal */}
+            <TransformationModal
+                open={openTransformModal}
+                onClose={() => setOpenTransformModal(false)}
+                onApply={handleApplyTransformations}
+                contextFields={contextFields}
+                targetFields={targetFields}
+                existingTransformations={elementTransformations}
+            />
         </div>
     );
 }
