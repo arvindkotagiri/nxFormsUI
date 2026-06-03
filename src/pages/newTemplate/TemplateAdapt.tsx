@@ -299,12 +299,23 @@ export function TemplateAdapt() {
         if (imageNode && isImageSelected) {
             try {
                 const targetUrl = `${nodeAPI}/image-retention/${imageId}/image`;
-                imageNode.crossOrigin = "anonymous";
-                imageNode.src = targetUrl;
-                if (editorRef.current) {
-                    setLocalHtml(editorRef.current.innerHTML);
+                const token = localStorage.getItem("access_token");
+                const response = await fetch(targetUrl, {
+                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch image: ${response.statusText}`);
                 }
-                toast.success("Logo replaced successfully");
+                const blob = await response.blob();
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    imageNode.src = reader.result as string;
+                    if (editorRef.current) {
+                        setLocalHtml(editorRef.current.innerHTML);
+                    }
+                    toast.success("Logo replaced successfully");
+                };
+                reader.readAsDataURL(blob);
             } catch (err) {
                 console.error("Failed to replace image:", err);
                 toast.error("Failed to replace image");
