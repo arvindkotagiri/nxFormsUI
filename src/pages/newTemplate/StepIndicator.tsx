@@ -2,13 +2,12 @@ import { useWizard } from '@/context/WizardContext';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// Redefining the steps to 6 steps
+// Streamlined 4-step wizard
 const steps = [
   { number: 1, title: 'Upload', description: 'Upload template' },
-  { number: 2, title: 'Identify', description: 'Configure & Map' },
-  { number: 3, title: 'Adapt', description: 'Visual Editor' },
-  { number: 4, title: 'Generate', description: 'Create ZPL/HTML' },
-  { number: 5, title: 'Save', description: 'Save Label' },
+  { number: 2, title: 'Studio', description: 'Map & Edit Canvas' },
+  { number: 3, title: 'Generate', description: 'Create ZPL/HTML' },
+  { number: 4, title: 'Save', description: 'Save Label' },
 ];
 
 export function StepIndicator() {

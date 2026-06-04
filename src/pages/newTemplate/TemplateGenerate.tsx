@@ -470,27 +470,30 @@ export function TemplateGenerate() {
                        <img src={uploadedImage || ""} className="max-h-[380px] object-contain opacity-40" alt="XDP Base" />
                        
                        <div className="absolute inset-0 pointer-events-none">
-                          {xdpLayout.map((f, i) => (
-                             <div 
-                                key={i}
-                                className="absolute border border-orange-500 bg-orange-500/10 flex items-center justify-center overflow-hidden"
-                                style={{
-                                   left: f.x,
-                                   top: f.y,
-                                   width: f.w || 'auto',
-                                   height: f.h || 'auto',
-                                   minWidth: '4px',
-                                   minHeight: '4px'
-                                }}
-                             >
-                                <span className="text-[6px] font-bold text-orange-700 truncate px-0.5">{f.name}</span>
-                             </div>
-                          ))}
+                          {Array.isArray(xdpLayout) && xdpLayout.map((f, i) => {
+                             if (!f) return null;
+                             return (
+                                <div 
+                                   key={i}
+                                   className="absolute border border-orange-500 bg-orange-500/10 flex items-center justify-center overflow-hidden"
+                                   style={{
+                                      left: f.x || 0,
+                                      top: f.y || 0,
+                                      width: f.w || 'auto',
+                                      height: f.h || 'auto',
+                                      minWidth: '4px',
+                                      minHeight: '4px'
+                                   }}
+                                >
+                                   <span className="text-[6px] font-bold text-orange-700 truncate px-0.5">{f.name || ''}</span>
+                                </div>
+                             );
+                          })}
                        </div>
                     </div>
                     
                     <div className="absolute bottom-2 right-2 bg-white/90 backdrop-blur px-2 py-1 rounded text-[8px] font-bold text-slate-500 border shadow-sm">
-                       {xdpLayout.length} Fields Mapped
+                       {Array.isArray(xdpLayout) ? xdpLayout.length : 0} Fields Mapped
                     </div>
                  </div>
                ) : (
