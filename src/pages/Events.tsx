@@ -104,12 +104,13 @@ type ColumnId =
   | "source"
   | "context"
   | "status"
+  | "created_by"
   | "ts"
   | "duration"
   | "outputs"
   | "actions";
 
-type SortKey = "evt_no" | "id" | "source" | "context" | "status" | "ts";
+type SortKey = "evt_no" | "id" | "source" | "context" | "status" | "created_by" | "ts";
 type SortDir = "asc" | "desc";
 
 type TableColumn = {
@@ -184,6 +185,12 @@ function getTableColumns(onViewDetail: (e: any) => void): TableColumn[] {
       render: (e) => <StatusBadge status={e.status} />,
     },
     {
+      id: "created_by",
+      label: "Created By",
+      sortKey: "created_by",
+      render: (e) => <span className="text-muted-foreground text-xs">{e.created_by ?? "—"}</span>
+    },
+    {
       id: "ts",
       label: "Timestamp",
       sortKey: "ts",
@@ -235,6 +242,7 @@ const ALL_COLUMN_IDS: ColumnId[] = [
   "context",
   // "form",
   "status",
+  "created_by",
   "ts",
   "duration",
   "outputs",
