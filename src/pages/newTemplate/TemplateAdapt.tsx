@@ -2,6 +2,7 @@ import { toBlob } from 'html-to-image';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useWizard } from '@/context/WizardContext';
 import { Button } from '@/components/ui/button';
+import { useCustomFonts } from '@/hooks/useCustomFonts';
 import { bootstrapTokenIfMissing } from '@/lib/api';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -48,6 +49,8 @@ export function TemplateAdapt() {
         setGeneratedXDP,
         selectedContext
     } = useWizard();
+
+    const { fonts: customFonts } = useCustomFonts();
 
     const [isLoading, setIsLoading] = useState(false);
     const [localHtml, setLocalHtml] = useState("");
@@ -815,6 +818,44 @@ export function TemplateAdapt() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Font Family Selector */}
+                            <div className="space-y-2 border-t border-slate-100 pt-4">
+                                <label className="text-[10px] font-bold uppercase text-slate-500 block">Font Family</label>
+                                <select
+                                    value={selectedElement?.style.fontFamily?.replace(/['"]/g, "") || ""}
+                                    onChange={(e) => {
+                                        if (selectedElement) {
+                                            selectedElement.style.fontFamily = e.target.value ? `'${e.target.value}'` : "";
+                                            if (editorRef.current) {
+                                                setLocalHtml(editorRef.current.innerHTML);
+                                            }
+                                        }
+                                    }}
+                                    className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-body focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm font-medium"
+                                >
+                                    <option value="">Default Font (Inherit)</option>
+                                    <optgroup label="System Fonts">
+                                        <option value="sans-serif">Sans-Serif</option>
+                                        <option value="serif">Serif</option>
+                                        <option value="monospace">Monospace</option>
+                                        <option value="Arial">Arial</option>
+                                        <option value="Helvetica">Helvetica</option>
+                                        <option value="Times New Roman">Times New Roman</option>
+                                        <option value="Georgia">Georgia</option>
+                                        <option value="Courier New">Courier New</option>
+                                    </optgroup>
+                                    {customFonts && customFonts.length > 0 && (
+                                        <optgroup label="Custom Fonts">
+                                            {customFonts.map((font: any) => (
+                                                <option key={font.id} value={font.name}>
+                                                    {font.name}
+                                                </option>
+                                            ))}
+                                        </optgroup>
+                                    )}
+                                </select>
+                            </div>
                         </div>
                     )}
 
