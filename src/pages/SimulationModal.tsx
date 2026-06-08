@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { bootstrapTokenIfMissing } from "@/lib/api";
+import { useCustomFonts } from "@/hooks/useCustomFonts";
 
 const API_URL = import.meta.env.VITE_NODE_API;
 const POLL_INTERVAL_MS = 1500;
@@ -73,6 +74,7 @@ type SimulationOption = {
 };
 
 export default function SimulationModal({ open, onClose, formName, formId, context }: Props) {
+    const { cssString } = useCustomFonts();
     const [options, setOptions] = useState<SimulationOption[]>([]);
     const [optionsLoading, setOptionsLoading] = useState(false);
     const [optionsError, setOptionsError] = useState<string | null>(null);
@@ -381,7 +383,15 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
                                         {output.format === "HTML" && (
                                             <div className="rounded-lg overflow-hidden border">
                                                 <iframe
-                                                    srcDoc={output.rendered_output}
+                                                    srcDoc={(() => {
+                                                        const html = output.rendered_output;
+                                                        if (!html) return "";
+                                                        const styleBlock = `<style>${cssString}</style>`;
+                                                        if (html.includes("</head>")) {
+                                                            return html.replace("</head>", `${styleBlock}</head>`);
+                                                        }
+                                                        return styleBlock + html;
+                                                    })()}
                                                     className="w-full h-[500px] bg-white"
                                                     sandbox="allow-same-origin"
                                                     title={`Preview ${output.output_id}`}
