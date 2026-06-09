@@ -29,7 +29,7 @@ import {
 import { cn } from "@/lib/utils";
 import { normalizeOutputsByContext } from "@/lib/contextDisplay";
 
-const API_URL = import.meta.env.VITE_NODE_API;
+const API_URL = import.meta.env.VITE_NODE_API ?? "";
 
 function AnimatedCounter({ target, isString }: { target: number | string; isString?: boolean }) {
   const [value, setValue] = useState(0);
@@ -80,14 +80,20 @@ function EmptyState({ message }: { message: string }) {
 }
 
 function buildDashboardUrl(filtersObj: Record<string, string> | null) {
-  const url = new URL(`${API_URL}/dashboard`);
-  if (!filtersObj) return url.toString();
-  Object.entries(filtersObj).forEach(([k, v]) => {
-    if (!v) return;
-    const key = filterQueryKey[k] ?? k.toLowerCase().replace(/\s+/g, "_");
-    url.searchParams.set(key, v);
-  });
-  return url.toString();
+  const base = API_URL?.trim() || "";
+  const pathname = "/dashboard";
+  const params = new URLSearchParams();
+  if (filtersObj) {
+    Object.entries(filtersObj).forEach(([k, v]) => {
+      if (!v) return;
+      const key = filterQueryKey[k] ?? k.toLowerCase().replace(/\s+/g, "_");
+      params.set(key, v);
+    });
+  }
+
+  const queryString = params.toString();
+  const prefix = base.replace(/\/$/, "") || "";
+  return `${prefix}${pathname}${queryString ? `?${queryString}` : ""}`;
 }
 
 export default function Dashboard() {
