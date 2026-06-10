@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 import SimulationModal from "./SimulationModal";
 import { Play } from "lucide-react";
+import { useCustomFonts } from "@/hooks/useCustomFonts";
 
 type LabelTemplate = {
   uuid: string;
@@ -32,6 +33,7 @@ type LabelTemplate = {
 };
 export default function Templates() {
   const navigate = useNavigate();
+  const { cssString } = useCustomFonts();
   const [view, setView] = useState<"grid" | "editor">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTemplate, setSelectedTemplate] =
@@ -63,6 +65,9 @@ export default function Templates() {
   <html>
   <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    ${cssString}
+  </style>
   </head>
   <body style="margin:0; transform: scale(1); transform-origin: top left;">
   ${html?.replace(/\\n/g, "") || ""}

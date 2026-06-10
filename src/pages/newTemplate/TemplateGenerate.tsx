@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useWizard } from "@/context/WizardContext";
 import { Button } from "@/components/ui/button";
+import { useCustomFonts } from "@/hooks/useCustomFonts";
 import {
   ArrowLeft,
   ArrowRight,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 
 export function TemplateGenerate() {
+  const { cssString } = useCustomFonts();
   const {
     generatedZPL,
     setGeneratedZPL,
@@ -380,7 +382,15 @@ export function TemplateGenerate() {
               {generatedHTML ? (
                 <iframe
                   id="html-preview-iframe"
-                  srcDoc={generatedHTML}
+                  srcDoc={(() => {
+                    const html = generatedHTML;
+                    if (!html) return "";
+                    const styleBlock = `<style>${cssString}</style>`;
+                    if (html.includes("</head>")) {
+                      return html.replace("</head>", `${styleBlock}</head>`);
+                    }
+                    return styleBlock + html;
+                  })()}
                   className="w-full h-full border-none"
                   title="HTML Preview"
                 />

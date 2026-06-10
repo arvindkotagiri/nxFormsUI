@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Save, ToggleLeft, ToggleRight, RefreshCw, BrainCircuit, Cpu, CheckCircle2, XCircle, Loader2, KeyRound } from "lucide-react";
+import { Save, ToggleLeft, ToggleRight, RefreshCw, BrainCircuit, Cpu, CheckCircle2, XCircle, Loader2, KeyRound, Upload, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCustomFonts } from "@/hooks/useCustomFonts";
 
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 
@@ -12,6 +13,7 @@ const TABS = [
   "Notifications",
   "Data Retention",
   "Cloud Print",
+  "Custom Fonts",
 ];
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -128,6 +130,74 @@ export default function Settings() {
         .catch(() => setAvailableModels([]));
     }
   }, [activeTab]);
+
+  // Custom Fonts State
+  const { fonts, refreshFonts } = useCustomFonts();
+  const [fontName, setFontName] = useState("");
+  const [fontFile, setFontFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [uploadMessage, setUploadMessage] = useState("");
+
+  const handleFontUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fontName.trim() || !fontFile) {
+      setUploadStatus('error');
+      setUploadMessage("Font family name and file are required.");
+      return;
+    }
+    setIsUploading(true);
+    setUploadStatus('idle');
+    setUploadMessage("");
+    const formData = new FormData();
+    formData.append("name", fontName);
+    formData.append("fontFile", fontFile);
+    try {
+      const res = await fetch(`${flaskAPI}/api/upload-font`, {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUploadStatus('success');
+        setUploadMessage("Font uploaded and saved successfully!");
+        setFontName("");
+        setFontFile(null);
+        const fileInput = document.getElementById('fontFileInput') as HTMLInputElement;
+        if (fileInput) fileInput.value = "";
+        refreshFonts();
+      } else {
+        setUploadStatus('error');
+        setUploadMessage(data.error || "Upload failed.");
+      }
+    } catch (err) {
+      setUploadStatus('error');
+      setUploadMessage("Network error during font upload.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFontDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this custom font?")) return;
+    try {
+      const res = await fetch(`${flaskAPI}/api/fonts/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        setUploadStatus('success');
+        setUploadMessage("Font deleted successfully.");
+        refreshFonts();
+      } else {
+        const data = await res.json();
+        setUploadStatus('error');
+        setUploadMessage(data.error || "Failed to delete font.");
+      }
+    } catch (err) {
+      setUploadStatus('error');
+      setUploadMessage("Network error during font deletion.");
+    }
+  };
 
   const [agentEnabled, setAgentEnabled] = useState(false);
   const [agentSiteId, setAgentSiteId] = useState("SITE-001");
@@ -647,6 +717,102 @@ export default function Settings() {
                   Clear Console
                 </button>
             </div>
+          </Section>
+        </div>
+       )}
+
+      {/* Custom Fonts */}
+      {activeTab === 7 && (
+        <div className="space-y-4 animate-fade-in">
+          <Section title="Add Custom Font">
+            <div className="text-xs text-muted-foreground italic mb-4">
+              Upload font files (like TrueType <code>.ttf</code>, OpenType <code>.otf</code>, or Web Fonts <code>.woff</code>/<code>.woff2</code>) to make them available in the canvas designer.
+            </div>
+            
+            {uploadMessage && (
+              <div className={cn(
+                "flex items-center gap-2 text-sm px-4 py-3 rounded-xl font-body mb-2",
+                uploadStatus === 'success' ? "bg-green-500/10 text-green-600 border border-green-500/30" : "bg-red-500/10 text-red-600 border border-red-500/30"
+              )}>
+                {uploadStatus === 'success' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                {uploadMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleFontUpload} className="space-y-4">
+              <FormRow label="Font Family Name" description="E.g., BrandSans-Bold">
+                <input 
+                  type="text"
+                  value={fontName}
+                  onChange={(e) => setFontName(e.target.value)}
+                  className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-56"
+                  placeholder="E.g., BrandSans-Bold"
+                />
+              </FormRow>
+
+              <FormRow label="Font File" description="Accepts .ttf, .otf, .woff, .woff2">
+                <input 
+                  type="file"
+                  id="fontFileInput"
+                  accept=".ttf,.otf,.woff,.woff2"
+                  onChange={(e) => setFontFile(e.target.files?.[0] || null)}
+                  className="px-3 py-2 text-xs rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-56"
+                />
+              </FormRow>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={isUploading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold font-body transition-all text-white hover:opacity-90"
+                  style={{ background: "hsl(var(--accent))" }}
+                >
+                  {isUploading ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                  {isUploading ? "Uploading..." : "Upload & Save Font"}
+                </button>
+              </div>
+            </form>
+          </Section>
+
+          <Section title="Installed Custom Fonts">
+            {fonts.length === 0 ? (
+              <div className="text-slate-500 italic py-4 text-center text-xs">No custom fonts installed yet. Upload one above.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs font-body">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left px-3 py-2 text-muted-foreground font-semibold uppercase tracking-wider">Font Family Name</th>
+                      <th className="text-left px-3 py-2 text-muted-foreground font-semibold uppercase tracking-wider">Filename</th>
+                      <th className="text-center px-3 py-2 text-muted-foreground font-semibold uppercase tracking-wider">Preview</th>
+                      <th className="text-right px-3 py-2 text-muted-foreground font-semibold uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fonts.map((font) => (
+                      <tr key={font.id} className="border-b border-border hover:bg-muted/30">
+                        <td className="px-3 py-3 font-semibold text-foreground">{font.name}</td>
+                        <td className="px-3 py-3 text-muted-foreground font-mono">{font.filename}</td>
+                        <td className="px-3 py-3 text-center">
+                          <span style={{ fontFamily: `'${font.name}'` }} className="text-sm font-medium">
+                            Aa Bb Cc 123
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <button
+                            onClick={() => handleFontDelete(font.id)}
+                            className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition-all"
+                            title="Delete custom font"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Section>
         </div>
       )}
