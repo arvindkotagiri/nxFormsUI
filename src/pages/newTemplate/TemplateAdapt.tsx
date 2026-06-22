@@ -23,7 +23,9 @@ import {
     RotateCw,
     Lock,
     Zap,
-    Layers
+    Layers,
+    Undo2,
+    Redo2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -40,6 +42,7 @@ export function TemplateAdapt() {
         uploadedFile,
         uploadedImage,
         chunks,
+        setChunks,
         generatedHTML,
         setGeneratedHTML,
         nextStep,
@@ -54,6 +57,31 @@ export function TemplateAdapt() {
 
     const [isLoading, setIsLoading] = useState(false);
     const [localHtml, setLocalHtml] = useState("");
+
+    // Undo/Redo states
+    const [historyState, setHistoryState] = useState<{ list: string[]; index: number }>({
+        list: [],
+        index: -1,
+    });
+
+    const pushState = useCallback((newHtml: string) => {
+        setLocalHtml(newHtml);
+        setHistoryState(prev => {
+            const newList = prev.list.slice(0, prev.index + 1);
+            if (newList[newList.length - 1] === newHtml) {
+                return prev;
+            }
+            return {
+                list: [...newList, newHtml],
+                index: newList.length,
+            };
+        });
+    }, []);
+
+    const historyStateRef = useRef(historyState);
+    useEffect(() => {
+        historyStateRef.current = historyState;
+    }, [historyState]);
 
     const [selectedElements, setSelectedElements] = useState<HTMLElement[]>([]);
     const [isDragging, setIsDragging] = useState(false);
@@ -95,12 +123,188 @@ export function TemplateAdapt() {
         fetchRetentionImages();
     }, []);
 
+    const undo = useCallback(() => {
+        const { list, index } = historyStateRef.current;
+        if (index > 0) {
+            const nextIndex = index - 1;
+            setHistoryState(prev => ({ ...prev, index: nextIndex }));
+            setLocalHtml(list[nextIndex]);
+            selectedElements.forEach(el => (el.style.outline = ""));
+            setSelectedElements([]);
+            toast.info("Undo");
+        }
+    }, [selectedElements]);
+
+    const redo = useCallback(() => {
+        const { list, index } = historyStateRef.current;
+        if (index < list.length - 1) {
+            const nextIndex = index + 1;
+            setHistoryState(prev => ({ ...prev, index: nextIndex }));
+            setLocalHtml(list[nextIndex]);
+            selectedElements.forEach(el => (el.style.outline = ""));
+            setSelectedElements([]);
+            toast.info("Redo");
+        }
+    }, [selectedElements]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const activeEl = document.activeElement;
+            if (activeEl && (activeEl.tagName.toLowerCase() === 'input' || activeEl.tagName.toLowerCase() === 'textarea')) {
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                undo();
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+                e.preventDefault();
+                redo();
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [undo, redo]);
+
+    // Auto-annotation of dynamic placeholders
+    const annotateHtmlPlaceholders = useCallback((htmlStr: string, chunksList: any[]): string => {
+        if (!htmlStr) return htmlStr;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlStr, 'text/html');
+        
+        const elements = Array.from(doc.body.getElementsByTagName('*')) as HTMLElement[];
+        elements.forEach(el => {
+            if (el.tagName.toLowerCase() === 'img') return;
+            
+            const textContent = el.textContent?.trim() || '';
+            const match = textContent.match(/^\{\{(.+)\}\}$/);
+            if (match) {
+                const placeholderName = match[1];
+                const matchingChunk = chunksList.find(c => {
+                    if (c.isStatic || !c.fieldMapping) return false;
+                    const fieldName = c.fieldMapping.split('.').pop();
+                    return fieldName === placeholderName;
+                });
+                
+                if (matchingChunk) {
+                    if (!el.getAttribute("data-sap-mapping")) {
+                        el.setAttribute("data-sap-mapping", matchingChunk.fieldMapping);
+                    }
+                    el.setAttribute("data-editor-element", "true");
+                    if (matchingChunk.transformations && !el.getAttribute("data-transformations")) {
+                        el.setAttribute("data-transformations", JSON.stringify(matchingChunk.transformations));
+                    }
+                } else {
+                    if (!el.getAttribute("data-sap-mapping")) {
+                        el.setAttribute("data-sap-mapping", "unmapped");
+                        el.setAttribute("data-editor-element", "true");
+                    }
+                }
+            }
+        });
+        return doc.body.innerHTML;
+    }, []);
+
+    // Sync canvas to chunks on save
+    const syncCanvasToChunks = useCallback(() => {
+        if (!editorRef.current) return;
+        
+        const elements = Array.from(editorRef.current.querySelectorAll("*")) as HTMLElement[];
+        const absoluteElements = elements.filter(el => {
+            const style = window.getComputedStyle(el);
+            return style.position === "absolute" || el.getAttribute("data-editor-element") === "true";
+        });
+        
+        const canvasWidth = editorRef.current.offsetWidth || 816;
+        const canvasHeight = editorRef.current.offsetHeight || 1056;
+        
+        const updatedChunks = absoluteElements.map((el, index) => {
+            const style = el.style;
+            const styleLeft = style.left ? parseFloat(style.left) : el.offsetLeft;
+            const styleTop = style.top ? parseFloat(style.top) : el.offsetTop;
+            const styleWidth = style.width ? parseFloat(style.width) : el.offsetWidth;
+            const styleHeight = style.height ? parseFloat(style.height) : el.offsetHeight;
+            
+            const x = (styleLeft / canvasWidth) * 100;
+            const y = (styleTop / canvasHeight) * 100;
+            const width = (styleWidth / canvasWidth) * 100;
+            const height = (styleHeight / canvasHeight) * 100;
+            
+            const sapMapping = el.getAttribute("data-sap-mapping");
+            const transformationsRaw = el.getAttribute("data-transformations");
+            let transformations = [];
+            if (transformationsRaw) {
+                try {
+                    transformations = JSON.parse(transformationsRaw);
+                } catch (e) {
+                    console.error("Error parsing transformations:", e);
+                }
+            }
+            
+            const textContent = el.textContent?.trim() || "";
+            
+            let type: 'text' | 'barcode' | 'logo' | 'signature' | 'table' = 'text';
+            const img = el.querySelector("img") || (el.tagName.toLowerCase() === 'img' ? el : null);
+            if (img) {
+                const src = img.getAttribute("src") || "";
+                if (src.includes("logo") || img.id?.includes("logo")) {
+                    type = 'logo';
+                } else if (src.includes("signature") || img.id?.includes("signature")) {
+                    type = 'signature';
+                } else if (src.includes("barcode") || img.id?.includes("barcode") || img.getAttribute("alt")?.includes("Barcode")) {
+                    type = 'barcode';
+                }
+            }
+            
+            const isStatic = !sapMapping || sapMapping === "unmapped";
+            
+            let label = textContent;
+            if (sapMapping && sapMapping !== "unmapped") {
+                label = sapMapping.split(".").pop() || textContent;
+            }
+            if (label.startsWith("{{") && label.endsWith("}}")) {
+                label = label.slice(2, -2);
+            }
+            if (!label) {
+                label = type === 'logo' ? 'Logo' : (type === 'signature' ? 'Signature' : (type === 'barcode' ? 'Barcode' : `Field_${index}`));
+            }
+            
+            return {
+                id: el.id || `chunk-${index}-${Date.now()}`,
+                type,
+                x,
+                y,
+                width,
+                height,
+                label,
+                value: textContent,
+                isStatic,
+                fieldMapping: sapMapping && sapMapping !== "unmapped" ? sapMapping : undefined,
+                transformations
+            };
+        });
+        
+        setChunks(updatedChunks);
+    }, [setChunks]);
+
     // 🔥 Sync localHtml when generatedHTML is loaded from WizardContext
     useEffect(() => {
         if (generatedHTML && !localHtml) {
-            setLocalHtml(generatedHTML);
+            const annotated = annotateHtmlPlaceholders(generatedHTML, chunks);
+            setLocalHtml(annotated);
+            setHistoryState({
+                list: [annotated],
+                index: 0
+            });
         }
-    }, [generatedHTML, localHtml]);
+    }, [generatedHTML, localHtml, chunks, annotateHtmlPlaceholders]);
+
+    useEffect(() => {
+        if (!generatedHTML) {
+            setLocalHtml("");
+            setHistoryState({ list: [], index: -1 });
+        }
+    }, [generatedHTML]);
 
     // -------------------------------------------------
     // DOM Utils
@@ -224,8 +428,11 @@ export function TemplateAdapt() {
             const yMax = Math.max(marquee.y1, marquee.y2);
 
             const children = Array.from(
-                editorRef.current.querySelectorAll("[data-editor-element]")
-            ) as HTMLElement[];
+                editorRef.current.querySelectorAll("*")
+            ).filter(el => {
+                const style = window.getComputedStyle(el);
+                return style.position === "absolute" || el.getAttribute("data-editor-element") === "true";
+            }) as HTMLElement[];
 
             const newlySelected: HTMLElement[] = [];
 
@@ -248,12 +455,12 @@ export function TemplateAdapt() {
 
         if (isDragging && editorRef.current) {
             // Sync drag positions back to state cleanly
-            setLocalHtml(editorRef.current.innerHTML);
+            pushState(editorRef.current.innerHTML);
         }
 
         setIsDragging(false);
         setMarquee(null);
-    }, [marquee, isDragging]);
+    }, [marquee, isDragging, pushState]);
 
     // -------------------------------------------------
     // ResizeObserver
@@ -314,7 +521,7 @@ export function TemplateAdapt() {
                 reader.onloadend = () => {
                     imageNode.src = reader.result as string;
                     if (editorRef.current) {
-                        setLocalHtml(editorRef.current.innerHTML);
+                        pushState(editorRef.current.innerHTML);
                     }
                     toast.success("Logo replaced successfully");
                 };
@@ -356,7 +563,7 @@ export function TemplateAdapt() {
         selectedElement.setAttribute("data-editor-element", "true");
         
         if (editorRef.current) {
-            setLocalHtml(editorRef.current.innerHTML);
+            pushState(editorRef.current.innerHTML);
         }
         toast.success(`Mapped to ${fieldName} successfully`);
     };
@@ -374,7 +581,7 @@ export function TemplateAdapt() {
         }
         
         if (editorRef.current) {
-            setLocalHtml(editorRef.current.innerHTML);
+            pushState(editorRef.current.innerHTML);
         }
         toast.info("Changed mapping to Static text");
     };
@@ -387,11 +594,17 @@ export function TemplateAdapt() {
         }
     };
 
+    const handleTextBlur = () => {
+        if (editorRef.current) {
+            pushState(editorRef.current.innerHTML);
+        }
+    };
+
     const handleApplyTransformations = (transformations: TransformationPayload[]) => {
         if (!selectedElement) return;
         selectedElement.setAttribute("data-transformations", JSON.stringify(transformations));
         if (editorRef.current) {
-            setLocalHtml(editorRef.current.innerHTML);
+            pushState(editorRef.current.innerHTML);
         }
         setOpenTransformModal(false);
         toast.success("Applied transformations successfully");
@@ -473,6 +686,9 @@ export function TemplateAdapt() {
                     }
                 });
 
+                // Sync canvas elements back to chunks state
+                syncCanvasToChunks();
+
                 // Clear overlays or outlines again to be safe
                 const outerHtmlContent = editorRef.current.outerHTML;
 
@@ -520,6 +736,30 @@ export function TemplateAdapt() {
                         <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Editor</span>
                     </div>
 
+                    {/* Undo / Redo controls */}
+                    <div className="flex items-center gap-1 border-r border-slate-200 pr-4">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+                            onClick={undo}
+                            disabled={historyState.index <= 0}
+                            title="Undo (Ctrl+Z)"
+                        >
+                            <Undo2 className="w-4 h-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+                            onClick={redo}
+                            disabled={historyState.index >= historyState.list.length - 1}
+                            title="Redo (Ctrl+Y)"
+                        >
+                            <Redo2 className="w-4 h-4" />
+                        </Button>
+                    </div>
+
                     {selectedElements.length > 0 ? (
                         <>
                             <span className="text-[10px] text-slate-400 font-bold uppercase">
@@ -550,7 +790,7 @@ export function TemplateAdapt() {
                                     selectedElements.forEach(el => el.remove());
                                     setSelectedElements([]);
                                     if (editorRef.current) {
-                                        setLocalHtml(editorRef.current.innerHTML);
+                                        pushState(editorRef.current.innerHTML);
                                     }
                                 }}
                             >
@@ -569,7 +809,7 @@ export function TemplateAdapt() {
                         className="text-slate-600 hover:bg-slate-50 text-[10px] font-bold"
                         onClick={() => {
                             if (generatedHTML) {
-                                setLocalHtml(generatedHTML);
+                                pushState(generatedHTML);
                                 toast.info("Canvas reset to initial template");
                             }
                         }}
@@ -724,7 +964,7 @@ export function TemplateAdapt() {
                                         onClick={() => {
                                             if (selectedElement && isElementStatic) {
                                                 selectedElement.setAttribute("data-sap-mapping", "unmapped");
-                                                if (editorRef.current) setLocalHtml(editorRef.current.innerHTML);
+                                                if (editorRef.current) pushState(editorRef.current.innerHTML);
                                             }
                                         }}
                                         className={cn(
@@ -746,6 +986,7 @@ export function TemplateAdapt() {
                                     <textarea
                                         value={selectedElement?.textContent || ""}
                                         onChange={(e) => handleTextChange(e.target.value)}
+                                        onBlur={handleTextBlur}
                                         rows={3}
                                         className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-body focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all shadow-sm font-medium"
                                     />
@@ -805,7 +1046,7 @@ export function TemplateAdapt() {
                                                             onClick={() => {
                                                                 const updated = elementTransformations.filter((_, i) => i !== index);
                                                                 selectedElement.setAttribute("data-transformations", JSON.stringify(updated));
-                                                                if (editorRef.current) setLocalHtml(editorRef.current.innerHTML);
+                                                                if (editorRef.current) pushState(editorRef.current.innerHTML);
                                                             }}
                                                             className="w-5 h-5 rounded-md hover:bg-red-50 text-red-500 flex items-center justify-center transition-all"
                                                         >
@@ -828,7 +1069,7 @@ export function TemplateAdapt() {
                                         if (selectedElement) {
                                             selectedElement.style.fontFamily = e.target.value ? `'${e.target.value}'` : "";
                                             if (editorRef.current) {
-                                                setLocalHtml(editorRef.current.innerHTML);
+                                                pushState(editorRef.current.innerHTML);
                                             }
                                         }
                                     }}

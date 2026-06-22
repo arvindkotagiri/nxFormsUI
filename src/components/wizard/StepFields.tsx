@@ -197,7 +197,8 @@ export function StepFields({ entities, fields, onChange }: Props) {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 border-b">
                   <tr className="text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="text-left font-medium px-4 py-2.5 w-16">On</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-24">Context</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-24">Output Det.</th>
                     <th className="text-left font-medium px-4 py-2.5">Field</th>
                     <th className="text-left font-medium px-4 py-2.5">Business Label</th>
                     <th className="text-left font-medium px-4 py-2.5">Type</th>
@@ -208,7 +209,7 @@ export function StepFields({ entities, fields, onChange }: Props) {
                 <tbody>
                   {visibleFields.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      <td colSpan={7} className="px-4 py-10 text-center text-sm text-muted-foreground">
                         No fields match your filters.
                       </td>
                     </tr>
@@ -216,7 +217,7 @@ export function StepFields({ entities, fields, onChange }: Props) {
                   {visibleFields.map((f) => {
                     const locked = f.isKey;
                     return (
-                      <tr key={f.originalName} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors", f.enabled && "bg-primary/5")}>
+                      <tr key={f.originalName} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors", (f.enabled || f.outputDetermination) && "bg-primary/5")}>
                         <td className="px-4 py-2.5">
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -233,6 +234,13 @@ export function StepFields({ entities, fields, onChange }: Props) {
                               <TooltipContent>Key fields are required and always included.</TooltipContent>
                             )}
                           </Tooltip>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <Switch
+                            checked={!!f.outputDetermination}
+                            onCheckedChange={(v) => updateField(active.originalName, f.originalName, { outputDetermination: v })}
+                            aria-label={`Toggle Output Determination for ${f.originalName}`}
+                          />
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5">

@@ -64,14 +64,15 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
           if (Array.isArray(fields)) {
             fields.forEach((f: any) => {
               fieldsRecord[entityName][f.name] = {
-                enabled: true,
+                enabled: f.enabled !== undefined ? !!f.enabled : true,
                 label: f.label || f.name,
                 description: f.description || "",
                 originalName: f.name,
                 type: f.type || "",
                 isKey: !!f.isKey,
                 hasValueHelp: f.hasValueHelp,
-                sample: f.sample
+                sample: f.sample,
+                outputDetermination: !!f.outputDetermination
               };
             });
           }
@@ -186,7 +187,8 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
               type: f.type,
               isKey: !!f.isKey,
               hasValueHelp: false,
-              sample: ""
+              sample: "",
+              outputDetermination: false
             };
           }
         });
@@ -216,7 +218,7 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
       const enabledFields = Object.entries(state.fields).reduce((acc, [entityName, fields]) => {
         if (state.entities[entityName]?.enabled) {
           acc[entityName] = Object.entries(fields)
-            .filter(([_, config]) => config.enabled)
+            .filter(([_, config]) => config.enabled || config.outputDetermination)
             .map(([name, config]) => ({ name, ...config }));
         }
         return acc;
