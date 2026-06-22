@@ -167,6 +167,12 @@
     color: hsl(var(--accent));
   }
 
+  .pill-filter.applied {
+    background: hsl(var(--primary) / 0.08);
+    border-color: hsl(var(--primary));
+    color: hsl(var(--primary));
+  }
+
   .nav-item {
     @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all cursor-pointer;
     font-family: 'Manrope', sans-serif;

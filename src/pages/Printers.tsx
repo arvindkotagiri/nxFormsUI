@@ -34,21 +34,23 @@ export default function Printers() {
   const [selected, setSelected] = useState<PrinterData | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+  const [editingPrinter, setEditingPrinter] = useState<PrinterData | null>(null);
+
+  // Delete confirmation modal state
+  const [deleteTarget, setDeleteTarget] = useState<PrinterData | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [newPrinter, setNewPrinter] = useState({
     name: "",
     ip_address: "",
     site_id: "SITE-001",
-    type: "ZEBRA"
+    type: "ZEBRA",
   });
 
   const fetchPrinters = async () => {
     try {
       setLoading(true);
-      const flaskAPI = import.meta.env.VITE_FLASK_API;
-      // Ensure DB tables exist
       await fetch(`${flaskAPI}/api/init-db`, { method: "POST" });
-      
       const res = await fetch(`${flaskAPI}/api/printers`);
       const data = await res.json();
       setPrinters(data);
@@ -63,43 +65,87 @@ export default function Printers() {
     fetchPrinters();
   }, []);
 
-  const handleAddPrinter = async (e: React.FormEvent) => {
+  const openAddModal = () => {
+    setEditingPrinter(null);
+    setNewPrinter({ name: "", ip_address: "", site_id: "SITE-001", type: "ZEBRA" });
+    setShowAddModal(true);
+  };
+
+  const openEditModal = (printer: PrinterData) => {
+    setEditingPrinter(printer);
+    setNewPrinter({
+      name: printer.name,
+      ip_address: printer.ip_address,
+      site_id: printer.site_id,
+      type: printer.type,
+    });
+    setShowAddModal(true);
+  };
+
+  const handleAddOrEditPrinter = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${flaskAPI}/api/printers`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newPrinter),
-      });
-      if (res.ok) {
-        toast.success("Printer added successfully");
-        setShowAddModal(false);
-        fetchPrinters();
+      if (editingPrinter) {
+        // UPDATE existing printer
+        const res = await fetch(`${flaskAPI}/api/printers/${editingPrinter.id}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newPrinter),
+        });
+        if (res.ok) {
+          toast.success("Printer updated successfully");
+          setShowAddModal(false);
+          setEditingPrinter(null);
+          fetchPrinters();
+        } else {
+          toast.error("Failed to update printer");
+        }
+      } else {
+        // CREATE new printer
+        const res = await fetch(`${flaskAPI}/api/printers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(newPrinter),
+        });
+        if (res.ok) {
+          toast.success("Printer added successfully");
+          setShowAddModal(false);
+          fetchPrinters();
+        } else {
+          toast.error("Failed to add printer");
+        }
       }
     } catch (err) {
-      toast.error("Error adding printer");
+      toast.error(editingPrinter ? "Error updating printer" : "Error adding printer");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const deletePrinter = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this printer?")) return;
+  const confirmDeletePrinter = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
     try {
-      await fetch(`${flaskAPI}/api/printers/${id}`, { method: "DELETE" });
+      await fetch(`${flaskAPI}/api/printers/${deleteTarget.id}`, { method: "DELETE" });
       toast.success("Printer deleted");
       fetchPrinters();
-      if (selected?.id === id) setSelected(null);
+      if (selected?.id === deleteTarget.id) setSelected(null);
     } catch (err) {
       toast.error("Error deleting printer");
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
     }
   };
 
   const testPrint = async (printer: PrinterData) => {
     try {
-      const flaskAPI = import.meta.env.VITE_FLASK_API;
-      const testZpl = "^XA^FO50,50^A0N,50,50^FDTest Print^FS^FO50,120^ADN,36,20^FDPrinter: " + printer.name + "^FS^XZ";
+      const testZpl =
+        "^XA" +
+        "^FO50,50^A0N,50,50^FDMyFormsAI Test Print^FS" +
+        "^FO50,120^ADN,36,20^FDPrinter Name - " + printer.name + "^FS" +
+        "^XZ";
       const res = await fetch(`${flaskAPI}/api/print-zpl`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -107,7 +153,7 @@ export default function Printers() {
           printer_id: printer.id,
           site_id: printer.site_id,
           payload: testZpl,
-          copies: 1
+          copies: 1,
         }),
       });
       if (res.ok) {
@@ -135,7 +181,7 @@ export default function Printers() {
             <RefreshCw size={18} className={cn(loading && "animate-spin")} />
           </button>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body shadow-md"
             style={{ background: "hsl(var(--accent))", color: "white" }}
           >
@@ -156,7 +202,7 @@ export default function Printers() {
           <h3 className="text-lg font-semibold">No printers configured</h3>
           <p className="text-sm text-muted-foreground mt-1">Add your first local printer to start cloud printing.</p>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={openAddModal}
             className="mt-6 px-4 py-2 rounded-lg text-sm font-semibold"
             style={{ background: "hsl(var(--primary))", color: "white" }}
           >
@@ -215,13 +261,13 @@ export default function Printers() {
                 </button>
                 <button
                   className="p-2 rounded-lg bg-muted text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  onClick={(e) => { e.stopPropagation(); deletePrinter(p.id); }}
+                  onClick={(e) => { e.stopPropagation(); setDeleteTarget(p); }}
                 >
                   <Trash2 size={14} />
                 </button>
                 <button
                   className="p-2 rounded-lg bg-muted text-muted-foreground hover:bg-muted/80 transition-colors"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); openEditModal(p); }}
                 >
                   <Settings size={14} />
                 </button>
@@ -253,21 +299,60 @@ export default function Printers() {
         </div>
       )}
 
-      {/* Add Printer Modal */}
+      {/* ── Delete Confirmation Modal ── */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-card w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-display font-semibold text-foreground">Delete Printer</h2>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="p-1 rounded-full hover:bg-muted text-muted-foreground transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-1">
+              Are you sure you want to delete{" "}
+              <span className="font-semibold text-foreground">{deleteTarget.name}</span>?
+            </p>
+            <p className="text-xs text-muted-foreground mb-6">This action cannot be undone.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="flex-1 h-11 rounded-xl border border-border font-semibold text-sm hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeletePrinter}
+                disabled={isDeleting}
+                className="flex-1 h-11 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 bg-destructive text-white hover:bg-destructive/90 transition-colors"
+              >
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add / Edit Printer Modal ── */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-card w-full max-w-md rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-display font-semibold">Configure Cloud Printer</h2>
-              <button 
-                onClick={() => setShowAddModal(false)}
+              <h2 className="text-xl font-display font-semibold">
+                {editingPrinter ? "Edit Printer" : "Configure Cloud Printer"}
+              </h2>
+              <button
+                onClick={() => { setShowAddModal(false); setEditingPrinter(null); }}
                 className="p-1 rounded-full hover:bg-muted text-muted-foreground transition-colors"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleAddPrinter} className="space-y-4">
+            <form onSubmit={handleAddOrEditPrinter} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Printer Name</label>
                 <input
@@ -321,7 +406,7 @@ export default function Printers() {
               <div className="pt-4 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => { setShowAddModal(false); setEditingPrinter(null); }}
                   className="flex-1 h-11 rounded-xl border border-border font-semibold text-sm hover:bg-muted transition-colors"
                 >
                   Cancel
@@ -332,7 +417,13 @@ export default function Printers() {
                   className="flex-1 h-11 rounded-xl font-semibold text-sm shadow-lg flex items-center justify-center gap-2"
                   style={{ background: "hsl(var(--accent))", color: "white" }}
                 >
-                  {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : "Save Printer"}
+                  {isSubmitting ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : editingPrinter ? (
+                    "Save Changes"
+                  ) : (
+                    "Save Printer"
+                  )}
                 </button>
               </div>
             </form>
@@ -342,4 +433,3 @@ export default function Printers() {
     </div>
   );
 }
-

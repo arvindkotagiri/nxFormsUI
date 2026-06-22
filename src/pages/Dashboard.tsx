@@ -27,92 +27,9 @@ import {
   Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
-const API_URL = import.meta.env.VITE_NODE_API;
+import { normalizeOutputsByContext } from "@/lib/contextDisplay";
 
-// const kpiCards = [
-//   {
-//     label: "Total Outputs Today",
-//     value: 14872,
-//     icon: FileOutput,
-//     trend: "+12.4%",
-//     up: true,
-//     color: "hsl(var(--primary))",
-//     bg: "hsl(var(--secondary))",
-//   },
-//   {
-//     label: "Processed Successfully",
-//     value: 14209,
-//     icon: CheckCircle,
-//     trend: "+8.1%",
-//     up: true,
-//     color: "hsl(var(--success))",
-//     bg: "hsl(var(--success-bg))",
-//   },
-//   {
-//     label: "Failed",
-//     value: 248,
-//     icon: XCircle,
-//     trend: "-3.2%",
-//     up: false,
-//     color: "hsl(var(--error))",
-//     bg: "hsl(var(--error-bg))",
-//   },
-//   {
-//     label: "Pending",
-//     value: 415,
-//     icon: Clock,
-//     trend: "+2.1%",
-//     up: true,
-//     color: "hsl(var(--warning))",
-//     bg: "hsl(var(--warning-bg))",
-//   },
-//   {
-//     label: "Avg Processing Time",
-//     value: "142ms",
-//     icon: Timer,
-//     trend: "-18ms",
-//     up: false,
-//     isString: true,
-//     color: "hsl(var(--info))",
-//     bg: "hsl(var(--info-bg))",
-//   },
-// ];
-
-// const outputsByContext = [
-//   { name: "Invoice", outputs: 4200, errors: 120 },
-//   { name: "Receipt", outputs: 3100, errors: 45 },
-//   { name: "Label", outputs: 2800, errors: 82 },
-//   { name: "Report", outputs: 1900, errors: 31 },
-//   { name: "Statement", outputs: 1400, errors: 18 },
-//   { name: "Dispatch", outputs: 1100, errors: 22 },
-// ];
-
-// const statusDist = [
-//   { name: "Success", value: 14209, color: "hsl(var(--success))" },
-//   { name: "Failed", value: 248, color: "hsl(var(--error))" },
-//   { name: "Pending", value: 415, color: "hsl(var(--warning))" },
-// ];
-
-// const timeTrend = [
-//   { time: "00:00", ms: 165 },
-//   { time: "04:00", ms: 143 },
-//   { time: "08:00", ms: 188 },
-//   { time: "10:00", ms: 212 },
-//   { time: "12:00", ms: 178 },
-//   { time: "14:00", ms: 155 },
-//   { time: "16:00", ms: 162 },
-//   { time: "18:00", ms: 149 },
-//   { time: "20:00", ms: 134 },
-//   { time: "22:00", ms: 128 },
-// ];
-
-// const printerUtil = [
-//   { name: "LBL-PRN-01", util: 88 },
-//   { name: "PDF-EXPORT", util: 74 },
-//   { name: "LBL-PRN-02", util: 61 },
-//   { name: "SHIP-PRN-01", util: 52 },
-//   { name: "RPT-PRN-01", util: 38 },
-// ];
+const API_URL = import.meta.env.VITE_NODE_API ?? "";
 
 function AnimatedCounter({ target, isString }: { target: number | string; isString?: boolean }) {
   const [value, setValue] = useState(0);
@@ -138,6 +55,14 @@ function AnimatedCounter({ target, isString }: { target: number | string; isStri
 
 const filters = ["Date Range", "Context", "Source", "Status", "Printer"];
 
+const filterQueryKey: Record<string, string> = {
+  "Date Range": "date_range",
+  Context: "context",
+  Source: "source",
+  Status: "status",
+  Printer: "printer",
+};
+
 const iconMap: Record<string, any> = {
   FileOutput,
   CheckCircle,
@@ -146,6 +71,31 @@ const iconMap: Record<string, any> = {
   Timer,
 };
 
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="flex min-h-[160px] flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
+      <p>{message}</p>
+    </div>
+  );
+}
+
+function buildDashboardUrl(filtersObj: Record<string, string> | null) {
+  const base = API_URL?.trim() || "";
+  const pathname = "/dashboard";
+  const params = new URLSearchParams();
+  if (filtersObj) {
+    Object.entries(filtersObj).forEach(([k, v]) => {
+      if (!v) return;
+      const key = filterQueryKey[k] ?? k.toLowerCase().replace(/\s+/g, "_");
+      params.set(key, v);
+    });
+  }
+
+  const queryString = params.toString();
+  const prefix = base.replace(/\/$/, "") || "";
+  return `${prefix}${pathname}${queryString ? `?${queryString}` : ""}`;
+}
+
 export default function Dashboard() {
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [kpiCards, setKpiCards] = useState<any[]>([]);
@@ -153,27 +103,48 @@ export default function Dashboard() {
   const [statusDist, setStatusDist] = useState<any[]>([]);
   const [timeTrend, setTimeTrend] = useState<any[]>([]);
   const [printerUtil, setPrinterUtil] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Selected filters that drive API query params
+  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({});
+  // Temporary value while a filter panel is open
+  const [tempFilterValue, setTempFilterValue] = useState<string>("");
 
   useEffect(() => {
     const fetchDashboard = async () => {
-      const res = await fetch(`${API_URL}/dashboard`);
-      const data = await res.json();
+      setFetchError(null);
+      setIsLoading(true);
+      try {
+        const res = await fetch(buildDashboardUrl(Object.keys(selectedFilters).length ? selectedFilters : null));
+        const data = await res.json();
 
-      const mappedCards = data.kpiCards.map((card: any) => ({
-        ...card,
-        icon: iconMap[card.icon], // convert string → component
-        color: "hsl(var(--primary))",
-        bg: "hsl(var(--secondary))",
-      }));
+        const mappedCards = (data.kpiCards ?? []).map((card: any) => ({
+          ...card,
+          icon: iconMap[card.icon],
+          color: "hsl(var(--primary))",
+          bg: "hsl(var(--secondary))",
+        }));
 
-      setKpiCards(mappedCards);
-      setOutputsByContext(data.outputsByContext);
-      setStatusDist(data.statusDist);
-      setTimeTrend(data.timeTrend);
-      setPrinterUtil(data.printerUtil);
+        setKpiCards(mappedCards);
+        setOutputsByContext(normalizeOutputsByContext(data.outputsByContext ?? []));
+        setStatusDist(data.statusDist ?? []);
+        setTimeTrend(data.timeTrend ?? []);
+        setPrinterUtil(data.printerUtil ?? []);
+      } catch (error) {
+        console.error(error);
+        setFetchError("Unable to load dashboard data. Please try again.");
+        setKpiCards([]);
+        setOutputsByContext([]);
+        setStatusDist([]);
+        setTimeTrend([]);
+        setPrinterUtil([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
     fetchDashboard();
-  }, []);
+  }, [selectedFilters]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -192,17 +163,189 @@ export default function Dashboard() {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {filters.map((f) => (
-          <button
-            key={f}
-            onClick={() => setActiveFilter(activeFilter === f ? null : f)}
-            className={cn("pill-filter", activeFilter === f && "active")}
-          >
-            {f}
-            <ChevronDown size={12} />
-          </button>
-        ))}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          {filters.map((f) => (
+            <div key={f} className="relative">
+              <button
+                onClick={() => {
+                  if (activeFilter === f) return setActiveFilter(null);
+                  setActiveFilter(f);
+                  setTempFilterValue(selectedFilters[f] ?? "");
+                }}
+                className={cn("pill-filter", activeFilter === f && "active", selectedFilters[f] && "applied")}
+              >
+                {f}
+                <ChevronDown size={12} />
+              </button>
+
+              {activeFilter === f && (
+                <div className="absolute left-0 top-full mt-2 w-64 card-elevated p-3 z-40">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {f === "Date Range" && (
+                        <>
+                          <button className={cn("pill-filter", tempFilterValue === "today" && "active")} onClick={() => setTempFilterValue("today")}>Today</button>
+                          <button className={cn("pill-filter", tempFilterValue === "last_24h" && "active")} onClick={() => setTempFilterValue("last_24h")}>Last 24h</button>
+                          <button className={cn("pill-filter", tempFilterValue === "last_7d" && "active")} onClick={() => setTempFilterValue("last_7d")}>Last 7d</button>
+                        </>
+                      )}
+
+                      {f === "Context" && (
+                        <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select w-full">
+                          <option value="">Select context</option>
+                          {outputsByContext.map((o) => (
+                            <option key={o.name} value={o.name}>{o.name}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {f === "Status" && (
+                        <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select w-full">
+                          <option value="">Select status</option>
+                          {statusDist.map((s) => (
+                            <option key={s.name} value={s.name}>{s.name}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {f === "Printer" && (
+                        <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select w-full">
+                          <option value="">Select printer</option>
+                          {printerUtil.map((p) => (
+                            <option key={p.name} value={p.name}>{p.name}</option>
+                          ))}
+                        </select>
+                      )}
+
+                      {f === "Source" && (
+                        <input className="input w-full" placeholder="Enter source" value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} />
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="pill-filter"
+                        onClick={() => {
+                          setSelectedFilters((p) => ({ ...p, [f]: tempFilterValue }));
+                          setActiveFilter(null);
+                        }}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        className="pill-filter bg-slate-100 text-slate-700"
+                        onClick={() => {
+                          setTempFilterValue("");
+                          setSelectedFilters((p) => {
+                            const copy = { ...p };
+                            delete copy[f];
+                            return copy;
+                          });
+                          setActiveFilter(null);
+                        }}
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {activeFilter ? (
+            <button
+              onClick={() => setActiveFilter(null)}
+              className="pill-filter bg-slate-100 text-slate-700 hover:bg-slate-200"
+            >
+              Clear filter
+            </button>
+          ) : null}
+        </div>
+        <div className="text-sm text-muted-foreground">
+          {activeFilter ? (
+            <span>Showing dashboard data filtered by <strong>{activeFilter}</strong>.</span>
+          ) : (
+            <span>Showing all dashboard data for today.</span>
+          )}
+        </div>
+        {fetchError ? (
+          <div className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
+            {fetchError}
+          </div>
+        ) : null}
+        {activeFilter ? (
+          <div className="card-elevated p-4 mt-2">
+            <div className="flex items-center gap-4 flex-wrap">
+              {activeFilter === "Date Range" && (
+                <div className="flex items-center gap-2">
+                  <button className={cn("pill-filter", tempFilterValue === "today" && "active")} onClick={() => setTempFilterValue("today")}>Today</button>
+                  <button className={cn("pill-filter", tempFilterValue === "last_24h" && "active")} onClick={() => setTempFilterValue("last_24h")}>Last 24h</button>
+                  <button className={cn("pill-filter", tempFilterValue === "last_7d" && "active")} onClick={() => setTempFilterValue("last_7d")}>Last 7d</button>
+                </div>
+              )}
+
+              {activeFilter === "Context" && (
+                <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select">
+                  <option value="">Select context</option>
+                  {outputsByContext.map((o) => (
+                    <option key={o.name} value={o.name}>{o.name}</option>
+                  ))}
+                </select>
+              )}
+
+              {activeFilter === "Status" && (
+                <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select">
+                  <option value="">Select status</option>
+                  {statusDist.map((s) => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </select>
+              )}
+
+              {activeFilter === "Printer" && (
+                <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select">
+                  <option value="">Select printer</option>
+                  {printerUtil.map((p) => (
+                    <option key={p.name} value={p.name}>{p.name}</option>
+                  ))}
+                </select>
+              )}
+
+              {activeFilter === "Source" && (
+                <input className="input" placeholder="Enter source" value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                className="pill-filter"
+                onClick={() => {
+                  if (!activeFilter) return;
+                  setSelectedFilters((p) => ({ ...p, [activeFilter]: tempFilterValue }));
+                  setActiveFilter(null);
+                }}
+              >
+                Apply
+              </button>
+              <button
+                className="pill-filter bg-slate-100 text-slate-700"
+                onClick={() => {
+                  if (!activeFilter) return;
+                  setTempFilterValue("");
+                  setSelectedFilters((p) => {
+                    const copy = { ...p };
+                    delete copy[activeFilter];
+                    return copy;
+                  });
+                  setActiveFilter(null);
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* KPI Cards */}
@@ -266,33 +409,49 @@ export default function Dashboard() {
             </h2>
             <span className="text-xs text-muted-foreground font-body">Last 24h</span>
           </div>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={outputsByContext} barSize={28}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 12, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 12, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontFamily: "Manrope",
-                  fontSize: 12,
-                }}
-              />
-              <Bar dataKey="outputs" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} name="Outputs" />
-              <Bar dataKey="errors" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} name="Errors" />
-            </BarChart>
-          </ResponsiveContainer>
+          {outputsByContext.length > 0 ? (
+            <ResponsiveContainer
+              width="100%"
+              height={Math.max(220, outputsByContext.length * 36)}
+            >
+              <BarChart
+                data={outputsByContext}
+                layout="vertical"
+                margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+                barCategoryGap="20%"
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 12, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={140}
+                  interval={0}
+                  tick={{ fontSize: 12, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    fontFamily: "Manrope",
+                    fontSize: 12,
+                  }}
+                />
+                <Bar dataKey="outputs" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} name="Outputs" barSize={14} />
+                <Bar dataKey="errors" fill="hsl(var(--accent))" radius={[0, 4, 4, 0]} name="Errors" barSize={14} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState message="No context output data is available for today." />
+          )}
         </div>
 
         {/* Status Distribution */}
@@ -302,43 +461,49 @@ export default function Dashboard() {
               Status Distribution
             </h2>
           </div>
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie
-                data={statusDist}
-                cx="50%"
-                cy="50%"
-                innerRadius={48}
-                outerRadius={72}
-                paddingAngle={3}
-                dataKey="value"
-              >
-                {statusDist.map((entry, index) => (
-                  <Cell key={index} fill={entry.color} strokeWidth={0} />
+          {statusDist.length > 0 && statusDist.some((entry) => entry?.value > 0) ? (
+            <>
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie
+                    data={statusDist}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={48}
+                    outerRadius={72}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {statusDist.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} strokeWidth={0} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: "8px",
+                      fontFamily: "Manrope",
+                      fontSize: 12,
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-2 mt-2">
+                {statusDist.map((s) => (
+                  <div key={s.name} className="flex items-center justify-between text-xs font-body">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
+                      <span className="text-muted-foreground">{s.name}</span>
+                    </div>
+                    <span className="font-semibold text-foreground">{s.value.toLocaleString()}</span>
+                  </div>
                 ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontFamily: "Manrope",
-                  fontSize: 12,
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-2 mt-2">
-            {statusDist.map((s) => (
-              <div key={s.name} className="flex items-center justify-between text-xs font-body">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: s.color }} />
-                  <span className="text-muted-foreground">{s.name}</span>
-                </div>
-                <span className="font-semibold text-foreground">{s.value.toLocaleString()}</span>
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <EmptyState message="No status distribution data is available for today." />
+          )}
         </div>
       </div>
 
@@ -352,39 +517,43 @@ export default function Dashboard() {
             </h2>
             <span className="text-xs text-muted-foreground font-body">ms</span>
           </div>
-          <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={timeTrend}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis
-                dataKey="time"
-                tick={{ fontSize: 11, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 11, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "hsl(var(--card))",
-                  border: "1px solid hsl(var(--border))",
-                  borderRadius: "8px",
-                  fontFamily: "Manrope",
-                  fontSize: 12,
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="ms"
-                stroke="hsl(var(--accent))"
-                strokeWidth={2}
-                dot={{ r: 3, fill: "hsl(var(--accent))" }}
-                activeDot={{ r: 5 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {timeTrend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <LineChart data={timeTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 11, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fontFamily: "Manrope", fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px",
+                    fontFamily: "Manrope",
+                    fontSize: 12,
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="ms"
+                  stroke="hsl(var(--accent))"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: "hsl(var(--accent))" }}
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <EmptyState message="No processing time trend data is available for today." />
+          )}
         </div>
 
         {/* Printer Utilization */}
@@ -394,33 +563,37 @@ export default function Dashboard() {
               Printer Utilization
             </h2>
           </div>
-          <div className="space-y-3">
-            {printerUtil.map((p) => (
-              <div key={p.name} className="space-y-1">
-                <div className="flex items-center justify-between text-xs font-body">
-                  <span className="text-foreground font-medium">{p.name}</span>
-                  <span
-                    className="font-semibold"
-                    style={{ color: p.util > 80 ? "hsl(var(--accent))" : "hsl(var(--primary))" }}
-                  >
-                    {p.util}%
-                  </span>
+          {printerUtil.length > 0 ? (
+            <div className="space-y-3">
+              {printerUtil.map((p) => (
+                <div key={p.name} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-body">
+                    <span className="text-foreground font-medium">{p.name}</span>
+                    <span
+                      className="font-semibold"
+                      style={{ color: p.util > 80 ? "hsl(var(--accent))" : "hsl(var(--primary))" }}
+                    >
+                      {p.util}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-1000"
+                      style={{
+                        width: `${p.util}%`,
+                        background:
+                          p.util > 80
+                            ? "hsl(var(--accent))"
+                            : "hsl(var(--primary))",
+                      }}
+                    />
+                  </div>
                 </div>
-                <div className="h-1.5 rounded-full bg-secondary overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-1000"
-                    style={{
-                      width: `${p.util}%`,
-                      background:
-                        p.util > 80
-                          ? "hsl(var(--accent))"
-                          : "hsl(var(--primary))",
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState message="No printer utilization data is available for today." />
+          )}
         </div>
       </div>
     </div>
