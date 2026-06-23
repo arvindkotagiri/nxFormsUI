@@ -65,13 +65,19 @@ export function TemplateSave() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const raw = await response.text();
+      let data: any = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = { error: raw || `Request failed with status ${response.status}` };
+      }
 
       if (response.ok) {
         setIsSaved(true);
         toast.success('Label saved successfully to Database!');
       } else {
-        throw new Error(data.error || 'Failed to save label');
+        throw new Error(data.error || `Failed to save label (HTTP ${response.status})`);
       }
 
     } catch (error) {

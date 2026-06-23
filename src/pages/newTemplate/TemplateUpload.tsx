@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useWizard } from '@/context/WizardContext';
 import { bootstrapTokenIfMissing } from '@/lib/api';
+import { legacyApiUrl } from '@/lib/legacyApiBase';
 import { LABEL_SIZES } from '@/data/labelData';
 import { Switch } from '@/components/ui/switch';
 import { Upload, Loader2 } from 'lucide-react';
@@ -37,8 +38,11 @@ export function TemplateUpload() {
   useEffect(() => {
     const fetchContexts = async () => {
       try {
-        const response = await fetch(`${flaskAPI || 'http://localhost:5050'}/api/catalog`);
+        const catalogUrl = legacyApiUrl('/api/catalog');
+        console.log("[TemplateUpload] Fetching contexts from:", catalogUrl);
+        const response = await fetch(catalogUrl);
         const apis = await response.json();
+        console.log("[TemplateUpload] API Catalog response:", apis);
         if (Array.isArray(apis)) {
           const dynamicContexts = apis.map((api: any) => ({
             id: `api-${api.id}`,
@@ -48,6 +52,7 @@ export function TemplateUpload() {
             fields: api.fields || {},
             output_fields: Array.isArray(api.output_fields) ? api.output_fields : [],
           }));
+          console.log("[TemplateUpload] Mapped contexts:", dynamicContexts);
           setContexts(dynamicContexts);
         } else {
           console.warn("API Catalog returned non-array response:", apis);

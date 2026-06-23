@@ -629,6 +629,13 @@ export function TemplateIdentify() {
     uploadedImages
   } = useWizard();
 
+  console.log("[TemplateIdentify] selectedContext:", {
+    exists: !!selectedContext,
+    name: selectedContext?.name,
+    isOData: selectedContext?.isOData,
+    entitiesCount: selectedContext?.entities?.length || 0,
+  });
+
   const [activePageIndex, setActivePageIndex] = useState(0);
 
   const [selectedChunk, setSelectedChunk] = useState<string | null>(null);
