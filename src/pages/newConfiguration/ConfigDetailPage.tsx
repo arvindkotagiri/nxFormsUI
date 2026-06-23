@@ -23,6 +23,12 @@ import {
   getLabels,
   getPrinters,
 } from "../../lib/api";
+import {
+  flattenActiveOutputFields,
+  matchOrgConditionKey,
+  type ActiveOutputField,
+} from "../../lib/outputDefinitionFields";
+import { fetchLegacyApi } from "../../lib/legacyApiBase";
 
 // ---------- Types ----------
 type RefItem = { id: string; name: string };
@@ -43,6 +49,7 @@ type LabelConfigPayload = {
   valid_from?: string | null; // yyyy-mm-dd
   valid_to?: string | null;   // yyyy-mm-dd
   printer?: string | null;
+  output_conditions?: Record<string, string>;
 };
 
 type Props = {
@@ -82,6 +89,10 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     labels: [],
     printers: [],
   });
+
+  const [outputFields, setOutputFields] = useState<ActiveOutputField[]>([]);
+  const [outputFieldsError, setOutputFieldsError] = useState<string | null>(null);
+  const [outputConditions, setOutputConditions] = useState<Record<string, string>>({});
 
   const [formData, setFormData] = useState<LabelConfigPayload>({
     label_name: "",
@@ -143,6 +154,19 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     }
   }, []);
 
+  const fetchOutputFields = useCallback(async () => {
+    try {
+      setOutputFieldsError(null);
+      const data = await fetchLegacyApi<{ status: string; records: any[] }>(
+        "/api/output-definition-fields/active",
+      );
+      setOutputFields(flattenActiveOutputFields(data.records || []));
+    } catch (e: any) {
+      setOutputFields([]);
+      setOutputFieldsError(e?.message || "Failed to load output definition fields");
+    }
+  }, []);
+
   // ---------- Fetch existing config ----------
   const fetchConfig = useCallback(async () => {
     if (!configId) return;
@@ -167,6 +191,11 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         valid_to: data.valid_to || "",
         printer: data.printer || "",
       });
+      setOutputConditions(
+        data.output_conditions && typeof data.output_conditions === "object"
+          ? data.output_conditions
+          : {},
+      );
     } catch (e: any) {
       setErrorBanner(e?.message || "Failed to load configuration");
       navigate("/labelConfigurator");
@@ -177,8 +206,41 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
 
   useEffect(() => {
     fetchReferenceData();
+    fetchOutputFields();
     fetchConfig();
-  }, [fetchReferenceData, fetchConfig]);
+  }, [fetchReferenceData, fetchOutputFields, fetchConfig]);
+
+  const orgFieldOptions: Record<string, RefItem[]> = useMemo(
+    () => ({
+      company_code: referenceData.companyCodes,
+      sales_organization: referenceData.salesOrgs,
+      plant: referenceData.plants,
+      warehouse: referenceData.warehouses,
+      shipping_point: referenceData.shippingPoints,
+    }),
+    [referenceData],
+  );
+
+  const setOutputCondition = (fieldKey: string, value: string) => {
+    setOutputConditions((prev) => ({ ...prev, [fieldKey]: value }));
+  };
+
+  const getOutputFieldValue = (field: ActiveOutputField, orgKey: string | null) => {
+    const fieldKey = `${field.entity}.${field.name}`;
+    if (orgKey) {
+      return (formData[orgKey as keyof LabelConfigPayload] as string) || "";
+    }
+    return outputConditions[fieldKey] || "";
+  };
+
+  const setOutputFieldValue = (field: ActiveOutputField, orgKey: string | null, value: string) => {
+    const fieldKey = `${field.entity}.${field.name}`;
+    if (orgKey) {
+      setField(orgKey as keyof LabelConfigPayload, value);
+      return;
+    }
+    setOutputCondition(fieldKey, value);
+  };
 
   // ---------- Handlers ----------
   const setField = (key: keyof LabelConfigPayload, value: any) => {
@@ -229,6 +291,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         valid_from: formData.valid_from ? formData.valid_from : null,
         valid_to: formData.valid_to ? formData.valid_to : null,
         printer: formData.printer ? formData.printer : null,
+        output_conditions: outputConditions,
       };
 
       if (isEditMode && configId) {
@@ -411,46 +474,53 @@ function SelectField({
           <h2 className="font-display text-sm font-semibold text-foreground">
             Organizational Conditions
           </h2>
+          {outputFieldsError && (
+            <p className="text-xs text-destructive font-body">{outputFieldsError}</p>
+          )}
+          {outputFields.length === 0 ? (
+            <p className="text-xs text-muted-foreground font-body">
+              No output fields configured yet. In API Setup, mark fields as &quot;Show in Output&quot; on step 4 and save the API definition.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {outputFields.map((field) => {
+                const orgKey = matchOrgConditionKey(field);
+                const fieldKey = `${field.entity}.${field.name}`;
+                const hasRefOptions = orgKey && (orgFieldOptions[orgKey]?.length ?? 0) > 0;
+                const value = getOutputFieldValue(field, hasRefOptions ? orgKey : null);
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                if (hasRefOptions) {
+                  return (
+                    <SelectField
+                      key={fieldKey}
+                      label={field.label}
+                      value={value}
+                      options={orgFieldOptions[orgKey!] || []}
+                      onChange={(v) => setOutputFieldValue(field, orgKey, v)}
+                    />
+                  );
+                }
 
-      <SelectField label="Company Code"
-        value={formData.company_code}
-        options={referenceData.companyCodes}
-        onChange={(v) => setField("company_code", v)}
-      />
-
-      <SelectField label="Sales Organization"
-        value={formData.sales_organization}
-        options={referenceData.salesOrgs}
-        onChange={(v) => setField("sales_organization", v)}
-      />
-
-      <SelectField label="Plant"
-        value={formData.plant}
-        options={referenceData.plants}
-        onChange={(v) => setField("plant", v)}
-      />
-
-      <SelectField label="Warehouse"
-        value={formData.warehouse}
-        options={referenceData.warehouses}
-        onChange={(v) => setField("warehouse", v)}
-      />
-
-      <SelectField label="Shipping Point"
-        value={formData.shipping_point}
-        options={referenceData.shippingPoints}
-        onChange={(v) => setField("shipping_point", v)}
-      />
-
-      {/* <SelectField label="Printer"
-        value={formData.printer}
-        options={referenceData.printers}
-        onChange={(v) => setField("printer", v)}
-      /> */}
-
-    </div>
+                return (
+                  <div key={fieldKey}>
+                    <label className="text-xs font-semibold text-muted-foreground font-body">
+                      {field.label}
+                    </label>
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => setOutputFieldValue(field, null, e.target.value)}
+                      placeholder="Any (fallback)"
+                      className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1 font-body">
+                      {field.apiName} · {field.entity}.{field.name}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
 <div className="card-elevated p-5 space-y-4">

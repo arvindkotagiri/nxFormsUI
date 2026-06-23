@@ -102,12 +102,11 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
                 form: string;
                 inputValues: Record<string, string>;
             }[] = await res.json();
-
+            console.log(data)
             const filtered = data
                 .filter(
                     (r) =>
-                        r.context?.toLowerCase() === context?.toLowerCase() &&
-                        r.form?.toLowerCase() === formName?.toLowerCase()
+                        r.context?.toLowerCase() === context?.toLowerCase()
                 )
                 .map((r) => ({
                     label: r.simulationName,
@@ -308,7 +307,7 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
                         >
                             <option value="">
                                 {options.length === 0
-                                    ? "— No records found for this context/form —"
+                                    ? "— No records found for this context —"
                                     : "— Select a record —"}
                             </option>
                             {options.map((opt, i) => (

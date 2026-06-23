@@ -45,7 +45,8 @@ export function TemplateUpload() {
             name: api.name,
             isOData: !!(api.entities && Array.isArray(api.entities) && api.entities.length > 0),
             entities: api.entities || [],
-            fields: api.fields || {}
+            fields: api.fields || {},
+            output_fields: Array.isArray(api.output_fields) ? api.output_fields : [],
           }));
           setContexts(dynamicContexts);
         } else {
@@ -308,8 +309,24 @@ export function TemplateUpload() {
         )}
 
         {/* Action Button */}
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex justify-between">
           <button
+            type="button"
+            disabled={!uploadedFile || isProcessing}
+            onClick={() => {
+              setUploadedFile(null);
+              setUploadedImage(null);
+              setErrorMessage(null);
+              setProcessingStatus("");
+              setGeneratedHTML(null);
+              setAnalysisResults([], null);
+            }}
+            className="px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all disabled:opacity-40 border border-border bg-background text-foreground"
+          >
+            Clear
+          </button>
+          <button
+            type="button"
             disabled={
               !uploadedImage ||
               !selectedContext ||

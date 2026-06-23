@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -19,8 +19,24 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, placeho
 
   const isOData = selectedContext?.isOData;
   const entities = selectedContext?.entities || [];
-  const fieldsByEntity = selectedContext?.fields || {}; // For OData: { Entity: [fields] }
-  const flatFields = Array.isArray(selectedContext?.fields) ? selectedContext.fields : []; // For non-OData: [fields]
+  const fieldsByEntity = selectedContext?.fields || {};
+  const flatFields = Array.isArray(selectedContext?.fields) ? selectedContext.fields : [];
+
+  const outputFieldsByEntity = useMemo(() => {
+    const grouped: Record<string, any[]> = {};
+    const outputFields = Array.isArray(selectedContext?.output_fields)
+      ? selectedContext.output_fields
+      : [];
+
+    for (const field of outputFields) {
+      const entityName = field.entity;
+      if (!entityName) continue;
+      if (!grouped[entityName]) grouped[entityName] = [];
+      grouped[entityName].push(field);
+    }
+
+    return grouped;
+  }, [selectedContext?.output_fields]);
 
   // Reset selected entity when popover closes
   useEffect(() => {
@@ -102,7 +118,10 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, placeho
                 <CommandList className="max-h-[300px] custom-scrollbar">
                   <CommandEmpty>No field found.</CommandEmpty>
                   <CommandGroup>
-                    {fieldsByEntity[selectedEntity]?.map((field: any) => (
+                    {(outputFieldsByEntity[selectedEntity]?.length
+                      ? outputFieldsByEntity[selectedEntity]
+                      : fieldsByEntity[selectedEntity]?.filter((field: any) => field.showInOutputDefinition === true) || []
+                    ).map((field: any) => (
                       <CommandItem
                         key={field.name}
                         value={field.name}
@@ -132,7 +151,10 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, placeho
               <CommandList className="max-h-[300px] custom-scrollbar">
                 <CommandEmpty>No field found.</CommandEmpty>
                 <CommandGroup>
-                  {flatFields.map((field: any) => (
+                  {(Array.isArray(selectedContext?.output_fields) && selectedContext.output_fields.length > 0
+                    ? selectedContext.output_fields
+                    : flatFields.filter((field: any) => field.showInOutputDefinition === true)
+                  ).map((field: any) => (
                     <CommandItem
                       key={field.name || field}
                       value={field.name || field}

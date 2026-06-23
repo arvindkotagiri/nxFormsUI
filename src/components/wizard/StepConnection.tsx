@@ -7,10 +7,9 @@ import { cn } from "@/lib/utils";
 import { Eye, EyeOff, Loader2, CheckCircle2, XCircle, ShieldCheck, KeyRound, Link2 } from "lucide-react";
 
 import { toast } from "sonner";
+import { fetchLegacyApi } from "@/lib/legacyApiBase";
 
 type TestStatus = "idle" | "connecting" | "token" | "metadata" | "success" | "error";
-
-const flaskAPI = import.meta.env.VITE_FLASK_API;
 
 interface Props {
   value: ConnectionConfig;
@@ -25,10 +24,10 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const canTest = Boolean(
-    value.baseUrl &&
+    value.baseUrl?.trim() &&
     (value.authType === "None" ||
-    (value.authType === "Basic" && value.username && value.password) ||
-    (value.authType === "OAuth2" && value.tokenUrl && value.clientId && value.clientSecret))
+    (value.authType === "Basic" && value.username?.trim() && value.password?.trim()) ||
+    (value.authType === "OAuth2" && value.tokenUrl?.trim() && value.clientId?.trim() && value.clientSecret?.trim()))
   );
 
   async function handleTest() {
@@ -49,21 +48,22 @@ export function StepConnection({ value, onChange, onTested, tested }: Props) {
       
       setStatus("metadata");
 
-      const response = await fetch(`${flaskAPI}/api/fetch-metadata`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          url: value.baseUrl,
-          authType: value.authType,
-          tokenUrl: value.tokenUrl,
-          clientId: value.clientId,
-          clientSecret: value.clientSecret,
-          username: value.username,
-          password: value.password,
-        })
-      });
+      const data = await fetchLegacyApi<{ status: string; entities?: any[]; message?: string }>(
+        "/api/fetch-metadata",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            url: value.baseUrl,
+            authType: value.authType,
+            tokenUrl: value.tokenUrl,
+            clientId: value.clientId,
+            clientSecret: value.clientSecret,
+            username: value.username,
+            password: value.password,
+          }),
+        },
+      );
 
-      const data = await response.json();
       if (data.status === "success" && data.entities?.length > 0) {
         setStatus("success");
         toast.success("Connection verified successfully!");
