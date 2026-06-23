@@ -145,7 +145,7 @@ export function SimulationPage() {
       const inputValues: FieldValues = {};
       fieldRows.forEach((row) => {
         if (row.entityName && row.fieldName) {
-          inputValues[`${row.entityName}.${row.fieldName}`] = row.value;
+          inputValues[`${row.fieldName}`] = row.value;
         }
       });
       const payload = {

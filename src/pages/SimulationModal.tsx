@@ -175,6 +175,7 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
                     data.outputs.every((o) => o.status === "Success" || o.status === "Failed")
                 ) {
                     setPollResult(data);
+                    console.log("this->data", data);
                     setSimStatus("done");
                     setStatusMessage("Simulation complete.");
                     return;
@@ -362,6 +363,7 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
                 {pollResult && simStatus === "done" && (
                     <div className="space-y-4">
                         {pollResult.outputs.map((output) => (
+
                             <div key={output.output_id} className="space-y-2">
 
                                 {/* Output header */}
@@ -379,7 +381,7 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
 
                                 {output.status === "Success" && output.rendered_output && (
                                     <>
-                                        {output.format === "HTML" && (
+                                        {output.format === "html" && (
                                             <div className="rounded-lg overflow-hidden border">
                                                 <iframe
                                                     srcDoc={(() => {
@@ -397,7 +399,7 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
                                                 />
                                             </div>
                                         )}
-                                        {output.format === "ZPL" && (
+                                        {output.format === "zpl" && (
                                             <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto whitespace-pre-wrap break-all">
                                                 {output.rendered_output}
                                             </pre>
