@@ -71,8 +71,8 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
                 type: f.type || "",
                 isKey: !!f.isKey,
                 hasValueHelp: f.hasValueHelp,
-                sample: f.sample,
-                outputDetermination: !!f.outputDetermination
+                showInOutputDefinition: f.showInOutputDefinition !== undefined ? !!f.showInOutputDefinition : !!f.outputDetermination,
+                outputDetermination: f.showInOutputDefinition !== undefined ? !!f.showInOutputDefinition : !!f.outputDetermination
               };
             });
           }
@@ -188,6 +188,7 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
               isKey: !!f.isKey,
               hasValueHelp: false,
               sample: "",
+              showInOutputDefinition: false,
               outputDetermination: false
             };
           }
@@ -218,7 +219,7 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
       const enabledFields = Object.entries(state.fields).reduce((acc, [entityName, fields]) => {
         if (state.entities[entityName]?.enabled) {
           acc[entityName] = Object.entries(fields)
-            .filter(([_, config]) => config.enabled || config.outputDetermination)
+             .filter(([_, config]) => config.enabled || config.showInOutputDefinition)
             .map(([name, config]) => ({ name, ...config }));
         }
         return acc;

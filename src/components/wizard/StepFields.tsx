@@ -198,7 +198,7 @@ export function StepFields({ entities, fields, onChange }: Props) {
                 <thead className="bg-muted/40 border-b">
                   <tr className="text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="text-left font-medium px-4 py-2.5 w-24">Context</th>
-                    <th className="text-left font-medium px-4 py-2.5 w-24">Output Det.</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-24">Show in Output</th>
                     <th className="text-left font-medium px-4 py-2.5">Field</th>
                     <th className="text-left font-medium px-4 py-2.5">Business Label</th>
                     <th className="text-left font-medium px-4 py-2.5">Type</th>
@@ -217,7 +217,7 @@ export function StepFields({ entities, fields, onChange }: Props) {
                   {visibleFields.map((f) => {
                     const locked = f.isKey;
                     return (
-                      <tr key={f.originalName} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors", (f.enabled || f.outputDetermination) && "bg-primary/5")}>
+                      <tr key={f.originalName} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors", (f.enabled || f.showInOutputDefinition) && "bg-primary/5")}>
                         <td className="px-4 py-2.5">
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -237,9 +237,9 @@ export function StepFields({ entities, fields, onChange }: Props) {
                         </td>
                         <td className="px-4 py-2.5">
                           <Switch
-                            checked={!!f.outputDetermination}
-                            onCheckedChange={(v) => updateField(active.originalName, f.originalName, { outputDetermination: v })}
-                            aria-label={`Toggle Output Determination for ${f.originalName}`}
+                            checked={!!f.showInOutputDefinition}
+                            onCheckedChange={(v) => updateField(active.originalName, f.originalName, { showInOutputDefinition: v, outputDetermination: v })}
+                            aria-label={`Toggle Show in Output for ${f.originalName}`}
                           />
                         </td>
                         <td className="px-4 py-2.5">
