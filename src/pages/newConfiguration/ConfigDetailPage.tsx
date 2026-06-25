@@ -32,6 +32,7 @@ import { fetchLegacyApi } from "../../lib/legacyApiBase";
 
 // ---------- Types ----------
 type RefItem = { id: string; name: string };
+type LabelRefItem = RefItem & { context?: string | number | null };
 
 type LabelConfigPayload = {
   label_name: string;
@@ -76,7 +77,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     warehouses: RefItem[];
     shippingPoints: RefItem[];
     processTypes: RefItem[];
-    labels: RefItem[];
+    labels: LabelRefItem[];
     printers: RefItem[];
   }>({
     customers: [],
@@ -93,6 +94,19 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
   const [outputFields, setOutputFields] = useState<ActiveOutputField[]>([]);
   const [outputFieldsError, setOutputFieldsError] = useState<string | null>(null);
   const [outputConditions, setOutputConditions] = useState<Record<string, string>>({});
+
+  const normalizeContextValue = (value: string | number | null | undefined): string =>
+    String(value ?? "").trim().toLowerCase();
+
+  const doesFieldMatchLabelContext = (field: ActiveOutputField, labelContext: string): boolean => {
+    const normalizedLabelContext = normalizeContextValue(labelContext);
+    if (!normalizedLabelContext) return false;
+
+    return (
+      normalizeContextValue(field.apiName) === normalizedLabelContext ||
+      normalizeContextValue(field.apiId) === normalizedLabelContext
+    );
+  };
 
   const [formData, setFormData] = useState<LabelConfigPayload>({
     label_name: "",
@@ -225,6 +239,21 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     setOutputConditions((prev) => ({ ...prev, [fieldKey]: value }));
   };
 
+  const selectedLabel = useMemo(() => {
+    return (
+      referenceData.labels.find((l) => l.id === formData.label_id) ||
+      referenceData.labels.find((l) => l.name === formData.label_name) ||
+      null
+    );
+  }, [referenceData.labels, formData.label_id, formData.label_name]);
+
+  const selectedLabelContext = normalizeContextValue(selectedLabel?.context);
+
+  const filteredOutputFields = useMemo(() => {
+    if (!selectedLabelContext) return [];
+    return outputFields.filter((field) => doesFieldMatchLabelContext(field, selectedLabelContext));
+  }, [outputFields, selectedLabelContext]);
+
   const getOutputFieldValue = (field: ActiveOutputField, orgKey: string | null) => {
     const fieldKey = `${field.entity}.${field.name}`;
     if (orgKey) {
@@ -247,12 +276,33 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     setFormData((p) => ({ ...p, [key]: value }));
   };
 
+  const resetOrganizationalConditions = () => {
+    setFormData((p) => ({
+      ...p,
+      company_code: "",
+      sales_organization: "",
+      plant: "",
+      warehouse: "",
+      shipping_point: "",
+    }));
+    setOutputConditions({});
+  };
+
   const handleLabelChange = (labelName: string) => {
     const selected = referenceData.labels.find((l) => l.name === labelName);
+    const nextLabelId = selected?.id || "";
+    const didLabelChange =
+      formData.label_name !== labelName ||
+      formData.label_id !== nextLabelId;
+
+    if (didLabelChange) {
+      resetOrganizationalConditions();
+    }
+
     setFormData((p) => ({
       ...p,
       label_name: labelName,
-      label_id: selected?.id || "",
+      label_id: nextLabelId,
     }));
   };
 
@@ -317,8 +367,6 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
       </div>
     );
   }
-
-  type RefItem = { id: string; name: string };
 
 function SelectField({
   label,
@@ -477,13 +525,17 @@ function SelectField({
           {outputFieldsError && (
             <p className="text-xs text-destructive font-body">{outputFieldsError}</p>
           )}
-          {outputFields.length === 0 ? (
+          {!formData.label_id ? (
             <p className="text-xs text-muted-foreground font-body">
-              No output fields configured yet. In API Setup, mark fields as &quot;Show in Output&quot; on step 4 and save the API definition.
+              Select a label to load organizational conditions for its context.
+            </p>
+          ) : filteredOutputFields.length === 0 ? (
+            <p className="text-xs text-muted-foreground font-body">
+              No output fields configured for this label context. In API Setup, mark fields as &quot;Show in Output&quot; on step 4 and save the API definition.
             </p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {outputFields.map((field) => {
+              {filteredOutputFields.map((field) => {
                 const orgKey = matchOrgConditionKey(field);
                 const fieldKey = `${field.entity}.${field.name}`;
                 const hasRefOptions = orgKey && (orgFieldOptions[orgKey]?.length ?? 0) > 0;
