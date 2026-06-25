@@ -969,6 +969,7 @@ export function TemplateAdapt() {
         if (editorRef.current) {
             pushState(editorRef.current.innerHTML);
         }
+        setSelectedElements([selectedElement]);
         toast.success(`Mapped to ${fieldName} successfully`);
     };
 
@@ -1528,6 +1529,7 @@ export function TemplateAdapt() {
                                         <FieldMappingSelector 
                                             value={selectedElementMapping === "unmapped" ? "" : selectedElementMapping}
                                             selectedContext={selectedContext}
+                                            sourceLabel={selectedElement?.textContent || ""}
                                             onSelect={handleMappingSelect}
                                         />
                                         <p className="text-[9px] text-slate-400 leading-normal">

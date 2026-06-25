@@ -12,6 +12,12 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
     base: "/",
+    proxy: {
+      "^/api(?:/|$)": {
+        target: process.env.VITE_NODE_API || "http://localhost:4000",
+        changeOrigin: true,
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

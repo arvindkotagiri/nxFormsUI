@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useWizard } from '@/context/WizardContext';
 import { bootstrapTokenIfMissing } from '@/lib/api';
+import { legacyApiUrl } from '@/lib/legacyApiBase';
 import { LABEL_SIZES } from '@/data/labelData';
 import { Switch } from '@/components/ui/switch';
 import { Upload, Loader2 } from 'lucide-react';
@@ -37,16 +38,21 @@ export function TemplateUpload() {
   useEffect(() => {
     const fetchContexts = async () => {
       try {
-        const response = await fetch(`${flaskAPI || 'http://localhost:5050'}/api/catalog`);
+        const catalogUrl = legacyApiUrl('/api/catalog');
+        console.log("[TemplateUpload] Fetching contexts from:", catalogUrl);
+        const response = await fetch(catalogUrl);
         const apis = await response.json();
+        console.log("[TemplateUpload] API Catalog response:", apis);
         if (Array.isArray(apis)) {
           const dynamicContexts = apis.map((api: any) => ({
             id: `api-${api.id}`,
             name: api.name,
             isOData: !!(api.entities && Array.isArray(api.entities) && api.entities.length > 0),
             entities: api.entities || [],
-            fields: api.fields || {}
+            fields: api.fields || {},
+            output_fields: Array.isArray(api.output_fields) ? api.output_fields : [],
           }));
+          console.log("[TemplateUpload] Mapped contexts:", dynamicContexts);
           setContexts(dynamicContexts);
         } else {
           console.warn("API Catalog returned non-array response:", apis);
@@ -353,40 +359,59 @@ export function TemplateUpload() {
         )}
 
         {/* Action Buttons */}
-        <div className="mt-6 flex justify-end gap-3">
-          {hasCachedData && (
-            <button
-              disabled={isProcessing || !selectedContext || !selectedSize}
-              onClick={handleUsePreprocessedData}
-              className="px-5 py-2 rounded-lg text-sm font-semibold font-body transition-all text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm hover:shadow"
-            >
-              Use Preprocessed Data
-            </button>
-          )}
+        <div className="mt-6 flex justify-between">
           <button
-            disabled={
-              !uploadedImage ||
-              !selectedContext ||
-              !selectedSize ||
-              isProcessing
-            }
-            onClick={handleUploadAndProcess}
-            className="px-6 py-2 rounded-lg text-sm font-semibold font-body transition-all disabled:opacity-40"
-            style={{
-              background: hasCachedData ? "transparent" : "hsl(var(--accent))",
-              border: hasCachedData ? "1px solid hsl(var(--border))" : "none",
-              color: hasCachedData ? "hsl(var(--foreground))" : "white"
+            type="button"
+            disabled={!uploadedFile || isProcessing}
+            onClick={() => {
+              setUploadedFile(null);
+              setUploadedImage(null);
+              setErrorMessage(null);
+              setProcessingStatus("");
+              setGeneratedHTML(null);
+              setAnalysisResults([], null);
             }}
+            className="px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all disabled:opacity-40 border border-border bg-background text-foreground"
           >
-            {isProcessing ? (
-              <span className="flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" />
-                {processingStatus || "Analyzing..."}
-              </span>
-            ) : (
-              hasCachedData ? "Re-Analyze File" : "Analyze & Continue"
-            )}
+            Clear
           </button>
+          <div className="flex gap-3">
+            {hasCachedData && (
+              <button
+                type="button"
+                disabled={isProcessing || !selectedContext || !selectedSize}
+                onClick={handleUsePreprocessedData}
+                className="px-5 py-2 rounded-lg text-sm font-semibold font-body transition-all text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm hover:shadow"
+              >
+                Use Preprocessed Data
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={
+                !uploadedImage ||
+                !selectedContext ||
+                !selectedSize ||
+                isProcessing
+              }
+              onClick={handleUploadAndProcess}
+              className="px-6 py-2 rounded-lg text-sm font-semibold font-body transition-all disabled:opacity-40"
+              style={{
+                background: hasCachedData ? "transparent" : "hsl(var(--accent))",
+                border: hasCachedData ? "1px solid hsl(var(--border))" : "none",
+                color: hasCachedData ? "hsl(var(--foreground))" : "white"
+              }}
+            >
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  {processingStatus || "Analyzing..."}
+                </span>
+              ) : (
+                hasCachedData ? "Re-Analyze File" : "Analyze & Continue"
+              )}
+            </button>
+          </div>
         </div>
 
       </div>

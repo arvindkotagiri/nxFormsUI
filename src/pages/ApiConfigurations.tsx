@@ -4,16 +4,24 @@ import { cn } from "@/lib/utils";
 import { ImportWizard } from "@/components/wizard/ImportWizard";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-
-const flaskAPI = import.meta.env.VITE_FLASK_API;
+import { fetchLegacyApi } from "@/lib/legacyApiBase";
 
 interface ApiDefinition {
   id: number;
   name: string;
   endpoint: string;
   auth_type: string;
+  auth_url?: string;
   client_id?: string;
   client_secret?: string;
+  username?: string;
+  password?: string;
+  application?: string;
+  environment?: string;
+  client?: string;
+  entities?: any[];
+  fields?: Record<string, any>;
+  output_fields?: any[];
   status: string;
   created_at: string;
 }
@@ -29,9 +37,8 @@ export default function ApiConfigurations() {
   const fetchApis = async () => {
     try {
       setLoading(true);
-      await fetch(`${flaskAPI}/api/catalog-init`, { method: "POST" });
-      const res = await fetch(`${flaskAPI}/api/catalog`);
-      const data = await res.json();
+      await fetchLegacyApi("/api/catalog-init", { method: "POST" });
+      const data = await fetchLegacyApi<ApiDefinition[]>("/api/catalog");
       setApis(data);
     } catch (err) {
       toast.error("Failed to load API catalog");
@@ -47,11 +54,9 @@ export default function ApiConfigurations() {
   const handleDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this API configuration?")) return;
     try {
-      const res = await fetch(`${flaskAPI}/api/catalog/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        toast.success("API deleted successfully");
-        fetchApis();
-      }
+      await fetchLegacyApi(`/api/catalog/${id}`, { method: "DELETE" });
+      toast.success("API deleted successfully");
+      fetchApis();
     } catch (err) {
       toast.error("Failed to delete API");
     }
@@ -76,7 +81,7 @@ export default function ApiConfigurations() {
         <div className="mx-auto w-full">
           <ImportWizard 
             initialData={editingApi}
-            startStep={editingApi ? 3 : 1}
+            startStep={editingApi ? 2 : 1}
             onSaved={() => {
               setShowWizard(false);
               setEditingApi(null);

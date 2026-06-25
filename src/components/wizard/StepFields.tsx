@@ -1,23 +1,28 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { EntityConfig, FieldConfig } from "./types";
+import type { ConnectionConfig, EntityConfig, FieldConfig } from "./types";
 import { Search, KeyRound, ChevronDown, Eye, Sparkles, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import { fetchLegacyApi } from "@/lib/legacyApiBase";
+
+const PREVIEW_ROW_COUNT = 5;
 
 interface Props {
   entities: Record<string, EntityConfig>;
   fields: Record<string, Record<string, FieldConfig>>;
+  connection: ConnectionConfig;
   onChange: (next: Record<string, Record<string, FieldConfig>>) => void;
 }
 
 type FilterMode = "all" | "selected" | "keys";
 
-export function StepFields({ entities, fields, onChange }: Props) {
+export function StepFields({ entities, fields, connection, onChange }: Props) {
   const enabledEntities = useMemo(
     () => Object.values(entities).filter((e) => e.enabled),
     [entities],
@@ -29,6 +34,12 @@ export function StepFields({ entities, fields, onChange }: Props) {
   const [filter, setFilter] = useState<FilterMode>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (!enabledEntities.find((e) => e.originalName === activeName) && enabledEntities[0]) {
+      setActiveName(enabledEntities[0].originalName);
+    }
+  }, [enabledEntities, activeName]);
 
   if (!active) {
     return (
@@ -201,6 +212,7 @@ export function StepFields({ entities, fields, onChange }: Props) {
                     <th className="text-left font-medium px-4 py-2.5 w-24">Show in Output</th>
                     <th className="text-left font-medium px-4 py-2.5">Field</th>
                     <th className="text-left font-medium px-4 py-2.5">Business Label</th>
+                    <th className="text-left font-medium px-4 py-2.5">Show in Output</th>
                     <th className="text-left font-medium px-4 py-2.5">Type</th>
                     <th className="text-left font-medium px-4 py-2.5">Description</th>
                     <th className="text-left font-medium px-4 py-2.5">Sample</th>
@@ -268,6 +280,13 @@ export function StepFields({ entities, fields, onChange }: Props) {
                           />
                         </td>
                         <td className="px-4 py-2.5">
+                          <Switch
+                            checked={!!f.showInOutputDefinition}
+                            onCheckedChange={(value) => updateField(active.originalName, f.originalName, { showInOutputDefinition: value })}
+                            aria-label={`Show ${f.originalName} in output definition`}
+                          />
+                        </td>
+                        <td className="px-4 py-2.5">
                           <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-mono text-muted-foreground">
                             {f.type ? f.type.replace("Edm.", "") : ""}
                           </span>
@@ -291,7 +310,13 @@ export function StepFields({ entities, fields, onChange }: Props) {
           </div>
         </div>
 
-        <PreviewDialog open={previewOpen} onOpenChange={setPreviewOpen} entity={active} fieldsList={activeFieldsList} />
+        <PreviewDialog
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          entity={active}
+          fieldsList={activeFieldsList.filter((f) => f.enabled).slice(0, 10)}
+          connection={connection}
+        />
       </div>
     </TooltipProvider>
   );
@@ -312,51 +337,140 @@ function SegmentBtn({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-function PreviewDialog({ open, onOpenChange, entity, fieldsList }: { open: boolean; onOpenChange: (v: boolean) => void; entity: EntityConfig, fieldsList: FieldConfig[] }) {
+function formatPreviewValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "object") {
+    if (Array.isArray(value)) return value.map(formatPreviewValue).join(", ");
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function PreviewDialog({
+  open,
+  onOpenChange,
+  entity,
+  fieldsList,
+  connection,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  entity: EntityConfig;
+  fieldsList: FieldConfig[];
+  connection: ConnectionConfig;
+}) {
   const [loading, setLoading] = useState(false);
-  const [rows, setRows] = useState<Record<string, string | number>[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [rows, setRows] = useState<Record<string, unknown>[]>([]);
 
   async function load() {
+    if (!connection.baseUrl) {
+      setError("Configure the OData base URL in the Connection step first.");
+      return;
+    }
+
+    if (connection.authType === "OAuth2") {
+      const missingOAuthFields = [
+        !connection.tokenUrl?.trim() ? "tokenUrl" : null,
+        !connection.clientId?.trim() ? "clientId" : null,
+        !connection.clientSecret?.trim() ? "clientSecret" : null,
+      ].filter(Boolean) as string[];
+
+      if (missingOAuthFields.length > 0) {
+        const message = `OAuth2 requires tokenUrl, clientId, and clientSecret. Missing: ${missingOAuthFields.join(", ")}`;
+        setError(message);
+        toast.error(message);
+        return;
+      }
+    }
+
     setLoading(true);
+    setError(null);
     setRows([]);
-    await new Promise((r) => setTimeout(r, 700));
-    setRows(Array.from({ length: 5 }).map((_, i) => {
-      const row: Record<string, string> = {};
-      fieldsList.slice(0, 6).forEach(f => {
-        row[f.originalName] = `Sample ${i+1}`;
-      });
-      return row;
-    }));
-    setLoading(false);
+
+    try {
+      const data = await fetchLegacyApi<{ status: string; rows?: Record<string, unknown>[]; message?: string }>(
+        "/api/preview-data",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            url: connection.baseUrl,
+            authType: connection.authType,
+            tokenUrl: connection.tokenUrl,
+            clientId: connection.clientId,
+            clientSecret: connection.clientSecret,
+            username: connection.username,
+            password: connection.password,
+            entitySet: entity.originalName,
+            sampleSize: PREVIEW_ROW_COUNT,
+          }),
+        },
+      );
+
+      if (data.status !== "success") {
+        throw new Error(data.message || "Failed to fetch preview data");
+      }
+
+      setRows(Array.isArray(data.rows) ? data.rows : []);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unable to fetch preview data";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // Auto-load when opened
-  if (open && rows.length === 0 && !loading) {
-    load();
-  }
+  useEffect(() => {
+    if (open) {
+      load();
+    } else {
+      setRows([]);
+      setError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, entity.originalName]);
+
+  const displayFields = fieldsList.length > 0
+    ? fieldsList
+    : rows.length > 0
+      ? Object.keys(rows[0]).slice(0, 10).map((name) => ({
+          originalName: name,
+          label: name,
+        } as FieldConfig))
+      : [];
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setRows([]); }}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Sample data — {entity.label}
             <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 font-mono text-[11px]">
-              GET {entity.originalName}?$top=5
+              GET {entity.originalName}?$top={PREVIEW_ROW_COUNT}
             </Badge>
           </DialogTitle>
         </DialogHeader>
         <div className="rounded-lg border overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Fetching sample records…
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> Fetching live records…
+            </div>
+          ) : error ? (
+            <div className="flex items-start gap-2 p-6 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{error}</span>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="p-6 text-sm text-muted-foreground">
+              No records returned from the API.
             </div>
           ) : (
             <div className="overflow-x-auto max-h-[400px]">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
-                    {fieldsList.slice(0, 6).map((f) => (
+                    {displayFields.map((f) => (
                       <th key={f.originalName} className="text-left px-3 py-2 font-medium text-xs text-muted-foreground whitespace-nowrap">
                         {f.label}
                       </th>
@@ -366,9 +480,9 @@ function PreviewDialog({ open, onOpenChange, entity, fieldsList }: { open: boole
                 <tbody>
                   {rows.map((r, i) => (
                     <tr key={i} className="border-t hover:bg-muted/30">
-                      {fieldsList.slice(0, 6).map((f) => (
+                      {displayFields.map((f) => (
                         <td key={f.originalName} className="px-3 py-2 font-mono text-xs whitespace-nowrap">
-                          {String(r[f.originalName])}
+                          {formatPreviewValue(r[f.originalName])}
                         </td>
                       ))}
                     </tr>

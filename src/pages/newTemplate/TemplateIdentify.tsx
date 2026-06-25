@@ -629,6 +629,13 @@ export function TemplateIdentify() {
     uploadedImages
   } = useWizard();
 
+  console.log("[TemplateIdentify] selectedContext:", {
+    exists: !!selectedContext,
+    name: selectedContext?.name,
+    isOData: selectedContext?.isOData,
+    entitiesCount: selectedContext?.entities?.length || 0,
+  });
+
   const [activePageIndex, setActivePageIndex] = useState(0);
 
   const [selectedChunk, setSelectedChunk] = useState<string | null>(null);
@@ -1039,6 +1046,7 @@ export function TemplateIdentify() {
                                 <FieldMappingSelector
                                   value={cell.fieldMapping || ""}
                                   selectedContext={selectedContext}
+                                  sourceLabel={cell?.label || cell?.value || `C${idx + 1}`}
                                   onSelect={(full, field) => {
                                     const updatedRows = [...(selectedChunkData.rows || [])];
                                     updatedRows.forEach((r) => {
@@ -1067,6 +1075,7 @@ export function TemplateIdentify() {
                               <FieldMappingSelector
                                 value={cell.fieldMapping || ""}
                                 selectedContext={selectedContext}
+                                sourceLabel={cell?.label || cell?.value || key}
                                 onSelect={(full, field) => {
                                   const updatedRows = [...(selectedChunkData.rows || [])];
                                   updatedRows.forEach((r: any) => {
@@ -1133,6 +1142,7 @@ export function TemplateIdentify() {
                     <FieldMappingSelector
                       value={selectedChunkData.fieldMapping || ""}
                       selectedContext={selectedContext}
+                      sourceLabel={selectedChunkData.label}
                       onSelect={(full, field) => {
                         // We only update fieldMapping — label stays as the
                         // original bounding-box text so the backend can match it

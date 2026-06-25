@@ -24,9 +24,16 @@ import {
   getPrinters,
   getCatalog,
 } from "../../lib/api";
+import {
+  flattenActiveOutputFields,
+  matchOrgConditionKey,
+  type ActiveOutputField,
+} from "../../lib/outputDefinitionFields";
+import { fetchLegacyApi } from "../../lib/legacyApiBase";
 
 // ---------- Types ----------
 type RefItem = { id: string; name: string };
+type LabelRefItem = RefItem & { context?: string | number | null };
 
 type LabelConfigPayload = {
   label_name: string;
@@ -45,6 +52,7 @@ type LabelConfigPayload = {
   valid_to?: string | null;   // yyyy-mm-dd
   printer?: string | null;
   custom_fields?: Record<string, string> | null;
+  output_conditions?: Record<string, string>;
 };
 
 type Props = {
@@ -71,7 +79,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     warehouses: RefItem[];
     shippingPoints: RefItem[];
     processTypes: RefItem[];
-    labels: any[];
+    labels: LabelRefItem[];
     printers: RefItem[];
     contexts: any[];
   }>({
@@ -86,6 +94,23 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     printers: [],
     contexts: [],
   });
+
+  const [outputFields, setOutputFields] = useState<ActiveOutputField[]>([]);
+  const [outputFieldsError, setOutputFieldsError] = useState<string | null>(null);
+  const [outputConditions, setOutputConditions] = useState<Record<string, string>>({});
+
+  const normalizeContextValue = (value: string | number | null | undefined): string =>
+    String(value ?? "").trim().toLowerCase();
+
+  const doesFieldMatchLabelContext = (field: ActiveOutputField, labelContext: string): boolean => {
+    const normalizedLabelContext = normalizeContextValue(labelContext);
+    if (!normalizedLabelContext) return false;
+
+    return (
+      normalizeContextValue(field.apiName) === normalizedLabelContext ||
+      normalizeContextValue(field.apiId) === normalizedLabelContext
+    );
+  };
 
   const [formData, setFormData] = useState<LabelConfigPayload>({
     label_name: "",
@@ -151,6 +176,19 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     }
   }, []);
 
+  const fetchOutputFields = useCallback(async () => {
+    try {
+      setOutputFieldsError(null);
+      const data = await fetchLegacyApi<{ status: string; records: any[] }>(
+        "/api/output-definition-fields/active",
+      );
+      setOutputFields(flattenActiveOutputFields(data.records || []));
+    } catch (e: any) {
+      setOutputFields([]);
+      setOutputFieldsError(e?.message || "Failed to load output definition fields");
+    }
+  }, []);
+
   // ---------- Fetch existing config ----------
   const fetchConfig = useCallback(async () => {
     if (!configId) return;
@@ -176,6 +214,11 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         printer: data.printer || "",
         custom_fields: data.custom_fields || {},
       });
+      setOutputConditions(
+        data.output_conditions && typeof data.output_conditions === "object"
+          ? data.output_conditions
+          : {},
+      );
     } catch (e: any) {
       setErrorBanner(e?.message || "Failed to load configuration");
       navigate("/labelConfigurator");
@@ -186,20 +229,89 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
 
   useEffect(() => {
     fetchReferenceData();
+    fetchOutputFields();
     fetchConfig();
-  }, [fetchReferenceData, fetchConfig]);
+  }, [fetchReferenceData, fetchOutputFields, fetchConfig]);
+
+  const orgFieldOptions: Record<string, RefItem[]> = useMemo(
+    () => ({
+      company_code: referenceData.companyCodes,
+      sales_organization: referenceData.salesOrgs,
+      plant: referenceData.plants,
+      warehouse: referenceData.warehouses,
+      shipping_point: referenceData.shippingPoints,
+    }),
+    [referenceData],
+  );
+
+  const setOutputCondition = (fieldKey: string, value: string) => {
+    setOutputConditions((prev) => ({ ...prev, [fieldKey]: value }));
+  };
+
+  const selectedLabel = useMemo(() => {
+    return (
+      referenceData.labels.find((l) => l.id === formData.label_id) ||
+      referenceData.labels.find((l) => l.name === formData.label_name) ||
+      null
+    );
+  }, [referenceData.labels, formData.label_id, formData.label_name]);
+
+  const selectedLabelContext = normalizeContextValue(selectedLabel?.context);
+
+  const filteredOutputFields = useMemo(() => {
+    if (!selectedLabelContext) return [];
+    return outputFields.filter((field) => doesFieldMatchLabelContext(field, selectedLabelContext));
+  }, [outputFields, selectedLabelContext]);
+
+  const getOutputFieldValue = (field: ActiveOutputField, orgKey: string | null) => {
+    const fieldKey = `${field.entity}.${field.name}`;
+    if (orgKey) {
+      return (formData[orgKey as keyof LabelConfigPayload] as string) || "";
+    }
+    return outputConditions[fieldKey] || "";
+  };
+
+  const setOutputFieldValue = (field: ActiveOutputField, orgKey: string | null, value: string) => {
+    const fieldKey = `${field.entity}.${field.name}`;
+    if (orgKey) {
+      setField(orgKey as keyof LabelConfigPayload, value);
+      return;
+    }
+    setOutputCondition(fieldKey, value);
+  };
 
   // ---------- Handlers ----------
   const setField = (key: keyof LabelConfigPayload, value: any) => {
     setFormData((p) => ({ ...p, [key]: value }));
   };
 
+  const resetOrganizationalConditions = () => {
+    setFormData((p) => ({
+      ...p,
+      company_code: "",
+      sales_organization: "",
+      plant: "",
+      warehouse: "",
+      shipping_point: "",
+    }));
+    setOutputConditions({});
+  };
+
   const handleLabelChange = (labelName: string) => {
     const selected = referenceData.labels.find((l) => l.name === labelName);
+    const nextLabelId = selected?.id || "";
+    const didLabelChange =
+      formData.label_name !== labelName ||
+      formData.label_id !== nextLabelId;
+
+    if (didLabelChange) {
+      resetOrganizationalConditions();
+    }
+
     setFormData((p) => ({
       ...p,
       label_name: labelName,
-      label_id: selected?.id || "",
+      label_id: nextLabelId,
     }));
   };
 
@@ -261,6 +373,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         valid_to: formData.valid_to ? formData.valid_to : null,
         printer: formData.printer ? formData.printer : null,
         custom_fields: formData.custom_fields ? formData.custom_fields : null,
+        output_conditions: outputConditions,
       };
 
       if (isEditMode && configId) {
@@ -286,8 +399,6 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
       </div>
     );
   }
-
-  type RefItem = { id: string; name: string };
 
 function SelectField({
   label,
@@ -443,46 +554,57 @@ function SelectField({
           <h2 className="font-display text-sm font-semibold text-foreground">
             Organizational Conditions
           </h2>
+          {outputFieldsError && (
+            <p className="text-xs text-destructive font-body">{outputFieldsError}</p>
+          )}
+          {!formData.label_id ? (
+            <p className="text-xs text-muted-foreground font-body">
+              Select a label to load organizational conditions for its context.
+            </p>
+          ) : filteredOutputFields.length === 0 ? (
+            <p className="text-xs text-muted-foreground font-body">
+              No output fields configured for this label context. In API Setup, mark fields as &quot;Show in Output&quot; on step 4 and save the API definition.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredOutputFields.map((field) => {
+                const orgKey = matchOrgConditionKey(field);
+                const fieldKey = `${field.entity}.${field.name}`;
+                const hasRefOptions = orgKey && (orgFieldOptions[orgKey]?.length ?? 0) > 0;
+                const value = getOutputFieldValue(field, hasRefOptions ? orgKey : null);
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                if (hasRefOptions) {
+                  return (
+                    <SelectField
+                      key={fieldKey}
+                      label={field.label}
+                      value={value}
+                      options={orgFieldOptions[orgKey!] || []}
+                      onChange={(v) => setOutputFieldValue(field, orgKey, v)}
+                    />
+                  );
+                }
 
-      <SelectField label="Company Code"
-        value={formData.company_code}
-        options={referenceData.companyCodes}
-        onChange={(v) => setField("company_code", v)}
-      />
-
-      <SelectField label="Sales Organization"
-        value={formData.sales_organization}
-        options={referenceData.salesOrgs}
-        onChange={(v) => setField("sales_organization", v)}
-      />
-
-      <SelectField label="Plant"
-        value={formData.plant}
-        options={referenceData.plants}
-        onChange={(v) => setField("plant", v)}
-      />
-
-      <SelectField label="Warehouse"
-        value={formData.warehouse}
-        options={referenceData.warehouses}
-        onChange={(v) => setField("warehouse", v)}
-      />
-
-      <SelectField label="Shipping Point"
-        value={formData.shipping_point}
-        options={referenceData.shippingPoints}
-        onChange={(v) => setField("shipping_point", v)}
-      />
-
-      {/* <SelectField label="Printer"
-        value={formData.printer}
-        options={referenceData.printers}
-        onChange={(v) => setField("printer", v)}
-      /> */}
-
-    </div>
+                return (
+                  <div key={fieldKey}>
+                    <label className="text-xs font-semibold text-muted-foreground font-body">
+                      {field.label}
+                    </label>
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) => setOutputFieldValue(field, null, e.target.value)}
+                      placeholder="Any (fallback)"
+                      className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
+                    />
+                    <p className="text-[11px] text-muted-foreground mt-1 font-body">
+                      {field.apiName} · {field.entity}.{field.name}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
 <div className="card-elevated p-5 space-y-4">

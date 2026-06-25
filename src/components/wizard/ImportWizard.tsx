@@ -5,11 +5,11 @@ import { StepConnection } from "./StepConnection";
 import { StepEntities } from "./StepEntities";
 import { StepFields } from "./StepFields";
 import { StepReview } from "./StepReview";
-import type { WizardState, EntityConfig, FieldConfig } from "./types";
+import type { WizardState, EntityConfig, FieldConfig, ConnectionConfig } from "./types";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-const flaskAPI = import.meta.env.VITE_FLASK_API;
+import { fetchLegacyApi } from "@/lib/legacyApiBase";
 
 const STEPS = [
   { id: 1, title: "Context", subtitle: "Name & environment" },
@@ -19,11 +19,31 @@ const STEPS = [
   { id: 5, title: "Review", subtitle: "Save definition" },
 ];
 
+function normalizeAuthType(raw: unknown): ConnectionConfig["authType"] {
+  const value = String(raw || "").trim().toLowerCase();
+  if (value === "basic" || value === "basic authentication") return "Basic";
+  if (value === "oauth2" || value === "oauth 2" || value === "oauth 2.0" || value.includes("oauth")) return "OAuth2";
+  return "None";
+}
+
+function hasCompleteConnection(connection: ConnectionConfig): boolean {
+  const authType = normalizeAuthType(connection.authType);
+  if (!connection.baseUrl?.trim()) return false;
+  if (authType === "None") return true;
+  if (authType === "Basic") {
+    return Boolean(connection.username?.trim() && connection.password?.trim());
+  }
+  if (authType === "OAuth2") {
+    return Boolean(connection.tokenUrl?.trim() && connection.clientId?.trim() && connection.clientSecret?.trim());
+  }
+  return false;
+}
+
 function buildInitialState(): WizardState {
   return {
     step: 1,
     context: { name: "", description: "", application: "", environment: "", client: "" },
-    connection: { baseUrl: "", authType: "OAuth2", tokenUrl: "", clientId: "", clientSecret: "", username: "", password: "" },
+    connection: { baseUrl: "", authType: "None", tokenUrl: "", clientId: "", clientSecret: "", username: "", password: "" },
     entities: {},
     fields: {},
   };
@@ -57,27 +77,74 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
         });
       }
 
+      const outputFieldKeys = new Set(
+        (Array.isArray(initialData.output_fields) ? initialData.output_fields : []).map(
+          (f: any) => `${f.entity}.${f.name}`,
+        ),
+      );
+
       const fieldsRecord: Record<string, Record<string, FieldConfig>> = {};
       if (initialData.fields && typeof initialData.fields === 'object') {
         Object.entries(initialData.fields).forEach(([entityName, fields]: [string, any]) => {
           fieldsRecord[entityName] = {};
           if (Array.isArray(fields)) {
             fields.forEach((f: any) => {
-              fieldsRecord[entityName][f.name] = {
-                enabled: f.enabled !== undefined ? !!f.enabled : true,
-                label: f.label || f.name,
+              const fieldName = f.name || f.originalName;
+              fieldsRecord[entityName][fieldName] = {
+                enabled: f.enabled !== false,
+                label: f.label || fieldName,
                 description: f.description || "",
-                originalName: f.name,
+                originalName: fieldName,
                 type: f.type || "",
                 isKey: !!f.isKey,
                 hasValueHelp: f.hasValueHelp,
-                showInOutputDefinition: f.showInOutputDefinition !== undefined ? !!f.showInOutputDefinition : !!f.outputDetermination,
-                outputDetermination: f.showInOutputDefinition !== undefined ? !!f.showInOutputDefinition : !!f.outputDetermination
+                sample: f.sample,
+                showInOutputDefinition:
+                  f.showInOutputDefinition !== undefined ? !!f.showInOutputDefinition : (!!f.outputDetermination || outputFieldKeys.has(`${entityName}.${fieldName}`)),
+                outputDetermination: f.outputDetermination !== undefined ? !!f.outputDetermination : (f.showInOutputDefinition !== undefined ? !!f.showInOutputDefinition : false)
               };
             });
           }
         });
       }
+
+      if (Array.isArray(initialData.output_fields)) {
+        initialData.output_fields.forEach((f: any) => {
+          if (!f?.entity || !f?.name) return;
+          if (!fieldsRecord[f.entity]) fieldsRecord[f.entity] = {};
+          if (!fieldsRecord[f.entity][f.name]) {
+            fieldsRecord[f.entity][f.name] = {
+              enabled: false,
+              label: f.label || f.name,
+              description: "",
+              originalName: f.name,
+              type: f.type || "",
+              isKey: false,
+              hasValueHelp: false,
+              sample: "",
+              showInOutputDefinition: true,
+            };
+          } else {
+            fieldsRecord[f.entity][f.name].showInOutputDefinition = true;
+          }
+        });
+      }
+
+      const hydratedConnection: ConnectionConfig = {
+        ...base.connection,
+        baseUrl: initialData.endpoint || "",
+        authType: normalizeAuthType(initialData.auth_type),
+        clientId: initialData.client_id || "",
+        clientSecret: initialData.client_secret || "",
+        username: initialData.username || "",
+        password: initialData.password || "",
+        tokenUrl: initialData.auth_url || "",
+      };
+
+      const requestedStartStep = startStep || 1;
+      const effectiveStartStep = requestedStartStep > 2 && !hasCompleteConnection(hydratedConnection)
+        ? 2
+        : requestedStartStep;
 
       return {
         ...base,
@@ -85,25 +152,16 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
   application: initialData.application || "",
   environment: initialData.environment || "",
   client: initialData.client || "",},
-        connection: { 
-          ...base.connection, 
-          baseUrl: initialData.endpoint || "", 
-          authType: initialData.auth_type || "OAuth2",
-          clientId: initialData.client_id || "", 
-          clientSecret: initialData.client_secret || "",
-          username: initialData.username || "",
-          password: initialData.password || "",
-          tokenUrl: initialData.auth_url || ""
-        },
+        connection: hydratedConnection,
         entities: entitiesRecord,
         fields: fieldsRecord,
-        step: startStep || 1
+        step: effectiveStartStep
       };
     }
     return base;
   });
 
-  const [tested, setTested] = useState(!!startStep && startStep > 2);
+  const [tested, setTested] = useState(() => !!startStep && startStep > 2 && hasCompleteConnection(state.connection));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
 
@@ -205,29 +263,36 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
 
   async function handleSave() {
     try {
-      const flaskAPI = import.meta.env.VITE_FLASK_API;
       const isEdit = !!initialData?.id;
-      const url = isEdit 
-        ? `${flaskAPI}/api/catalog/${initialData.id}`
-        : `${flaskAPI}/api/catalog`;
-      
+      const path = isEdit ? `/api/catalog/${initialData.id}` : "/api/catalog";
+
       // Flatten enabled entities and fields to save
       const enabledEntities = Object.entries(state.entities)
         .filter(([_, config]) => config.enabled)
         .map(([name, config]) => ({ name, ...config }));
-      
+
       const enabledFields = Object.entries(state.fields).reduce((acc, [entityName, fields]) => {
         if (state.entities[entityName]?.enabled) {
-          acc[entityName] = Object.entries(fields)
-             .filter(([_, config]) => config.enabled || config.showInOutputDefinition)
-            .map(([name, config]) => ({ name, ...config }));
+          acc[entityName] = Object.values(fields)
+            .filter((config) => config.enabled || config.showInOutputDefinition || config.outputDetermination)
+            .map((config) => ({
+              name: config.originalName,
+              label: config.label,
+              description: config.description,
+              type: config.type,
+              isKey: config.isKey,
+              enabled: config.enabled,
+              hasValueHelp: config.hasValueHelp,
+              sample: config.sample,
+              showInOutputDefinition: !!config.showInOutputDefinition,
+              outputDetermination: !!config.outputDetermination,
+            }));
         }
         return acc;
       }, {} as any);
 
-      const response = await fetch(url, {
+      await fetchLegacyApi(path, {
         method: isEdit ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: state.context.name,
           application: state.context.application,
@@ -241,11 +306,9 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
           username: state.connection.username,
           password: state.connection.password,
           entities: enabledEntities,
-          fields: enabledFields
-        })
+          fields: enabledFields,
+        }),
       });
-
-      if (!response.ok) throw new Error("Failed to save context");
 
       setSaved(true);
       toast.success(isEdit ? "Context updated successfully" : "Context definition saved", {
@@ -320,6 +383,7 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
           <StepFields
             entities={state.entities}
             fields={state.fields}
+            connection={state.connection}
             onChange={(fields) => setState((s) => ({ ...s, fields }))}
           />
         )}
