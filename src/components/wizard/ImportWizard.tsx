@@ -100,7 +100,8 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
                 hasValueHelp: f.hasValueHelp,
                 sample: f.sample,
                 showInOutputDefinition:
-                  !!f.showInOutputDefinition || outputFieldKeys.has(`${entityName}.${fieldName}`),
+                  f.showInOutputDefinition !== undefined ? !!f.showInOutputDefinition : (!!f.outputDetermination || outputFieldKeys.has(`${entityName}.${fieldName}`)),
+                outputDetermination: f.outputDetermination !== undefined ? !!f.outputDetermination : (f.showInOutputDefinition !== undefined ? !!f.showInOutputDefinition : false)
               };
             });
           }
@@ -246,6 +247,7 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
               hasValueHelp: false,
               sample: "",
               showInOutputDefinition: false,
+              outputDetermination: false
             };
           }
         });
@@ -271,17 +273,20 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
 
       const enabledFields = Object.entries(state.fields).reduce((acc, [entityName, fields]) => {
         if (state.entities[entityName]?.enabled) {
-          acc[entityName] = Object.values(fields).map((config) => ({
-            name: config.originalName,
-            label: config.label,
-            description: config.description,
-            type: config.type,
-            isKey: config.isKey,
-            enabled: config.enabled,
-            hasValueHelp: config.hasValueHelp,
-            sample: config.sample,
-            showInOutputDefinition: !!config.showInOutputDefinition,
-          }));
+          acc[entityName] = Object.values(fields)
+            .filter((config) => config.enabled || config.showInOutputDefinition || config.outputDetermination)
+            .map((config) => ({
+              name: config.originalName,
+              label: config.label,
+              description: config.description,
+              type: config.type,
+              isKey: config.isKey,
+              enabled: config.enabled,
+              hasValueHelp: config.hasValueHelp,
+              sample: config.sample,
+              showInOutputDefinition: !!config.showInOutputDefinition,
+              outputDetermination: !!config.outputDetermination,
+            }));
         }
         return acc;
       }, {} as any);

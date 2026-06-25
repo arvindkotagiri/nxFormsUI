@@ -58,6 +58,12 @@ export default function OutputRules() {
       sample.process_type = rule.process_type;
     }
 
+    if (rule.custom_fields && typeof rule.custom_fields === 'object') {
+      Object.entries(rule.custom_fields).forEach(([k, v]) => {
+        if (v) sample[k] = v;
+      });
+    }
+
     // 🔥 If no conditions → return empty object
     return JSON.stringify(sample, null, 2);
   }
@@ -82,6 +88,12 @@ export default function OutputRules() {
 
     if (rule.process_type && payload.process_type !== rule.process_type)
       return false;
+
+    if (rule.custom_fields && typeof rule.custom_fields === 'object') {
+      for (const [k, v] of Object.entries(rule.custom_fields)) {
+        if (v && payload[k] !== v) return false;
+      }
+    }
 
     return true;
   }
@@ -136,6 +148,13 @@ export default function OutputRules() {
     if (rule.warehouse) conditions.push(`warehouse == '${rule.warehouse}'`);
     if (rule.customer) conditions.push(`customer == '${rule.customer}'`);
     if (rule.process_type) conditions.push(`process_type == '${rule.process_type}'`);
+    if (rule.shipping_point) conditions.push(`shipping_point == '${rule.shipping_point}'`);
+
+    if (rule.custom_fields && typeof rule.custom_fields === 'object') {
+      Object.entries(rule.custom_fields).forEach(([k, v]) => {
+        if (v) conditions.push(`${k} == '${v}'`);
+      });
+    }
 
     return conditions.length ? conditions.join(" AND ") : "true";
   }

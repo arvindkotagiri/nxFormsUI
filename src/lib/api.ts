@@ -101,6 +101,10 @@ export async function me() {
   return request("/auth/me");
 }
 
+export async function getCatalog() {
+  return request<any[]>("/catalog");
+}
+
 // Dashboard configs
 export async function getLabelConfigs(filters: Record<string, any> = {}) {
   const qs = new URLSearchParams();

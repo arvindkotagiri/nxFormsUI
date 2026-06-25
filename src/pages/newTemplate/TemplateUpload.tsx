@@ -77,8 +77,37 @@ export function TemplateUpload() {
     reader.readAsDataURL(file);
   }, [setUploadedFile, setUploadedImage]);
 
+  const [hasCachedData, setHasCachedData] = useState(false);
   const currentFileSignature = uploadedFile ? `${uploadedFile.name}-${uploadedFile.size}-${uploadedFile.lastModified}` : null;
   const isAlreadyAnalyzed = lastAnalyzedFile === currentFileSignature && chunks.length > 0;
+
+  useEffect(() => {
+    if (currentFileSignature) {
+      const cached = localStorage.getItem(`nx_preprocess_cache_${currentFileSignature}`);
+      setHasCachedData(!!cached);
+    } else {
+      setHasCachedData(false);
+    }
+  }, [currentFileSignature]);
+
+  const handleUsePreprocessedData = () => {
+    if (!currentFileSignature) return;
+    const cachedDataStr = localStorage.getItem(`nx_preprocess_cache_${currentFileSignature}`);
+    if (!cachedDataStr) return;
+    try {
+      const cached = JSON.parse(cachedDataStr);
+      setAnalysisResults(
+        cached.extracted_fields,
+        cached.annotated_images,
+        cached.clean_images
+      );
+      setGeneratedHTML(cached.generatedHTML);
+      nextStep();
+    } catch (err) {
+      console.error("Error loading preprocessed data:", err);
+      setErrorMessage("Failed to load cached preprocessed data.");
+    }
+  };
 
   const handleUploadAndProcess = async () => {
     if (!uploadedFile) return;
@@ -143,6 +172,23 @@ export function TemplateUpload() {
 
       if (repData.status === "success") {
         setGeneratedHTML(repData.full_html);
+        
+        // Cache preprocessed results persistently
+        if (currentFileSignature) {
+          const cacheData = {
+            extracted_fields: data.extracted_fields,
+            annotated_images: data.annotated_images && data.annotated_images.length > 0 ? data.annotated_images : data.annotated_image,
+            clean_images: data.clean_images && data.clean_images.length > 0 ? data.clean_images : data.clean_image,
+            generatedHTML: repData.full_html
+          };
+          try {
+            localStorage.setItem(`nx_preprocess_cache_${currentFileSignature}`, JSON.stringify(cacheData));
+            setHasCachedData(true);
+          } catch (e) {
+            console.warn("Failed to store preprocessed layout in cache:", e);
+          }
+        }
+
         nextStep();
       } else {
         setErrorMessage(repData.error || "HTML design replication failed");
@@ -240,7 +286,6 @@ export function TemplateUpload() {
             <option value="zpl">ZPL</option>
             <option value="html">HTML</option>
             <option value="xdp">XDP</option>
-            <option value="all">All (Synchronized)</option>
           </select>
         </div>
 
@@ -313,7 +358,7 @@ export function TemplateUpload() {
           </div>
         )}
 
-        {/* Action Button */}
+        {/* Action Buttons */}
         <div className="mt-6 flex justify-between">
           <button
             type="button"
@@ -330,30 +375,43 @@ export function TemplateUpload() {
           >
             Clear
           </button>
-          <button
-            type="button"
-            disabled={
-              !uploadedImage ||
-              !selectedContext ||
-              !selectedSize ||
-              isProcessing
-            }
-            onClick={handleUploadAndProcess}
-            className="px-6 py-2 rounded-lg text-sm font-semibold font-body transition-all disabled:opacity-40"
-            style={{
-              background: "hsl(var(--accent))",
-              color: "white"
-            }}
-          >
-            {isProcessing ? (
-              <span className="flex items-center gap-2">
-                <Loader2 size={14} className="animate-spin" />
-                {processingStatus || "Analyzing..."}
-              </span>
-            ) : (
-              "Analyze & Continue"
+          <div className="flex gap-3">
+            {hasCachedData && (
+              <button
+                type="button"
+                disabled={isProcessing || !selectedContext || !selectedSize}
+                onClick={handleUsePreprocessedData}
+                className="px-5 py-2 rounded-lg text-sm font-semibold font-body transition-all text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm hover:shadow"
+              >
+                Use Preprocessed Data
+              </button>
             )}
-          </button>
+            <button
+              type="button"
+              disabled={
+                !uploadedImage ||
+                !selectedContext ||
+                !selectedSize ||
+                isProcessing
+              }
+              onClick={handleUploadAndProcess}
+              className="px-6 py-2 rounded-lg text-sm font-semibold font-body transition-all disabled:opacity-40"
+              style={{
+                background: hasCachedData ? "transparent" : "hsl(var(--accent))",
+                border: hasCachedData ? "1px solid hsl(var(--border))" : "none",
+                color: hasCachedData ? "hsl(var(--foreground))" : "white"
+              }}
+            >
+              {isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin" />
+                  {processingStatus || "Analyzing..."}
+                </span>
+              ) : (
+                hasCachedData ? "Re-Analyze File" : "Analyze & Continue"
+              )}
+            </button>
+          </div>
         </div>
 
       </div>

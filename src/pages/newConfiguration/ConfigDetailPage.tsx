@@ -22,6 +22,7 @@ import {
   getProcessTypes,
   getLabels,
   getPrinters,
+  getCatalog,
 } from "../../lib/api";
 import {
   flattenActiveOutputFields,
@@ -50,6 +51,7 @@ type LabelConfigPayload = {
   valid_from?: string | null; // yyyy-mm-dd
   valid_to?: string | null;   // yyyy-mm-dd
   printer?: string | null;
+  custom_fields?: Record<string, string> | null;
   output_conditions?: Record<string, string>;
 };
 
@@ -79,6 +81,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     processTypes: RefItem[];
     labels: LabelRefItem[];
     printers: RefItem[];
+    contexts: any[];
   }>({
     customers: [],
     plants: [],
@@ -89,6 +92,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     processTypes: [],
     labels: [],
     printers: [],
+    contexts: [],
   });
 
   const [outputFields, setOutputFields] = useState<ActiveOutputField[]>([]);
@@ -124,6 +128,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     valid_from: "",
     valid_to: "",
     printer: "",
+    custom_fields: {},
   });
 
   // ---------- Fetch reference data ----------
@@ -139,6 +144,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         processTypes,
         labels,
         printers,
+        contexts,
       ] = await Promise.all([
         getCustomers(),
         getPlants(),
@@ -149,6 +155,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         getProcessTypes(),
         getLabels(),
         getPrinters(),
+        getCatalog(),
       ]);
 
       setReferenceData({
@@ -161,6 +168,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         processTypes,
         labels,
         printers,
+        contexts,
       });
     } catch (e: any) {
       // keep non-blocking, but show a banner
@@ -204,6 +212,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         valid_from: data.valid_from || "",
         valid_to: data.valid_to || "",
         printer: data.printer || "",
+        custom_fields: data.custom_fields || {},
       });
       setOutputConditions(
         data.output_conditions && typeof data.output_conditions === "object"
@@ -311,6 +320,28 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     // keep it simple; you can also focus inputs
   };
 
+  // ---------- Dynamic Fields Filter ----------
+  const dynamicFields = useMemo(() => {
+    const selectedLabel = referenceData.labels.find((l) => l.name === formData.label_name);
+    const selectedContextName = selectedLabel?.context;
+    if (!selectedContextName) return [];
+
+    const contextDef = referenceData.contexts.find((c) => c.name.toLowerCase() === selectedContextName.toLowerCase());
+    if (!contextDef || !contextDef.fields) return [];
+
+    const fieldsList: any[] = [];
+    Object.values(contextDef.fields).forEach((entityFields: any) => {
+      if (Array.isArray(entityFields)) {
+        entityFields.forEach((f: any) => {
+          if (f.outputDetermination) {
+            fieldsList.push(f);
+          }
+        });
+      }
+    });
+    return fieldsList;
+  }, [formData.label_name, referenceData.labels, referenceData.contexts]);
+
   const handleSave = async () => {
     setErrorBanner(null);
 
@@ -341,6 +372,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
         valid_from: formData.valid_from ? formData.valid_from : null,
         valid_to: formData.valid_to ? formData.valid_to : null,
         printer: formData.printer ? formData.printer : null,
+        custom_fields: formData.custom_fields ? formData.custom_fields : null,
         output_conditions: outputConditions,
       };
 
@@ -601,6 +633,43 @@ function SelectField({
 
     </div>
   </div>
+
+  {/* Dynamic Conditions */}
+  {dynamicFields.length > 0 && (
+    <div className="card-elevated p-5 space-y-4">
+      <div>
+        <h2 className="font-display text-sm font-semibold text-foreground">
+          Dynamic Conditions
+        </h2>
+        <p className="text-xs text-muted-foreground font-body mt-1">
+          Dynamic routing criteria configured for context "{referenceData.labels.find((l) => l.name === formData.label_name)?.context}"
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {dynamicFields.map((field) => (
+          <div key={field.name}>
+            <label className="text-xs font-semibold text-muted-foreground font-body">
+              {field.label || field.name}
+            </label>
+            <input
+              type="text"
+              value={formData.custom_fields?.[field.name] || ""}
+              onChange={(e) => {
+                const updatedCustom = {
+                  ...formData.custom_fields,
+                  [field.name]: e.target.value,
+                };
+                setField("custom_fields", updatedCustom);
+              }}
+              placeholder="Enter condition value"
+              className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
       </div>
 
       {/* RIGHT SIDEBAR */}

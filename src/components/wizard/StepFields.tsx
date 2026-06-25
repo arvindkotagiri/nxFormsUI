@@ -208,7 +208,8 @@ export function StepFields({ entities, fields, connection, onChange }: Props) {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 border-b">
                   <tr className="text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="text-left font-medium px-4 py-2.5 w-16">On</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-24">Context</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-24">Show in Output</th>
                     <th className="text-left font-medium px-4 py-2.5">Field</th>
                     <th className="text-left font-medium px-4 py-2.5">Business Label</th>
                     <th className="text-left font-medium px-4 py-2.5">Show in Output</th>
@@ -228,7 +229,7 @@ export function StepFields({ entities, fields, connection, onChange }: Props) {
                   {visibleFields.map((f) => {
                     const locked = f.isKey;
                     return (
-                      <tr key={f.originalName} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors", f.enabled && "bg-primary/5")}>
+                      <tr key={f.originalName} className={cn("border-b last:border-0 hover:bg-muted/30 transition-colors", (f.enabled || f.showInOutputDefinition) && "bg-primary/5")}>
                         <td className="px-4 py-2.5">
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -245,6 +246,13 @@ export function StepFields({ entities, fields, connection, onChange }: Props) {
                               <TooltipContent>Key fields are required and always included.</TooltipContent>
                             )}
                           </Tooltip>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <Switch
+                            checked={!!f.showInOutputDefinition}
+                            onCheckedChange={(v) => updateField(active.originalName, f.originalName, { showInOutputDefinition: v, outputDetermination: v })}
+                            aria-label={`Toggle Show in Output for ${f.originalName}`}
+                          />
                         </td>
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5">

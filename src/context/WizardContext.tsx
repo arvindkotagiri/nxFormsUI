@@ -113,7 +113,7 @@ const initialState: WizardState = {
   selectedContext: null,
   selectedSize: null,
   labelName: '',
-  outputMode: 'all', // Default to all
+  outputMode: 'zpl', // Default to zpl
   watermarkName: '',
   printSystemId: false,
   modifiedLabelBlob: null,
@@ -166,10 +166,12 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         
       const [ymin, xmin, ymax, xmax] = box;
       const isTable = field.content_type === 'table';
+      const isBarcode = field.content_type === 'barcode';
+      const isQrCode = field.content_type === 'qrcode' || field.content_type === 'qr';
       
       return {
         id: `chunk-${index}-${Date.now()}`,
-        type: isTable ? 'table' : (field.content_type === 'barcode' ? 'barcode' : (field.content_type === 'table_cell' ? 'table_cell' : (field.content_type === 'logo' ? 'logo' : (field.content_type === 'signature' ? 'signature' : 'text')))),
+        type: isTable ? 'table' : ((isBarcode || isQrCode) ? 'barcode' : (field.content_type === 'table_cell' ? 'table_cell' : (field.content_type === 'logo' ? 'logo' : (field.content_type === 'signature' ? 'signature' : 'text')))),
         x: xmin / 10,
         y: ymin / 10,
         width: (xmax - xmin) / 10,
@@ -177,7 +179,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
         label: field.field_name || `field_${index}`,
         value: field.value || "",
         isStatic: field.category === 'static',
-        barcodeType: field.content_type === 'barcode' ? 'code128' : undefined,
+        barcodeType: isQrCode ? 'qr' : (isBarcode ? 'code128' : undefined),
         transformations: [],
         rows: isTable ? field.table_data : undefined,
         isDynamicTable: isTable,

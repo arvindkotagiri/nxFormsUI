@@ -39,6 +39,7 @@ export type FieldConfig = {
   hasValueHelp?: boolean;
   sample?: any;
   showInOutputDefinition?: boolean;
+  outputDetermination?: boolean;
 };
 
 export type WizardState = {
