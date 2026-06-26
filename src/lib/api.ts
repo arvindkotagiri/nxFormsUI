@@ -102,7 +102,7 @@ export async function me() {
 }
 
 export async function getCatalog() {
-  return request<any[]>("/catalog");
+  return request<any[]>("/api/catalog");
 }
 
 // Dashboard configs

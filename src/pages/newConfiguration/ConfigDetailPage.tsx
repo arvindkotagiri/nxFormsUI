@@ -323,10 +323,14 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
   // ---------- Dynamic Fields Filter ----------
   const dynamicFields = useMemo(() => {
     const selectedLabel = referenceData.labels.find((l) => l.name === formData.label_name);
-    const selectedContextName = selectedLabel?.context;
-    if (!selectedContextName) return [];
+    const selectedContextKey = normalizeContextValue(selectedLabel?.context);
+    if (!selectedContextKey) return [];
 
-    const contextDef = referenceData.contexts.find((c) => c.name.toLowerCase() === selectedContextName.toLowerCase());
+    const contextDef = referenceData.contexts.find(
+      (c) =>
+        normalizeContextValue(c?.name) === selectedContextKey ||
+        normalizeContextValue(c?.id) === selectedContextKey,
+    );
     if (!contextDef || !contextDef.fields) return [];
 
     const fieldsList: any[] = [];
