@@ -209,7 +209,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       const chunk = prev.chunks.find(c => c.id === id);
       let nextHtml = prev.generatedHTML;
       if (chunk && updates.label && updates.label !== chunk.label && nextHtml) {
-        nextHtml = nextHtml.replaceAll(`{{${chunk.label}}}`, `{{${updates.label}}}`);
+        nextHtml = nextHtml.split(`{{${chunk.label}}}`).join(`{{${updates.label}}}`);
       }
       return {
         ...prev,
@@ -223,7 +223,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       const chunk = prev.chunks.find(c => c.id === id);
       let nextHtml = prev.generatedHTML;
       if (chunk && nextHtml) {
-        nextHtml = nextHtml.replaceAll(`{{${chunk.label}}}`, "");
+        nextHtml = nextHtml.split(`{{${chunk.label}}}`).join("");
       }
       return {
         ...prev,
