@@ -197,6 +197,10 @@ export function TemplateAdapt() {
         if (!htmlStr) return htmlStr;
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlStr, 'text/html');
+        if (!doc || !doc.body) {
+            console.warn("[annotateHtmlPlaceholders] Parsed document or body is null.");
+            return htmlStr;
+        }
         
         const elements = Array.from(doc.body.getElementsByTagName('*')) as HTMLElement[];
         
