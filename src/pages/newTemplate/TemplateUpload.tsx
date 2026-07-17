@@ -33,6 +33,7 @@ export function TemplateUpload() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [contexts, setContexts] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
