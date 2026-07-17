@@ -32,8 +32,26 @@ export function TemplateUpload() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [contexts, setContexts] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".searchable-select-container")) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  // Filter contexts based on search term
+  const filteredContexts = contexts.filter((ctx) =>
+    ctx.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   useEffect(() => {
     const fetchContexts = async () => {
@@ -52,8 +70,12 @@ export function TemplateUpload() {
             fields: api.fields || {},
             output_fields: Array.isArray(api.output_fields) ? api.output_fields : [],
           }));
-          // Sort contexts alphabetically by name
-          dynamicContexts.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+          // Sort contexts alphabetically by name (strictly case-insensitive A-Z)
+          dynamicContexts.sort((a, b) => {
+            const nameA = (a.name || "").toLowerCase().trim();
+            const nameB = (b.name || "").toLowerCase().trim();
+            return nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+          });
           console.log("[TemplateUpload] Mapped and sorted contexts:", dynamicContexts);
           setContexts(dynamicContexts);
         } else {
@@ -229,27 +251,91 @@ export function TemplateUpload() {
           </p>
         </div>
 
-        {/* Business Context */}
-        <div className="space-y-2">
+        {/* Business Context (Searchable Dropdown) */}
+        <div className="space-y-2 searchable-select-container relative">
           <label className="text-xs font-body text-muted-foreground">
             Business Context
           </label>
-          <select
-            value={selectedContext?.id || ""}
-            onChange={(e) =>
-              setSelectedContext(
-                contexts.find(c => c.id === e.target.value)
-              )
-            }
-            className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
+          
+          {/* Selected Trigger Button */}
+          <div
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+            className="w-full px-3 py-2 rounded-lg border border-border bg-card text-sm font-body cursor-pointer flex justify-between items-center hover:border-accent/50 transition-all shadow-sm select-none"
           >
-            <option value="" disabled>Select context...</option>
-            {contexts.map(ctx => (
-              <option key={ctx.id} value={ctx.id}>
-                {ctx.name}
-              </option>
-            ))}
-          </select>
+            <span className={selectedContext ? "text-foreground font-medium" : "text-muted-foreground"}>
+              {selectedContext?.name || "Select context..."}
+            </span>
+            <svg
+              className={cn("w-4 h-4 text-muted-foreground transition-transform duration-200", isDropdownOpen && "rotate-180")}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+
+          {/* Search Dropdown Panel */}
+          {isDropdownOpen && (
+            <div className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg flex flex-col overflow-hidden max-h-[300px]">
+              {/* Search input box */}
+              <div className="p-2 border-b border-border bg-slate-50/50 dark:bg-slate-900/50 flex items-center">
+                <svg className="w-3.5 h-3.5 text-muted-foreground mr-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Type to search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full bg-transparent text-xs font-body focus:outline-none border-none p-0.5 text-foreground placeholder:text-muted-foreground"
+                  autoFocus
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="text-muted-foreground hover:text-foreground text-[10px] font-bold p-0.5"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Mapped filtered items list */}
+              <div className="overflow-y-auto max-h-[220px] divide-y divide-border/20">
+                {filteredContexts.length === 0 ? (
+                  <div className="p-4 text-xs text-muted-foreground text-center font-body">
+                    No matching contexts found
+                  </div>
+                ) : (
+                  filteredContexts.map((ctx) => {
+                    const isSelected = selectedContext?.id === ctx.id;
+                    return (
+                      <button
+                        key={ctx.id}
+                        onClick={() => {
+                          setSelectedContext(ctx);
+                          setIsDropdownOpen(false);
+                          setSearchTerm("");
+                        }}
+                        className={cn(
+                          "w-full text-left px-3.5 py-2.5 text-xs font-body transition-colors flex items-center justify-between",
+                          isSelected ? "bg-accent/10 text-accent font-semibold" : "hover:bg-muted/50 text-foreground"
+                        )}
+                      >
+                        <span className="truncate">{ctx.name}</span>
+                        {isSelected && (
+                          <svg className="w-3.5 h-3.5 text-accent shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Page Size */}
