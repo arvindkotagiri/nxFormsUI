@@ -52,7 +52,9 @@ export function TemplateUpload() {
             fields: api.fields || {},
             output_fields: Array.isArray(api.output_fields) ? api.output_fields : [],
           }));
-          console.log("[TemplateUpload] Mapped contexts:", dynamicContexts);
+          // Sort contexts alphabetically by name
+          dynamicContexts.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+          console.log("[TemplateUpload] Mapped and sorted contexts:", dynamicContexts);
           setContexts(dynamicContexts);
         } else {
           console.warn("API Catalog returned non-array response:", apis);
