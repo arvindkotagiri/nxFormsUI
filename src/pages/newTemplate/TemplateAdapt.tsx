@@ -1409,6 +1409,38 @@ export function TemplateAdapt() {
                                     Select any image imported in your Image Retention master to swap it into this placeholder position.
                                 </p>
                             </div>
+
+                            {/* Upload Local Custom Logo */}
+                            <div className="space-y-2 pt-3 border-t border-slate-100">
+                                <label className="text-[11px] font-bold text-slate-600 block">
+                                    Upload Custom Logo (Local File)
+                                </label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => {
+                                                const imageNode = getSelectedImageNode(selectedElement);
+                                                if (imageNode) {
+                                                    imageNode.src = reader.result as string;
+                                                    if (editorRef.current) {
+                                                        pushState(editorRef.current.innerHTML);
+                                                    }
+                                                    toast.success("Logo replaced with local file");
+                                                }
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                    className="w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 transition-all cursor-pointer"
+                                />
+                                <p className="text-[9px] text-muted-foreground mt-1 leading-normal">
+                                    Upload an image directly from your computer to replace this graphic.
+                                </p>
+                            </div>
                         </div>
                     )}
 
