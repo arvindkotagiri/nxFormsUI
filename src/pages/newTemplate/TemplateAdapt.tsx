@@ -482,8 +482,47 @@ export function TemplateAdapt() {
     // -------------------------------------------------
     const getTransform = (el: HTMLElement) => {
         const style = window.getComputedStyle(el);
-        const matrix = new DOMMatrixReadOnly(style.transform);
-        return { x: matrix.m41, y: matrix.m42 };
+        const transform = style.transform;
+        if (!transform || transform === "none") {
+            return { x: 0, y: 0 };
+        }
+        
+        // 1. Try DOMMatrixReadOnly if available
+        if (typeof window !== "undefined" && (window.DOMMatrixReadOnly || (window as any).DOMMatrix)) {
+            try {
+                const MatrixClass = window.DOMMatrixReadOnly || (window as any).DOMMatrix;
+                const matrix = new MatrixClass(transform);
+                return { x: matrix.m41, y: matrix.m42 };
+            } catch (e) {
+                // fallback
+            }
+        }
+        
+        // 2. Try WebKitCSSMatrix fallback
+        if (typeof window !== "undefined" && (window as any).WebKitCSSMatrix) {
+            try {
+                const matrix = new (window as any).WebKitCSSMatrix(transform);
+                return { x: matrix.m41, y: matrix.m42 };
+            } catch (e) {
+                // fallback
+            }
+        }
+        
+        // 3. Regex parser fallback
+        if (transform.startsWith("matrix(")) {
+            const values = transform.slice(7, -1).split(",").map(parseFloat);
+            return { x: values[4] || 0, y: values[5] || 0 };
+        }
+        if (transform.startsWith("matrix3d(")) {
+            const values = transform.slice(9, -1).split(",").map(parseFloat);
+            return { x: values[12] || 0, y: values[13] || 0 };
+        }
+        if (transform.startsWith("translate(")) {
+            const values = transform.slice(10, -1).split(",").map(val => parseFloat(val.trim()));
+            return { x: values[0] || 0, y: values[1] || 0 };
+        }
+        
+        return { x: 0, y: 0 };
     };
 
     const clearSelection = () => {
