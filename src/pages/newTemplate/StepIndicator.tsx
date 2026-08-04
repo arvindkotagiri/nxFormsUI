@@ -10,12 +10,16 @@ const steps = [
   { number: 4, title: 'Save', description: 'Save Label' },
 ];
 
-export function StepIndicator() {
+interface StepIndicatorProps {
+  compact?: boolean;
+}
+
+export function StepIndicator({ compact = false }: StepIndicatorProps) {
   // Assuming your setStep type now expects 1-6
   const { currentStep, setStep, uploadedFile, uploadedImage } = useWizard();
 
   return (
-    <nav className="w-full py-4" aria-label="Wizard steps">
+    <nav className={cn("w-full", compact ? "py-0.5" : "py-4")} aria-label="Wizard steps">
       <ol className="flex items-center justify-between">
         {steps.map((step, index) => {
           const isCompleted = currentStep > step.number;
@@ -28,7 +32,7 @@ export function StepIndicator() {
                 onClick={() => isClickable && setStep(step.number as any)}
                 disabled={!isClickable}
                 className={cn(
-                  'flex items-center gap-3 group transition-all',
+                  'flex items-center gap-2 group transition-all',
                   isClickable && 'cursor-pointer',
                   !isClickable && 'cursor-not-allowed'
                 )}
@@ -36,20 +40,22 @@ export function StepIndicator() {
                 {/* Step circle */}
                 <div
                   className={cn(
-                    'w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all border-2',
+                    compact ? 'w-6 h-6 text-xs border' : 'w-8 h-8 text-sm border-2',
+                    'rounded-full flex items-center justify-center font-semibold transition-all',
                     isCompleted && 'bg-primary border-primary text-primary-foreground',
-                    isCurrent && 'bg-primary border-primary text-primary-foreground ring-4 ring-primary/20',
+                    isCurrent && 'bg-primary border-primary text-primary-foreground ring-2 ring-primary/20',
                     !isCompleted && !isCurrent && 'bg-background border-border text-muted-foreground'
                   )}
                 >
-                  {isCompleted ? <Check className="w-4 h-4" /> : step.number}
+                  {isCompleted ? <Check className={cn(compact ? "w-3 h-3" : "w-4 h-4")} /> : step.number}
                 </div>
 
                 {/* Step text */}
                 <div className="hidden lg:block text-left">
                   <p
                     className={cn(
-                      'text-[11px] font-bold uppercase tracking-wider transition-colors',
+                      compact ? 'text-[10px]' : 'text-[11px]',
+                      'font-bold uppercase tracking-wider transition-colors',
                       isCurrent && 'text-primary',
                       isCompleted && 'text-foreground',
                       !isCompleted && !isCurrent && 'text-muted-foreground'
@@ -57,9 +63,11 @@ export function StepIndicator() {
                   >
                     {step.title}
                   </p>
-                  <p className="text-[10px] text-muted-foreground hidden xl:block">
-                    {step.description}
-                  </p>
+                  {!compact && (
+                    <p className="text-[10px] text-muted-foreground hidden xl:block">
+                      {step.description}
+                    </p>
+                  )}
                 </div>
               </button>
 
@@ -67,7 +75,8 @@ export function StepIndicator() {
               {index < steps.length - 1 && (
                 <div
                   className={cn(
-                    'h-0.5 flex-1 mx-4 transition-colors',
+                    compact ? 'h-0.5 flex-1 mx-2' : 'h-0.5 flex-1 mx-4',
+                    'transition-colors',
                     currentStep > step.number ? 'bg-primary' : 'bg-border'
                   )}
                 />

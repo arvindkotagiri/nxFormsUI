@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 
 export function TemplateSave() {
-  const { labelName, setLabelName, selectedContext, selectedSize, chunks, generatedZPL, generatedHTML, generatedXDP, outputMode, watermarkName, printSystemId, reset, prevStep } = useWizard();
+  const { labelName, setLabelName, selectedContext, selectedSize, chunks, generatedZPL, generatedHTML, generatedXDP, outputMode, watermarkName, printSystemId, reset, prevStep, editingUuid, labelId } = useWizard();
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedLabelId, setSavedLabelId] = useState('');
@@ -36,8 +36,13 @@ export function TemplateSave() {
       const barcodeChunk = chunks.find(c => c.type === 'barcode');
       const barcodeType = barcodeChunk?.barcodeType || 'code128';
 
+      // Extract table loop configs from table-type chunks
+      const tableChunks = chunks.filter((c: any) => c.type === 'table' && c.tableConfig);
+      const tableConfig = tableChunks.length > 0 ? tableChunks.map((c: any) => c.tableConfig) : null;
+
       const payload = {
-        label_id: `LBL-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+        uuid: editingUuid || undefined,
+        label_id: labelId || `LBL-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
         label_name: labelName,
         context: selectedContext?.name || 'unknown',
         field_mapping: fieldMapping,
@@ -51,8 +56,10 @@ export function TemplateSave() {
         page_dimensions: selectedSize?.id || "",
         fields: chunks,
         version: 1.0,
-        created_by: "System User" // Default
+        created_by: "System User", // Default
+        table_config: tableConfig,
       };
+
       setSavedLabelId(payload.label_id);
 
       // 2. Send to Backend

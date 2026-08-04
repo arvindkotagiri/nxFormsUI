@@ -19,6 +19,7 @@ import {
   FileSearch,
   Layers,
   Image,
+  LifeBuoy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +67,7 @@ const navItems: NavItem[] = [
       { title: "Events", url: "/events", icon: Zap },
       { title: "Output Status", url: "/output-status", icon: FileSearch },
       { title: "Logs & Audit", url: "/logs", icon: ScrollText },
+      { title: "Support Tickets", url: "/tickets", icon: LifeBuoy },
     ],
   },
   { kind: "link", title: "Settings", url: "/settings", icon: Settings },

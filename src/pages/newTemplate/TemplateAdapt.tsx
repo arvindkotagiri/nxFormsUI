@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { FieldMappingSelector } from './FieldMappingSelector';
 import { TransformationModal, type TransformationPayload } from './TransformationModal';
+import { TableLoopConfigPanel, type TableLoopConfig } from './TableLoopConfigPanel';
 
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 const nodeAPI = import.meta.env.VITE_NODE_API;
@@ -120,6 +121,9 @@ export function TemplateAdapt() {
 
     // Mapping & Transformations Modal detailed states
     const [openTransformModal, setOpenTransformModal] = useState(false);
+
+    // Table loop config state
+    const [tableConfigMap, setTableConfigMap] = useState<Record<string, TableLoopConfig>>({});
 
     const editorRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -236,6 +240,16 @@ export function TemplateAdapt() {
             }
         });
 
+        // Annotate <table> elements as entity set loop elements
+        const tableElements = Array.from(doc.body.querySelectorAll('table')) as HTMLElement[];
+        tableElements.forEach((tableEl, tableIndex) => {
+            if (!tableEl.id) {
+                tableEl.id = `chunk-table-${tableIndex}-${Date.now()}`;
+            }
+            tableEl.setAttribute('data-chunk-type', 'table');
+            tableEl.setAttribute('data-editor-element', 'true');
+        });
+
         // Match image/logo/signature/barcode elements with chunks list
         const logoChunks = chunksList.filter(c => c.type === 'logo');
         const signatureChunks = chunksList.filter(c => c.type === 'signature');
@@ -343,8 +357,11 @@ export function TemplateAdapt() {
                 }
             }
         });
+        // Extract all style elements to preserve absolute positioning stylesheet rules
+        const styleElements = Array.from(doc.querySelectorAll('style')) as HTMLStyleElement[];
+        const stylesHtml = styleElements.map(el => el.outerHTML).join('\n');
 
-        return doc.body.innerHTML;
+        return stylesHtml + '\n' + doc.body.innerHTML;
     }, []);
 
     // Sync canvas to chunks on save
@@ -382,6 +399,16 @@ export function TemplateAdapt() {
                     console.error("Error parsing transformations:", e);
                 }
             }
+
+            const tableConfigRaw = el.getAttribute("data-table-config");
+            let tableConfig = null;
+            if (tableConfigRaw) {
+                try {
+                    tableConfig = JSON.parse(tableConfigRaw);
+                } catch (e) {
+                    console.error("Error parsing table config:", e);
+                }
+            }
             
             const textContent = el.textContent?.trim() || "";
             
@@ -391,7 +418,9 @@ export function TemplateAdapt() {
             const chunkTypeAttr = el.getAttribute("data-chunk-type");
             const barcodeTypeAttr = el.getAttribute("data-barcode-type");
 
-            if (chunkTypeAttr) {
+            if (chunkTypeAttr === 'table') {
+                type = 'table';
+            } else if (chunkTypeAttr) {
                 type = chunkTypeAttr as any;
                 if (type === 'barcode') {
                     barcodeType = (barcodeTypeAttr || 'code128') as any;
@@ -444,7 +473,8 @@ export function TemplateAdapt() {
                 isStatic,
                 fieldMapping: sapMapping && sapMapping !== "unmapped" ? sapMapping : undefined,
                 transformations,
-                barcodeType
+                barcodeType,
+                tableConfig: tableConfig ?? undefined
             };
         });
         
@@ -984,7 +1014,12 @@ export function TemplateAdapt() {
     // -------------------------------------------------
     const isTextSelected = selectedElement !== null && 
         selectedElement.tagName.toLowerCase() !== "img" && 
-        selectedElement.id !== "watermark-element";
+        selectedElement.id !== "watermark-element" &&
+        selectedElement.getAttribute('data-chunk-type') !== 'table';
+
+    const isTableSelected = selectedElement !== null &&
+        (selectedElement.tagName.toLowerCase() === 'table' ||
+         selectedElement.getAttribute('data-chunk-type') === 'table');
 
     const selectedElementMapping = selectedElement?.getAttribute("data-sap-mapping") || "";
     const isElementStatic = !selectedElementMapping;
@@ -1056,6 +1091,19 @@ export function TemplateAdapt() {
         }
         setOpenTransformModal(false);
         toast.success("Applied transformations successfully");
+    };
+
+    const handleApplyTableLoopConfig = (config: TableLoopConfig) => {
+        if (!selectedElement) return;
+        const tableId = selectedElement.id;
+        // Write config to DOM attribute so it is serialised in the HTML
+        selectedElement.setAttribute('data-table-config', JSON.stringify(config));
+        // Also keep in local state for re-opening the panel
+        setTableConfigMap(prev => ({ ...prev, [tableId]: config }));
+        if (editorRef.current) {
+            pushState(editorRef.current.innerHTML);
+        }
+        toast.success(`Table loop configured: ${config.entitySetKey}${config.innerEntitySetKey ? ' → ' + config.innerEntitySetKey : ''}`);
     };
 
     const contextFields = (() => {
@@ -1174,102 +1222,9 @@ export function TemplateAdapt() {
     const isMultiPage = localHtml.includes("multi-page-container") || localHtml.includes("pdf-page-wrapper");
 
     return (
-        <div className="flex h-[calc(100vh-140px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
+        <div className="flex h-[calc(100vh-200px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
             {/* Editor Workspace (Left) */}
             <div className="flex-1 flex flex-col relative h-full">
-                <div 
-                    onMouseDown={handleToolbarMouseDown}
-                    style={{ transform: `translate(calc(-50% + ${toolbarPos.x}px), ${toolbarPos.y}px)` }}
-                    className="absolute top-6 left-1/2 z-50 bg-white/95 backdrop-blur shadow-2xl rounded-full px-6 py-2.5 flex items-center gap-6 border border-slate-200 animate-in fade-in duration-300 cursor-move"
-                >
-                    <div className="flex items-center gap-3 border-r border-slate-200 pr-6">
-                        <MousePointer2 className="w-4 h-4 text-rose-500 animate-pulse" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Editor</span>
-                    </div>
-
-                    {/* Undo / Redo controls */}
-                    <div className="flex items-center gap-1 border-r border-slate-200 pr-4">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-                            onClick={undo}
-                            disabled={historyState.index <= 0}
-                            title="Undo (Ctrl+Z)"
-                        >
-                            <Undo2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-                            onClick={redo}
-                            disabled={historyState.index >= historyState.list.length - 1}
-                            title="Redo (Ctrl+Y)"
-                        >
-                            <Redo2 className="w-4 h-4" />
-                        </Button>
-                    </div>
-
-                    {selectedElements.length > 0 ? (
-                        <>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase">
-                                {selectedElements.length} Selected
-                            </span>
-
-                            {selectedElements.length === 1 && (
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-slate-600 hover:bg-slate-50"
-                                    onClick={() => {
-                                        if (selectedElement) {
-                                            selectedElement.contentEditable = "true";
-                                            selectedElement.focus();
-                                        }
-                                    }}
-                                >
-                                    <Type className="w-4 h-4" />
-                                </Button>
-                            )}
-
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8 text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                    selectedElements.forEach(el => el.remove());
-                                    setSelectedElements([]);
-                                    if (editorRef.current) {
-                                        pushState(editorRef.current.innerHTML);
-                                    }
-                                }}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
-                        </>
-                    ) : (
-                        <span className="text-[10px] text-slate-400 italic">
-                            Shift + Click to select multiple elements
-                        </span>
-                    )}
-
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-slate-600 hover:bg-slate-50 text-[10px] font-bold"
-                        onClick={() => {
-                            if (generatedHTML) {
-                                pushState(generatedHTML);
-                                toast.info("Canvas reset to initial template");
-                            }
-                        }}
-                        disabled={isLoading}
-                    >
-                        <RefreshCw className={cn("w-3 h-3 mr-2", isLoading && "animate-spin")} />
-                        Reset Canvas
-                    </Button>
-                </div>
 
                 {/* Canvas Area (Removed p-12 double-whitespace padding on page wrappers) */}
                 <div className="flex-1 bg-slate-100 overflow-auto flex justify-center p-2 relative custom-scrollbar shadow-inner">
@@ -1298,6 +1253,11 @@ export function TemplateAdapt() {
                                 />
 
                                 <style dangerouslySetInnerHTML={{ __html: `
+                                    @media screen {
+                                        [data-editor-container], .pdf-page-wrapper {
+                                            transform: translate(0, 0) !important;
+                                        }
+                                    }
                                     [data-editor-container] * {
                                         transition: outline 0.08s ease-in-out;
                                     }
@@ -1354,6 +1314,96 @@ export function TemplateAdapt() {
                         <p className="text-[11px] text-muted-foreground mt-1 font-body">
                             Customize and configure logo positions and mappings
                         </p>
+                    </div>
+
+                    {/* General Canvas & Editor Controls */}
+                    <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 space-y-3 shadow-inner">
+                        <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
+                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Editor Controls</span>
+                            {selectedElements.length > 0 && (
+                                <span className="text-[9px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full uppercase tracking-tight">
+                                    {selectedElements.length} Selected
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                            {/* Undo / Redo */}
+                            <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                                    onClick={undo}
+                                    disabled={historyState.index <= 0}
+                                    title="Undo (Ctrl+Z)"
+                                >
+                                    <Undo2 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                                    onClick={redo}
+                                    disabled={historyState.index >= historyState.list.length - 1}
+                                    title="Redo (Ctrl+Y)"
+                                >
+                                    <Redo2 className="w-4 h-4" />
+                                </Button>
+                            </div>
+
+                            {/* Delete Selected */}
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-red-600 hover:bg-red-50 hover:text-red-700 border-slate-200 hover:border-red-200 text-[10px] font-bold uppercase tracking-wider disabled:opacity-30 disabled:pointer-events-none"
+                                disabled={selectedElements.length === 0}
+                                onClick={() => {
+                                    selectedElements.forEach(el => el.remove());
+                                    setSelectedElements([]);
+                                    if (editorRef.current) {
+                                        pushState(editorRef.current.innerHTML);
+                                    }
+                                }}
+                            >
+                                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                Delete
+                            </Button>
+
+                            {/* Reset Canvas */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-slate-600 hover:bg-slate-100 border-slate-200 text-[10px] font-bold uppercase tracking-wider"
+                                onClick={() => {
+                                    if (generatedHTML) {
+                                        pushState(generatedHTML);
+                                        toast.info("Canvas reset to initial template");
+                                    }
+                                }}
+                                disabled={isLoading}
+                            >
+                                <RefreshCw className={cn("w-3 h-3 mr-1", isLoading && "animate-spin")} />
+                                Reset
+                            </Button>
+                        </div>
+
+                        {selectedElements.length === 1 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full h-8 text-slate-700 hover:bg-slate-100 border-slate-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                onClick={() => {
+                                    if (selectedElement) {
+                                        selectedElement.contentEditable = "true";
+                                        selectedElement.focus();
+                                    }
+                                }}
+                            >
+                                <Type className="w-3.5 h-3.5" />
+                                Edit Inline Text
+                            </Button>
+                        )}
                     </div>
 
                     {/* Unified Graphic Type Selector & Image Inspector Section */}
@@ -1703,8 +1753,22 @@ export function TemplateAdapt() {
                         </div>
                     )}
 
+                    {/* Table / Entity Set Loop Config Panel */}
+                    {isTableSelected && (
+                        <TableLoopConfigPanel
+                            initialConfig={(() => {
+                                if (!selectedElement) return null;
+                                const raw = selectedElement.getAttribute('data-table-config');
+                                if (!raw) return tableConfigMap[selectedElement.id] ?? null;
+                                try { return JSON.parse(raw); } catch { return null; }
+                            })()}
+                            selectedContext={selectedContext}
+                            onApply={handleApplyTableLoopConfig}
+                        />
+                    )}
+
                     {/* Default state Help Inspector */}
-                    {!isImageSelected && !isTextSelected && !isBarcodeOrQrSelected && (
+                    {!isImageSelected && !isTextSelected && !isBarcodeOrQrSelected && !isTableSelected && (
                         <div className="space-y-4 text-center py-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 animate-in fade-in duration-300 shadow-sm">
                             <HelpCircle className="w-8 h-8 text-slate-400 mx-auto animate-pulse" />
                             <div className="space-y-1.5 px-5">

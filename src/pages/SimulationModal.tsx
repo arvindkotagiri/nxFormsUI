@@ -89,16 +89,22 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
         setOptionsLoading(true);
         setOptionsError(null);
         try {
-            await bootstrapTokenIfMissing();
+            try {
+                await bootstrapTokenIfMissing();
+            } catch (authErr) {
+                console.warn("Bootstrap token failed, continuing without token:", authErr);
+            }
             const token = localStorage.getItem("access_token") ?? "";
-            const res = await fetch(`${API_URL}/simulation`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const headers: Record<string, string> = {};
+            if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+            }
+            const res = await fetch(`${API_URL}/simulation`, { headers });
             if (!res.ok) throw new Error("Failed to fetch simulation records");
             const data: {
                 id: string;
                 simulationName: string;
-                context: string;
+                context: any;
                 form: string;
                 inputValues: Record<string, string>;
             }[] = await res.json();
@@ -106,7 +112,9 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
             const filtered = data
                 .filter(
                     (r) =>
-                        r.context?.toLowerCase() === context?.toLowerCase()
+                        r.context &&
+                        typeof r.context === "string" &&
+                        r.context.toLowerCase() === context?.toLowerCase()
                 )
                 .map((r) => ({
                     label: r.simulationName,
@@ -196,9 +204,12 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
         setStatusMessage("Triggering simulation...");
         setPollResult(null);
 
-        await bootstrapTokenIfMissing();
-
         try {
+            try {
+                await bootstrapTokenIfMissing();
+            } catch (authErr) {
+                console.warn("Bootstrap token failed, continuing simulation trigger without token:", authErr);
+            }
             const token = localStorage.getItem("access_token") ?? "";
 
             const payload = buildSimulationTriggerPayload(

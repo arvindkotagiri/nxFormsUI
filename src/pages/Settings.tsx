@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Save, ToggleLeft, ToggleRight, RefreshCw, BrainCircuit, Cpu, CheckCircle2, XCircle, Loader2, KeyRound, Upload, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCustomFonts } from "@/hooks/useCustomFonts";
+import Observability from "./Observability";
 
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 
@@ -14,6 +15,7 @@ const TABS = [
   "Data Retention",
   "Cloud Print",
   "Custom Fonts",
+  "AI Observability",
 ];
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
@@ -814,6 +816,13 @@ export default function Settings() {
               </div>
             )}
           </Section>
+        </div>
+      )}
+
+      {/* AI Observability */}
+      {activeTab === 8 && (
+        <div className="pt-2 animate-fade-in">
+          <Observability />
         </div>
       )}
     </div>
