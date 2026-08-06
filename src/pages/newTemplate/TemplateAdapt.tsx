@@ -571,7 +571,9 @@ export function TemplateAdapt() {
         while (current && current !== editorRef.current) {
             const style = window.getComputedStyle(current);
             const isAbsolute = style.position === "absolute" || current.getAttribute("data-editor-element") === "true";
-            if (isAbsolute) {
+            const isTableCell = current.tagName.toLowerCase() === "th" || current.tagName.toLowerCase() === "td";
+
+            if (isAbsolute || isTableCell) {
                 // Ignore the top-level full page absolute wrapper
                 if (current.parentElement === editorRef.current) {
                     const w = current.offsetWidth;
@@ -607,6 +609,9 @@ export function TemplateAdapt() {
             return;
         }
 
+        if (!target.id) {
+            target.id = `chunk-cell-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        }
         const targetId = target.id;
         if (e.shiftKey || e.metaKey) {
             if (selectedIds.includes(targetId)) {
@@ -641,6 +646,9 @@ export function TemplateAdapt() {
         });
 
         if (target) {
+            if (!target.id) {
+                target.id = `chunk-cell-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            }
             let nextSelection = [...selectedElements];
             const targetId = target.id;
 
@@ -661,13 +669,16 @@ export function TemplateAdapt() {
                 }
             }
 
-            setIsDragging(true);
-            setInitialTransforms(
-                nextSelection.map(el => ({
-                    el,
-                    ...getTransform(el)
-                }))
-            );
+            const isTableCell = target.tagName.toLowerCase() === "th" || target.tagName.toLowerCase() === "td";
+            if (!isTableCell) {
+                setIsDragging(true);
+                setInitialTransforms(
+                    nextSelection.map(el => ({
+                        el,
+                        ...getTransform(el)
+                    }))
+                );
+            }
         } else {
             setMarquee({
                 x1: e.clientX,
@@ -1389,20 +1400,43 @@ export function TemplateAdapt() {
                         </div>
 
                         {selectedElements.length === 1 && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="w-full h-8 text-slate-700 hover:bg-slate-100 border-slate-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
-                                onClick={() => {
-                                    if (selectedElement) {
-                                        selectedElement.contentEditable = "true";
-                                        selectedElement.focus();
-                                    }
-                                }}
-                            >
-                                <Type className="w-3.5 h-3.5" />
-                                Edit Inline Text
-                            </Button>
+                            <div className="flex flex-col gap-2 w-full">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full h-8 text-slate-700 hover:bg-slate-100 border-slate-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                    onClick={() => {
+                                        if (selectedElement) {
+                                            selectedElement.contentEditable = "true";
+                                            selectedElement.focus();
+                                        }
+                                    }}
+                                >
+                                    <Type className="w-3.5 h-3.5" />
+                                    Edit Inline Text
+                                </Button>
+
+                                {selectedElement?.closest("table") && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full h-8 text-blue-600 hover:bg-blue-50 border-blue-200 hover:border-blue-300 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                        onClick={() => {
+                                            const tableEl = selectedElement.closest("table");
+                                            if (tableEl) {
+                                                if (!tableEl.id) {
+                                                    tableEl.id = `chunk-table-${Date.now()}`;
+                                                }
+                                                setSelectedIds([tableEl.id]);
+                                                setSelectedElements([tableEl]);
+                                            }
+                                        }}
+                                    >
+                                        <Table2 className="w-3.5 h-3.5 text-blue-500" />
+                                        Configure Table Loop
+                                    </Button>
+                                )}
+                            </div>
                         )}
                     </div>
 
