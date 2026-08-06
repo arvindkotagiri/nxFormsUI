@@ -278,7 +278,9 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       const response = await fetch(catalogUrl);
       const apis = await response.json();
       if (Array.isArray(apis)) {
-        const matchingApi = apis.find(api => api.name === template.context);
+        const matchingApi = apis.find(
+          api => api.name?.trim().toLowerCase() === template.context?.trim().toLowerCase()
+        );
         if (matchingApi) {
           const resolvedContext = {
             id: `api-${matchingApi.id}`,

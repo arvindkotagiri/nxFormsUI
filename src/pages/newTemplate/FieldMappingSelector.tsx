@@ -19,7 +19,17 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, sourceL
   const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
 
   const isOData = selectedContext?.isOData;
-  const entities = selectedContext?.entities || [];
+  const entities = useMemo(() => {
+    const rawEntities = selectedContext?.entities || [];
+    const seen = new Set();
+    return rawEntities.filter((e: any) => {
+      const name = e?.name || e?.entitySet || e?.label || e;
+      if (!name || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+  }, [selectedContext?.entities]);
+
   const fieldsByEntity = selectedContext?.fields || {};
   const flatFields = Array.isArray(selectedContext?.fields) ? selectedContext.fields : [];
   useEffect(() => {
@@ -109,8 +119,8 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, sourceL
 
     const fieldMatches = findByKeys(fieldsByEntity);
     if (fieldMatches.length > 0) {
-      const visible = fieldMatches.filter((f: any) => f?.showInOutputDefinition === true);
-      return visible.length > 0 ? visible : fieldMatches;
+      // Return all matched fields that are enabled in the database definition
+      return fieldMatches.filter((f: any) => f?.enabled !== false);
     }
 
     if (entityMeta && Array.isArray((entityMeta as any).fields) && (entityMeta as any).fields.length > 0) {

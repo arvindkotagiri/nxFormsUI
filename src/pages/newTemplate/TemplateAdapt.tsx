@@ -26,7 +26,13 @@ import {
     Zap,
     Layers,
     Undo2,
-    Redo2
+    Redo2,
+    Minus,
+    Plus,
+    Maximize2,
+    ChevronLeft,
+    ChevronRight,
+    Table2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -54,6 +60,9 @@ export function TemplateAdapt() {
         setGeneratedXDP,
         selectedContext
     } = useWizard();
+
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     const { fonts: customFonts } = useCustomFonts();
 
@@ -706,8 +715,8 @@ export function TemplateAdapt() {
             const newY = e.clientY - toolbarDragStart.current.y;
             setToolbarPos({ x: newX, y: newY });
         } else if (isDragging) {
-            const dx = e.clientX - dragStart.x;
-            const dy = e.clientY - dragStart.y;
+            const dx = (e.clientX - dragStart.x) / zoomLevel;
+            const dy = (e.clientY - dragStart.y) / zoomLevel;
 
             initialTransforms.forEach(({ el, x, y }) => {
                 const newX = Math.round((x + dx) / GRID_SIZE) * GRID_SIZE;
@@ -1235,7 +1244,60 @@ export function TemplateAdapt() {
     return (
         <div className="flex h-[calc(100vh-200px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
             {/* Editor Workspace (Left) */}
-            <div className="flex-1 flex flex-col relative h-full">
+            <div className="flex-1 flex flex-col relative h-full min-w-0">
+
+                {/* Floating Zoom Controls */}
+                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md rounded-xl p-1 z-50 flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                        onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))}
+                        disabled={zoomLevel <= 0.5}
+                        title="Zoom Out"
+                    >
+                        <Minus className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-[10px] font-bold text-slate-600 min-w-[36px] text-center">
+                        {Math.round(zoomLevel * 100)}%
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                        onClick={() => setZoomLevel(z => Math.min(1.5, z + 0.1))}
+                        disabled={zoomLevel >= 1.5}
+                        title="Zoom In"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 border-l border-slate-200 pl-2 rounded-none"
+                        onClick={() => setZoomLevel(1)}
+                        title="Reset Zoom"
+                    >
+                        <Maximize2 className="w-3.5 h-3.5" />
+                    </Button>
+                </div>
+
+                {/* Floating Properties Panel Toggle */}
+                <button
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    className="absolute right-4 top-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md hover:bg-slate-50 text-slate-700 rounded-xl p-2 z-50 transition-all flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+                    title={isSidebarOpen ? "Collapse Inspector" : "Expand Inspector"}
+                >
+                    {isSidebarOpen ? (
+                        <>
+                            Collapse Inspector <ChevronRight className="w-4 h-4 text-rose-500" />
+                        </>
+                    ) : (
+                        <>
+                            <ChevronLeft className="w-4 h-4 text-emerald-500 animate-pulse" /> Expand Inspector
+                        </>
+                    )}
+                </button>
 
                 {/* Canvas Area (Removed p-12 double-whitespace padding on page wrappers) */}
                 <div className="flex-1 bg-slate-100 overflow-auto flex justify-center p-2 relative custom-scrollbar shadow-inner">
@@ -1252,6 +1314,13 @@ export function TemplateAdapt() {
                                 <div
                                     ref={editorRef}
                                     data-editor-container="true"
+                                    style={{
+                                        transform: `scale(${zoomLevel})`,
+                                        transformOrigin: "top center",
+                                        transition: "transform 0.15s ease-out",
+                                        marginBottom: `${(zoomLevel - 1) * 11}in`,
+                                        marginRight: `${(zoomLevel - 1) * 8.5}in`,
+                                    }}
                                     className={cn(
                                         "relative border border-slate-200/50 transition-all duration-300",
                                         isMultiPage 
@@ -1278,6 +1347,16 @@ export function TemplateAdapt() {
                                     }
                                     [data-editor-container] [data-sap-mapping] {
                                         border-bottom: 2px double #f43f5e;
+                                    }
+                                    [data-editor-container] table {
+                                        width: 100% !important;
+                                        max-width: 100% !important;
+                                        table-layout: fixed !important;
+                                        word-break: break-all !important;
+                                    }
+                                    [data-editor-container] td, [data-editor-container] th {
+                                        word-break: break-word !important;
+                                        overflow-wrap: break-word !important;
                                     }
                                 `}} />
 
@@ -1311,8 +1390,11 @@ export function TemplateAdapt() {
                 </div>
             </div>
 
-            {/* Premium, High-End Control Inspector Panel (Right) - FIXED flex-shrink-0 to prevent compression */}
-            <div className="w-[360px] flex-shrink-0 border-l border-slate-200 bg-white p-6 flex flex-col justify-between overflow-y-auto z-40 shadow-2xl select-none custom-scrollbar transition-all duration-300">
+            {/* Premium, High-End Control Inspector Panel (Right) */}
+            <div className={cn(
+                "border-l border-slate-200 bg-white flex flex-col justify-between overflow-y-auto z-40 shadow-2xl select-none custom-scrollbar transition-all duration-300 relative",
+                isSidebarOpen ? "w-[360px] p-6 opacity-100" : "w-0 p-0 border-0 opacity-0 pointer-events-none"
+            )}>
                 <div className="space-y-6">
                     {/* Header */}
                     <div className="border-b border-slate-100 pb-4">
