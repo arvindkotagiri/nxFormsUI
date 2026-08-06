@@ -255,8 +255,19 @@ export function TemplateAdapt() {
             if (!tableEl.id) {
                 tableEl.id = `chunk-table-${tableIndex}-${Date.now()}`;
             }
-            tableEl.setAttribute('data-chunk-type', 'table');
-            tableEl.setAttribute('data-editor-element', 'true');
+            
+            // Check if this table is a dynamic data table rather than a layout table
+            const hasTh = tableEl.querySelector('th') !== null;
+            const hasPlaceholders = tableEl.innerHTML.includes('{{');
+            
+            if (hasTh && hasPlaceholders) {
+                tableEl.setAttribute('data-chunk-type', 'table');
+                tableEl.setAttribute('data-editor-element', 'true');
+            } else {
+                // Layout table: do not mark it as a table chunk so children can be moved and mapped individually
+                tableEl.removeAttribute('data-chunk-type');
+                tableEl.setAttribute('data-editor-element', 'false');
+            }
         });
 
         // Match image/logo/signature/barcode elements with chunks list
@@ -576,13 +587,29 @@ export function TemplateAdapt() {
     const getAbsoluteAncestor = (el: HTMLElement | null): HTMLElement | null => {
         if (!el || !editorRef.current) return null;
         if (el === editorRef.current) return null;
+
+        // Check if the user clicked directly on a text node or text element.
+        // If it's a dynamic field placeholder, a mapped field, or a text leaf container, 
+        // return it directly so they can map or configure it as a text element.
+        const isPlaceholderText = el.textContent?.includes('{{') && el.textContent?.includes('}}');
+        const isMappedField = el.hasAttribute('data-sap-mapping') || el.closest('[data-sap-mapping]') !== null;
+        const isLeafText = el.tagName.toLowerCase() === 'span' || 
+                           el.tagName.toLowerCase() === 'p' || 
+                           el.tagName.toLowerCase() === 'label' ||
+                           el.tagName.toLowerCase() === 'font' ||
+                           (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3);
+
+        if (isPlaceholderText || isMappedField || isLeafText) {
+            return el;
+        }
+
         let current: HTMLElement | null = el;
         while (current && current !== editorRef.current) {
             const style = window.getComputedStyle(current);
             const isAbsolute = style.position === "absolute" || current.getAttribute("data-editor-element") === "true";
-            const isTableCell = current.tagName.toLowerCase() === "th" || current.tagName.toLowerCase() === "td";
+            const isTable = current.tagName.toLowerCase() === "table";
 
-            if (isAbsolute || isTableCell) {
+            if (isAbsolute || isTable) {
                 // Ignore the top-level full page absolute wrapper
                 if (current.parentElement === editorRef.current) {
                     const w = current.offsetWidth;
@@ -678,14 +705,50 @@ export function TemplateAdapt() {
                 }
             }
 
-            const isTableCell = target.tagName.toLowerCase() === "th" || target.tagName.toLowerCase() === "td";
-            if (!isTableCell) {
+            // Find the closest draggable absolute container block
+            let draggableEl: HTMLElement | null = target;
+            while (draggableEl && draggableEl !== editorRef.current) {
+                const style = window.getComputedStyle(draggableEl);
+                if (style.position === "absolute") {
+                    if (draggableEl.parentElement === editorRef.current) {
+                        const w = draggableEl.offsetWidth;
+                        const h = draggableEl.offsetHeight;
+                        if (w > 700 && h > 900) {
+                            draggableEl = draggableEl.parentElement;
+                            continue;
+                        }
+                    }
+                    break;
+                }
+                draggableEl = draggableEl.parentElement;
+            }
+
+            if (draggableEl && draggableEl !== editorRef.current) {
                 setIsDragging(true);
                 setInitialTransforms(
-                    nextSelection.map(el => ({
-                        el,
-                        ...getTransform(el)
-                    }))
+                    nextSelection.map(el => {
+                        let absEl: HTMLElement | null = el;
+                        while (absEl && absEl !== editorRef.current) {
+                            const style = window.getComputedStyle(absEl);
+                            if (style.position === "absolute") {
+                                if (absEl.parentElement === editorRef.current) {
+                                    const w = absEl.offsetWidth;
+                                    const h = absEl.offsetHeight;
+                                    if (w > 700 && h > 900) {
+                                        absEl = absEl.parentElement;
+                                        continue;
+                                    }
+                                }
+                                break;
+                            }
+                            absEl = absEl.parentElement;
+                        }
+                        const dragTarget = (absEl && absEl !== editorRef.current) ? absEl : el;
+                        return {
+                            el: dragTarget,
+                            ...getTransform(dragTarget)
+                        };
+                    })
                 );
             }
         } else {
@@ -823,6 +886,30 @@ export function TemplateAdapt() {
     const activeImageNode = getSelectedImageNode(selectedElement);
     
     const selectedChunk = selectedElement ? chunks.find(c => c.id === selectedElement.id) : null;
+
+    const imageNode = selectedElement ? getSelectedImageNode(selectedElement) : null;
+    const currentWidth = imageNode ? parseInt(imageNode.style.width || imageNode.getAttribute("width") || "0") || imageNode.offsetWidth : 0;
+    const currentHeight = imageNode ? parseInt(imageNode.style.height || imageNode.getAttribute("height") || "0") || imageNode.offsetHeight : 0;
+
+    const handleResizeLogo = (width: number, height: number) => {
+        const imgNode = getSelectedImageNode(selectedElement);
+        if (imgNode) {
+            imgNode.style.width = `${width}px`;
+            imgNode.style.height = `${height}px`;
+            imgNode.setAttribute("width", String(width));
+            imgNode.setAttribute("height", String(height));
+            
+            // Also adjust parent wrapper if it is an absolute container
+            if (selectedElement && selectedElement !== imgNode) {
+                selectedElement.style.width = `${width}px`;
+                selectedElement.style.height = `${height}px`;
+            }
+
+            if (editorRef.current) {
+                pushState(editorRef.current.innerHTML);
+            }
+        }
+    };
 
     const isBarcodeOrQr = (el: HTMLElement | null): boolean => {
         if (!el) return false;
@@ -1606,6 +1693,54 @@ export function TemplateAdapt() {
                                 <p className="text-[9px] text-muted-foreground mt-1 leading-normal">
                                     Upload an image directly from your computer to replace this graphic.
                                 </p>
+                            </div>
+
+                            {/* Resize Logo Controls */}
+                            <div className="space-y-3 pt-3 border-t border-slate-100">
+                                <label className="text-[11px] font-bold text-slate-600 block">
+                                    Resize Logo
+                                </label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <span className="text-[9px] text-slate-500 font-bold uppercase">Width (px)</span>
+                                        <input
+                                            type="number"
+                                            value={currentWidth || 100}
+                                            onChange={(e) => handleResizeLogo(parseInt(e.target.value) || 10, currentHeight || 100)}
+                                            className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                                            min="10"
+                                            max="800"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[9px] text-slate-500 font-bold uppercase">Height (px)</span>
+                                        <input
+                                            type="number"
+                                            value={currentHeight || 100}
+                                            onChange={(e) => handleResizeLogo(currentWidth || 100, parseInt(e.target.value) || 10)}
+                                            className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                                            min="10"
+                                            max="800"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-1 pt-1">
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="500"
+                                        value={currentWidth || 100}
+                                        onChange={(e) => {
+                                            const w = parseInt(e.target.value);
+                                            // Maintain aspect ratio or adjust both
+                                            const ratio = currentWidth > 0 ? currentHeight / currentWidth : 1;
+                                            const h = Math.round(w * ratio);
+                                            handleResizeLogo(w, h);
+                                        }}
+                                        className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                                    />
+                                    <span className="text-[8px] text-slate-400 block text-right leading-none">Drag to scale proportionally</span>
+                                </div>
                             </div>
                         </div>
                     )}
