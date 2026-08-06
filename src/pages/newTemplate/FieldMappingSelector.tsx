@@ -114,14 +114,14 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, sourceL
       return [] as any[];
     };
 
-    const outputMatches = findByKeys(outputFieldsByEntity);
-    if (outputMatches.length > 0) return outputMatches;
-
     const fieldMatches = findByKeys(fieldsByEntity);
     if (fieldMatches.length > 0) {
       // Return all matched fields that are enabled in the database definition
       return fieldMatches.filter((f: any) => f?.enabled !== false);
     }
+
+    const outputMatches = findByKeys(outputFieldsByEntity);
+    if (outputMatches.length > 0) return outputMatches;
 
     if (entityMeta && Array.isArray((entityMeta as any).fields) && (entityMeta as any).fields.length > 0) {
       return (entityMeta as any).fields;
@@ -373,7 +373,11 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, sourceL
                       </>
                     )}
                     {selectedEntityFields
-                      .filter((field: any) => !!resolveFieldName(field))
+                      .filter((field: any) => {
+                        const name = resolveFieldName(field);
+                        const inRec = recommendedFields.some((r: any) => resolveFieldName(r) === name);
+                        return !!name && !inRec;
+                      })
                       .map((field: any) => {
                         const fieldName = resolveFieldName(field);
                         const fieldLabel = resolveFieldLabel(field);
