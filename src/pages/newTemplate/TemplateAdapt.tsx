@@ -221,6 +221,21 @@ export function TemplateAdapt() {
         elements.forEach(el => {
             if (el.tagName.toLowerCase() === 'img') return;
             
+            // If the element already has a saved mapping, display it directly on the canvas
+            const sapMapping = el.getAttribute("data-sap-mapping");
+            if (sapMapping && sapMapping !== "unmapped") {
+                el.textContent = `{{${sapMapping}}}`;
+                el.setAttribute("data-editor-element", "true");
+                const matchingChunk = chunksList.find(c => c.fieldMapping === sapMapping);
+                if (matchingChunk) {
+                    el.id = matchingChunk.id;
+                    if (matchingChunk.transformations && !el.getAttribute("data-transformations")) {
+                        el.setAttribute("data-transformations", JSON.stringify(matchingChunk.transformations));
+                    }
+                }
+                return;
+            }
+            
             const textContent = el.textContent?.trim() || '';
             const match = textContent.match(/^\{\{(.+)\}\}$/);
             if (match) {
@@ -236,6 +251,7 @@ export function TemplateAdapt() {
                     if (!el.getAttribute("data-sap-mapping")) {
                         el.setAttribute("data-sap-mapping", matchingChunk.fieldMapping);
                     }
+                    el.textContent = `{{${matchingChunk.fieldMapping}}}`;
                     el.setAttribute("data-editor-element", "true");
                     if (matchingChunk.transformations && !el.getAttribute("data-transformations")) {
                         el.setAttribute("data-transformations", JSON.stringify(matchingChunk.transformations));
@@ -1147,7 +1163,7 @@ export function TemplateAdapt() {
     const handleMappingSelect = (fullPath: string, fieldName: string) => {
         if (!selectedElement) return;
         
-        selectedElement.textContent = `{{${fieldName}}}`;
+        selectedElement.textContent = `{{${fullPath}}}`;
         selectedElement.setAttribute("data-sap-mapping", fullPath);
         selectedElement.setAttribute("data-editor-element", "true");
         
