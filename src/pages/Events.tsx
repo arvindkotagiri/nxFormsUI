@@ -573,7 +573,7 @@ export default function Events() {
             className="flex-1 bg-foreground/20 backdrop-blur-sm"
             onClick={() => setSelectedEvent(null)}
           />
-          <div className="w-[480px] h-full bg-card shadow-elevated-lg flex flex-col animate-slide-in-right overflow-y-auto">
+          <div className="w-full max-w-[92vw] sm:max-w-[34rem] h-full bg-card shadow-elevated-lg flex flex-col animate-slide-in-right overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-border">
               <div className="flex items-center gap-2">
                 <Zap size={16} style={{ color: "hsl(var(--accent))" }} />

@@ -109,7 +109,7 @@ export default function ApiConfigurations() {
           <h1 className="font-display text-3xl font-semibold text-foreground tracking-tight">Integration Hub</h1>
           <p className="text-sm text-muted-foreground font-body">Manage your service mesh and external API endpoints.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full md:w-auto">
           <div className="relative group">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground group-focus-within:text-accent transition-colors" />
             <input 
@@ -117,10 +117,10 @@ export default function ApiConfigurations() {
               placeholder="Search APIs..." 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-xs font-body focus:ring-2 focus:ring-accent/20 outline-none w-[200px] md:w-[260px] transition-all"
+              className="pl-9 pr-4 py-2 bg-background border border-border rounded-xl text-xs font-body focus:ring-2 focus:ring-accent/20 outline-none w-full min-w-0 md:w-[260px] transition-all"
             />
           </div>
-          <Button onClick={() => setShowWizard(true)} className="bg-accent text-white hover:bg-accent/90 rounded-xl px-5 shadow-lg shadow-accent/20">
+          <Button onClick={() => setShowWizard(true)} className="bg-accent text-white hover:bg-accent/90 rounded-xl px-5 shadow-lg shadow-accent/20 shrink-0">
             <Plus size={16} className="mr-2" /> Add API
           </Button>
         </div>
@@ -222,7 +222,7 @@ export default function ApiConfigurations() {
               </div>
             </div>
             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 rounded-2xl bg-muted/30 border border-border">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Status</p>
                   <div className="flex items-center gap-2"><Activity size={14} className="text-green-500" /><span className="text-sm font-semibold">Healthy</span></div>

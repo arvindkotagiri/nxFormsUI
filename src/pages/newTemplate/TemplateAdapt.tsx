@@ -1553,7 +1553,7 @@ export function TemplateAdapt() {
                                             disabled={!selectedElementMapping || selectedElementMapping === "unmapped"}
                                             className="w-full text-xs h-9 rounded-xl border-dashed border-2 hover:border-blue-500 hover:bg-blue-50/10 transition-all font-semibold flex items-center justify-center gap-1.5"
                                         >
-                                            <Zap className="w-3.5 h-3.5 text-rose-500 animate-bounce" />
+                                            <Zap className="w-3.5 h-3.5 text-rose-500 animate-pulse" />
                                             Add Transformation
                                         </Button>
 

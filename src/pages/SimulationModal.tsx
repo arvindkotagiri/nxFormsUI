@@ -240,8 +240,8 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
     };
 
     return (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-card rounded-xl w-[900px] max-h-[90vh] overflow-auto p-6 space-y-5">
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-3 py-4 sm:px-6">
+            <div className="bg-card rounded-xl w-full max-w-[900px] max-h-[90vh] overflow-auto p-4 sm:p-6 space-y-5">
 
                 {/* Header */}
                 <div className="flex justify-between items-center">
@@ -255,7 +255,7 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
                 </div>
 
                 {/* Meta info */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div className="bg-muted rounded-lg px-4 py-3 space-y-1">
                         <p className="uppercase tracking-wide text-[10px] font-semibold text-muted-foreground">Form</p>
                         <p className="text-foreground font-medium text-sm">{formName}</p>

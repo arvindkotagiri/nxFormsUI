@@ -3,13 +3,10 @@ import {
   FileOutput,
   CheckCircle,
   XCircle,
+  X,
   Clock,
   Timer,
-  TrendingUp,
-  TrendingDown,
   RefreshCw,
-  Calendar,
-  ChevronDown,
 } from "lucide-react";
 import {
   BarChart,
@@ -24,7 +21,6 @@ import {
   Cell,
   LineChart,
   Line,
-  Legend,
 } from "recharts";
 import { cn } from "@/lib/utils";
 import { normalizeOutputsByContext } from "@/lib/contextDisplay";
@@ -53,12 +49,18 @@ function AnimatedCounter({ target, isString }: { target: number | string; isStri
   return <span>{value.toLocaleString()}</span>;
 }
 
-const filters = ["Date Range", "Context", "Source", "Status", "Printer"];
+const filters = ["Date Range", "Context", "Status", "Printer"];
+type FilterName = (typeof filters)[number];
+
+const createEmptyFilters = (): Record<FilterName, string> =>
+  filters.reduce((acc, name) => {
+    acc[name] = "";
+    return acc;
+  }, {} as Record<FilterName, string>);
 
 const filterQueryKey: Record<string, string> = {
   "Date Range": "date_range",
   Context: "context",
-  Source: "source",
   Status: "status",
   Printer: "printer",
 };
@@ -97,7 +99,6 @@ function buildDashboardUrl(filtersObj: Record<string, string> | null) {
 }
 
 export default function Dashboard() {
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [kpiCards, setKpiCards] = useState<any[]>([]);
   const [outputsByContext, setOutputsByContext] = useState<any[]>([]);
   const [statusDist, setStatusDist] = useState<any[]>([]);
@@ -106,10 +107,10 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Selected filters that drive API query params
-  const [selectedFilters, setSelectedFilters] = useState<Record<string, string>>({});
-  // Temporary value while a filter panel is open
-  const [tempFilterValue, setTempFilterValue] = useState<string>("");
+  // Applied filters drive API query params.
+  const [selectedFilters, setSelectedFilters] = useState<Partial<Record<FilterName, string>>>({});
+  // Draft filters are edited in UI and applied explicitly.
+  const [draftFilters, setDraftFilters] = useState<Record<FilterName, string>>(createEmptyFilters());
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -146,17 +147,48 @@ export default function Dashboard() {
     fetchDashboard();
   }, [selectedFilters]);
 
+  const setDraftValue = (filterName: FilterName, value: string) => {
+    setDraftFilters((prev) => ({ ...prev, [filterName]: value }));
+  };
+
+  const applyFilters = () => {
+    const normalized = Object.entries(draftFilters).reduce((acc, [key, value]) => {
+      const trimmed = value.trim();
+      if (!trimmed) return acc;
+      return {
+        ...acc,
+        [key]: trimmed,
+      };
+    }, {} as Partial<Record<FilterName, string>>);
+
+    setSelectedFilters(normalized);
+  };
+
+  const clearAllFilters = () => {
+    setDraftFilters(createEmptyFilters());
+    setSelectedFilters({});
+  };
+
+  const clearSingleFilter = (filterName: FilterName) => {
+    setDraftFilters((prev) => ({ ...prev, [filterName]: "" }));
+    setSelectedFilters((prev) => {
+      const next = { ...prev };
+      delete next[filterName];
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl font-semibold text-foreground">Dashboard</h1>
+          <h1 className="font-display text-2xl sm:text-3xl font-semibold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground font-body mt-1">
             Real-time output processing overview — today
           </p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-sm font-body text-muted-foreground hover:text-foreground hover:border-accent transition-all" onClick={() => { window.location.reload() }}>
+        <button className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-sm font-body text-muted-foreground hover:text-foreground hover:border-accent transition-all" onClick={() => { window.location.reload() }}>
           <RefreshCw size={14} />
           Refresh
         </button>
@@ -164,107 +196,102 @@ export default function Dashboard() {
 
       {/* Filters */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          {filters.map((f) => (
-            <div key={f} className="relative">
-              <button
-                onClick={() => {
-                  if (activeFilter === f) return setActiveFilter(null);
-                  setActiveFilter(f);
-                  setTempFilterValue(selectedFilters[f] ?? "");
-                }}
-                className={cn("pill-filter", activeFilter === f && "active", selectedFilters[f] && "applied")}
-              >
-                {f}
-                <ChevronDown size={12} />
-              </button>
+        <div className="rounded-2xl border border-border/60 bg-gradient-to-b from-card to-muted/20 p-2.5 shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="px-2 py-1 rounded-md bg-secondary text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Filters
+            </span>
 
-              {activeFilter === f && (
-                <div className="absolute left-0 top-full mt-2 w-64 card-elevated p-3 z-40">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {f === "Date Range" && (
-                        <>
-                          <button className={cn("pill-filter", tempFilterValue === "today" && "active")} onClick={() => setTempFilterValue("today")}>Today</button>
-                          <button className={cn("pill-filter", tempFilterValue === "last_24h" && "active")} onClick={() => setTempFilterValue("last_24h")}>Last 24h</button>
-                          <button className={cn("pill-filter", tempFilterValue === "last_7d" && "active")} onClick={() => setTempFilterValue("last_7d")}>Last 7d</button>
-                        </>
-                      )}
-
-                      {f === "Context" && (
-                        <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select w-full">
-                          <option value="">Select context</option>
-                          {outputsByContext.map((o) => (
-                            <option key={o.name} value={o.name}>{o.name}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      {f === "Status" && (
-                        <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select w-full">
-                          <option value="">Select status</option>
-                          {statusDist.map((s) => (
-                            <option key={s.name} value={s.name}>{s.name}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      {f === "Printer" && (
-                        <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select w-full">
-                          <option value="">Select printer</option>
-                          {printerUtil.map((p) => (
-                            <option key={p.name} value={p.name}>{p.name}</option>
-                          ))}
-                        </select>
-                      )}
-
-                      {f === "Source" && (
-                        <input className="input w-full" placeholder="Enter source" value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} />
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="pill-filter"
-                        onClick={() => {
-                          setSelectedFilters((p) => ({ ...p, [f]: tempFilterValue }));
-                          setActiveFilter(null);
-                        }}
-                      >
-                        Apply
-                      </button>
-                      <button
-                        className="pill-filter bg-slate-100 text-slate-700"
-                        onClick={() => {
-                          setTempFilterValue("");
-                          setSelectedFilters((p) => {
-                            const copy = { ...p };
-                            delete copy[f];
-                            return copy;
-                          });
-                          setActiveFilter(null);
-                        }}
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {activeFilter ? (
-            <button
-              onClick={() => setActiveFilter(null)}
-              className="pill-filter bg-slate-100 text-slate-700 hover:bg-slate-200"
+            <select
+              className="h-8 min-w-[122px] rounded-lg border border-border/70 bg-background px-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+              value={draftFilters["Date Range"]}
+              onChange={(e) => setDraftValue("Date Range", e.target.value)}
+              aria-label="Date range filter"
             >
-              Clear filter
+              <option value="">Date: All</option>
+              <option value="today">Date: Today</option>
+              <option value="last_24h">Date: Last 24h</option>
+              <option value="last_7d">Date: Last 7d</option>
+            </select>
+
+            <select
+              className="h-8 min-w-[140px] rounded-lg border border-border/70 bg-background px-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+              value={draftFilters.Context}
+              onChange={(e) => setDraftValue("Context", e.target.value)}
+              aria-label="Context filter"
+            >
+              <option value="">Context: All</option>
+              {outputsByContext.map((o) => (
+                <option key={o.name} value={o.name}>{o.name}</option>
+              ))}
+            </select>
+
+            <select
+              className="h-8 min-w-[120px] rounded-lg border border-border/70 bg-background px-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+              value={draftFilters.Status}
+              onChange={(e) => setDraftValue("Status", e.target.value)}
+              aria-label="Status filter"
+            >
+              <option value="">Status: All</option>
+              {statusDist.map((s) => (
+                <option key={s.name} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+
+            <select
+              className="h-8 min-w-[130px] rounded-lg border border-border/70 bg-background px-2.5 text-xs text-foreground outline-none focus:ring-2 focus:ring-primary/30"
+              value={draftFilters.Printer}
+              onChange={(e) => setDraftValue("Printer", e.target.value)}
+              aria-label="Printer filter"
+            >
+              <option value="">Printer: All</option>
+              {printerUtil.map((p) => (
+                <option key={p.name} value={p.name}>{p.name}</option>
+              ))}
+            </select>
+
+            <button
+              className="h-8 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+              onClick={applyFilters}
+              disabled={isLoading}
+            >
+              Apply
             </button>
-          ) : null}
+
+            <button
+              className="h-8 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-muted-foreground hover:text-foreground"
+              onClick={clearAllFilters}
+              disabled={isLoading}
+            >
+              Reset
+            </button>
+
+            {isLoading ? <span className="text-[11px] text-muted-foreground">Updating...</span> : null}
+          </div>
+
+          <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+            {Object.entries(selectedFilters).length > 0 ? (
+              Object.entries(selectedFilters).map(([name, value]) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => clearSingleFilter(name as FilterName)}
+                  className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[11px] text-foreground hover:bg-secondary transition-colors"
+                  title={`Clear ${name} filter`}
+                >
+                  <span className="font-medium">{name}:</span>
+                  <span>{value}</span>
+                  <X size={12} className="opacity-70" />
+                </button>
+              ))
+            ) : (
+              <span className="text-xs text-muted-foreground">No filters applied</span>
+            )}
+          </div>
         </div>
         <div className="text-sm text-muted-foreground">
-          {activeFilter ? (
-            <span>Showing dashboard data filtered by <strong>{activeFilter}</strong>.</span>
+          {Object.keys(selectedFilters).length > 0 ? (
+            <span>Showing dashboard data using the selected filters.</span>
           ) : (
             <span>Showing all dashboard data for today.</span>
           )}
@@ -274,82 +301,10 @@ export default function Dashboard() {
             {fetchError}
           </div>
         ) : null}
-        {activeFilter ? (
-          <div className="card-elevated p-4 mt-2">
-            <div className="flex items-center gap-4 flex-wrap">
-              {activeFilter === "Date Range" && (
-                <div className="flex items-center gap-2">
-                  <button className={cn("pill-filter", tempFilterValue === "today" && "active")} onClick={() => setTempFilterValue("today")}>Today</button>
-                  <button className={cn("pill-filter", tempFilterValue === "last_24h" && "active")} onClick={() => setTempFilterValue("last_24h")}>Last 24h</button>
-                  <button className={cn("pill-filter", tempFilterValue === "last_7d" && "active")} onClick={() => setTempFilterValue("last_7d")}>Last 7d</button>
-                </div>
-              )}
-
-              {activeFilter === "Context" && (
-                <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select">
-                  <option value="">Select context</option>
-                  {outputsByContext.map((o) => (
-                    <option key={o.name} value={o.name}>{o.name}</option>
-                  ))}
-                </select>
-              )}
-
-              {activeFilter === "Status" && (
-                <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select">
-                  <option value="">Select status</option>
-                  {statusDist.map((s) => (
-                    <option key={s.name} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
-              )}
-
-              {activeFilter === "Printer" && (
-                <select value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} className="select">
-                  <option value="">Select printer</option>
-                  {printerUtil.map((p) => (
-                    <option key={p.name} value={p.name}>{p.name}</option>
-                  ))}
-                </select>
-              )}
-
-              {activeFilter === "Source" && (
-                <input className="input" placeholder="Enter source" value={tempFilterValue} onChange={(e) => setTempFilterValue(e.target.value)} />
-              )}
-            </div>
-
-            <div className="flex items-center gap-2 mt-3">
-              <button
-                className="pill-filter"
-                onClick={() => {
-                  if (!activeFilter) return;
-                  setSelectedFilters((p) => ({ ...p, [activeFilter]: tempFilterValue }));
-                  setActiveFilter(null);
-                }}
-              >
-                Apply
-              </button>
-              <button
-                className="pill-filter bg-slate-100 text-slate-700"
-                onClick={() => {
-                  if (!activeFilter) return;
-                  setTempFilterValue("");
-                  setSelectedFilters((p) => {
-                    const copy = { ...p };
-                    delete copy[activeFilter];
-                    return copy;
-                  });
-                  setActiveFilter(null);
-                }}
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {kpiCards.map((card, i) => (
           <div
             key={card.label}

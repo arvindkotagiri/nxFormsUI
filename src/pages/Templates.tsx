@@ -152,7 +152,7 @@ export default function Templates() {
 
         {/* ================= MAIN EDITOR AREA ================= */}
         {/* Template Metadata */}
-        <div className="card-elevated p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div className="card-elevated p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <div className="text-xs text-muted-foreground">Label ID</div>
             <div className="font-semibold">{selectedTemplate.label_id}</div>
@@ -203,8 +203,8 @@ export default function Templates() {
           className={cn(
             "gap-4 grid",
             (output_mode === "all")
-              ? "grid-cols-2 lg:grid-cols-3"
-              : (output_mode === "both" ? "grid-cols-2 grid-rows-2" : "grid-cols-2")
+              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+              : (output_mode === "both" ? "grid-cols-1 sm:grid-cols-2 sm:grid-rows-2" : "grid-cols-1 sm:grid-cols-2")
           )}
         >
           {/* ---------- LEFT SIDE HTML CODE ---------- */}

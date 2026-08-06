@@ -78,6 +78,11 @@
 }
 
 @layer base {
+  html {
+    font-size: 15px;
+    -webkit-text-size-adjust: 100%;
+  }
+
   * {
     @apply border-border;
   }
@@ -85,6 +90,30 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Manrope', sans-serif;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  #root {
+    min-height: 100dvh;
+  }
+
+  @media (min-width: 640px) {
+    html {
+      font-size: 16px;
+    }
+  }
+
+  @media (min-width: 1920px) {
+    html {
+      font-size: 17px;
+    }
+  }
+
+  @media (min-width: 2560px) {
+    html {
+      font-size: 18px;
+    }
   }
 
   h1, h2, h3, h4, h5, h6 {

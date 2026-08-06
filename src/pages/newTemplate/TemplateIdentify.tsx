@@ -702,7 +702,13 @@ export function TemplateIdentify() {
     return flat;
   })();
 
-  const targetFields = chunks.map((c) => ({ name: c.label, path: c.id }));
+  const targetFields = chunks.map((c) => {
+    const mappedLeaf = c.fieldMapping ? c.fieldMapping.split(".").pop() : undefined;
+    return {
+      name: c.label,
+      path: mappedLeaf || c.fieldMapping || c.label,
+    };
+  });
 
   const saveTransformation = (data: any) => {
     if (!selectedChunkData) return;

@@ -69,6 +69,7 @@ export const TRANSFORMATIONS: Record<string, string[]> = {
   MATH: ["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "ROUND", "EXPRESSION"],
   NUMBER_FORMATTING: ["FORMAT_NUMBER", "FORMAT_CURRENCY", "FORMAT_COMPACT", "FORMAT_SCIENTIFIC"],
   DATE: ["DATE_FORMAT", "DATE_DIFF", "DATE_NOW", "DATE_TRUNCATE", "DATE_ADD"],
+  LOOKUP: ["LOOKUP BY BUSINESS PARTNER", "LOOKUP BY ADDRESS NUMBER"],
 };
 
 // ─── Help content per transformation ───────────────────────────────────────
@@ -85,8 +86,8 @@ const HELP: Record<string, { description: string; params: string[]; example?: { 
   IF_ELSE:      { description: "Applies conditional logic — evaluate a condition and return different values for true/false outcomes.", params: ["Field: The context field to evaluate.", "Operator: Comparison operator (==, !=, >, <).", "Value: The value to compare against.", "Then / Else: The output for each branch."] },
   SWITCH_CASE:  { description: "Maps input values to specific output values, like a lookup table.", params: ["Cases: A list of input=output pairs, one per line.", "Default (Optional): Fallback when no case matches."], example: { input: "USD", extra: "USD=Dollar, EUR=Euro", output: "Dollar" } },
   COALESCE:     { description: "Returns the first non-empty value from a list of fields.", params: ["Fields: Comma-separated list of field paths to evaluate in order."] },
-  ADD:          { description: "Adds a numeric value to the field.", params: ["Operand: The number to add."], example: { input: "100", extra: "Operand: 50", output: "150" } },
-  SUBTRACT:     { description: "Subtracts a numeric value from the field.", params: ["Operand: The number to subtract."], example: { input: "100", extra: "Operand: 25", output: "75" } },
+  ADD:          { description: "Adds numeric and/or mapped field values to the field.", params: ["Number Operand (Optional): A fixed number to add.", "Mapped Field (Optional): A mapped field whose value will also be added."], example: { input: "100", extra: "Number: 50, Mapped Field: Tax(10)", output: "160" } },
+  SUBTRACT:     { description: "Subtracts numeric and/or mapped field values from the field.", params: ["Number Operand (Optional): A fixed number to subtract.", "Mapped Field (Optional): A mapped field whose value will also be subtracted."], example: { input: "100", extra: "Number: 25, Mapped Field: Fee(5)", output: "70" } },
   MULTIPLY:     { description: "Multiplies the field by a numeric value.", params: ["Factor: The multiplier."], example: { input: "20", extra: "Factor: 5", output: "100" } },
   DIVIDE:       { description: "Divides the field by a numeric value.", params: ["Divisor: The number to divide by."], example: { input: "100", extra: "Divisor: 4", output: "25" } },
   ROUND:        { description: "Rounds a numeric value to a given number of decimal places.", params: ["Decimal Places: Defaults to 0."], example: { input: "3.14159", extra: "Places: 2", output: "3.14" } },
@@ -138,6 +139,18 @@ export type TransformationPayload = {
   conditions?: IfElseCondition[];
 };
 
+const MATH_FIELD_TYPES = new Set(["ADD", "SUBTRACT"]);
+const MATH_TERMS_KEY = "__mathTerms";
+
+const isMathFieldType = (type: string) => MATH_FIELD_TYPES.has(type);
+
+type MathTerm = {
+  id: string;
+  kind: "self" | "mapped" | "number";
+  operator: "+" | "-";
+  value?: string;
+};
+
 const ALL_TYPES = Object.values(TRANSFORMATIONS).flat();
 
 /** Parameterless transformations — enabled/disabled via toggle, not on select */
@@ -150,6 +163,50 @@ const isToggleType = (type: string) => TOGGLE_TYPES.has(type);
 const hasFieldValues = (values: Record<string, string>) =>
   Object.values(values).some((v) => v.trim() !== "");
 
+const parseMathTerms = (raw: string | undefined): MathTerm[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed
+      .map((t: any, index: number) => ({
+        id: String(t?.id ?? `term-${index}`),
+        kind: t?.kind === "mapped" || t?.kind === "number" ? t.kind : "self",
+        operator: t?.operator === "-" ? "-" : "+",
+        value: t?.value !== undefined ? String(t.value) : undefined,
+      }));
+  } catch {
+    return [];
+  }
+};
+
+const serializeMathTerms = (terms: MathTerm[]) => JSON.stringify(terms);
+
+const normalizeMathTermsByType = (type: string, terms: MathTerm[]): MathTerm[] => {
+  if (!isMathFieldType(type)) return terms;
+
+  return terms.map((term, index) => ({
+    ...term,
+    operator: index === 0 ? "+" : (type === "SUBTRACT" ? "-" : "+"),
+  }));
+};
+
+const hasUsableMathTerms = (terms: MathTerm[]) =>
+  terms.some((term) => term.kind === "self" || (term.value ?? "").trim() !== "");
+
+const buildMathExpressionSummary = (terms: MathTerm[]) => {
+  if (terms.length === 0) return "";
+  const chunks = terms.map((term, index) => {
+    const label = term.kind === "self"
+      ? "Current Field"
+      : (term.value ?? "").trim() || "?";
+    if (index === 0) return term.operator === "-" ? `- ${label}` : label;
+    return `${term.operator} ${label}`;
+  });
+  return chunks.join(" ");
+};
+
 function buildPayload(
   type: string,
   allValues: Record<string, Record<string, string>>,
@@ -158,6 +215,23 @@ function buildPayload(
   if (type === "IF_ELSE") {
     return { type, conditions: ifElseConditions };
   }
+
+  if (isMathFieldType(type)) {
+    const values = allValues[type] ?? {};
+    const expressionTerms = normalizeMathTermsByType(type, parseMathTerms(values[MATH_TERMS_KEY]));
+    if (!hasUsableMathTerms(expressionTerms)) return null;
+
+    const payloadValues: Record<string, string> = {
+      mathTerms: serializeMathTerms(expressionTerms),
+    };
+
+    return {
+      type,
+      value: buildMathExpressionSummary(expressionTerms),
+      values: payloadValues,
+    };
+  }
+
   const defs = FIELDS[type] ?? [];
   const values = allValues[type];
   if (defs.length > 0) {
@@ -178,6 +252,13 @@ function getTransformationSummary(
     return `${ifElseConditions.length} condition${ifElseConditions.length !== 1 ? "s" : ""}`;
   }
   if (isToggleType(type)) return "Enabled";
+
+  if (isMathFieldType(type)) {
+    const values = allValues[type] ?? {};
+    const expressionTerms = normalizeMathTermsByType(type, parseMathTerms(values[MATH_TERMS_KEY]));
+    return buildMathExpressionSummary(expressionTerms);
+  }
+
   const values = allValues[type];
   if (!values) return "";
   const parts = Object.entries(values)
@@ -216,6 +297,7 @@ export function TransformationModal({
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [mathDragIndex, setMathDragIndex] = useState<number | null>(null);
   const [helpPanel, setHelpPanel] = useState(true);
   // Values stored per-type: switching transformations never clears other types' data
   const [allValues, setAllValues] = useState<Record<string, Record<string, string>>>({});
@@ -285,6 +367,57 @@ export function TransformationModal({
     const seeded: Record<string, Record<string, string>> = {};
     for (const t of existingTransformations) {
       if (!t.type) continue;
+
+      if (isMathFieldType(t.type)) {
+        const existingMathTerms = parseMathTerms(t.values?.mathTerms);
+
+        if (existingMathTerms.length > 0) {
+          seeded[t.type] = {
+            [MATH_TERMS_KEY]: serializeMathTerms(normalizeMathTermsByType(t.type, existingMathTerms)),
+          };
+          continue;
+        }
+
+        // Backward compatibility migration from previous payload shape.
+        const migrated: MathTerm[] = [
+          { id: `self-${Date.now()}`, kind: "self", operator: "+" },
+        ];
+
+        const numberOperand = (t.values?.operandNumber ?? "").toString().trim();
+        if (numberOperand) {
+          migrated.push({ id: `num-${Date.now()}`, kind: "number", operator: "+", value: numberOperand });
+        }
+
+        const mappedOperands = t.values?.operandFields
+          ? (() => {
+              try {
+                const parsed = JSON.parse(t.values.operandFields);
+                return Array.isArray(parsed) ? parsed.map((v) => String(v)) : [];
+              } catch {
+                return [String(t.values?.operandFields ?? "")].filter(Boolean);
+              }
+            })()
+          : (t.values?.operandField ? [String(t.values.operandField)] : []);
+
+        mappedOperands.forEach((field, idx) => {
+          migrated.push({ id: `map-${Date.now()}-${idx}`, kind: "mapped", operator: "+", value: field });
+        });
+
+        if (migrated.length === 1 && t.value) {
+          const asNumber = Number(String(t.value).trim());
+          if (Number.isFinite(asNumber)) {
+            migrated.push({ id: `legacy-num-${Date.now()}`, kind: "number", operator: "+", value: String(t.value).trim() });
+          } else {
+            migrated.push({ id: `legacy-map-${Date.now()}`, kind: "mapped", operator: "+", value: String(t.value).trim() });
+          }
+        }
+
+        seeded[t.type] = {
+          [MATH_TERMS_KEY]: serializeMathTerms(normalizeMathTermsByType(t.type, migrated)),
+        };
+        continue;
+      }
+
       const defs = FIELDS[t.type] ?? [];
       if (defs.length === 0) continue;
       if (t.values) {
@@ -393,7 +526,90 @@ export function TransformationModal({
     if (!selected) return;
     const updated = { ...(allValues[selected] ?? {}), [label]: value };
     setAllValues((prev) => ({ ...prev, [selected]: updated }));
+
+    if (isMathFieldType(selected)) {
+      if (hasUsableMathTerms(parseMathTerms(updated[MATH_TERMS_KEY]))) {
+        markConfigured(selected);
+      }
+      return;
+    }
+
     if (hasFieldValues(updated)) markConfigured(selected);
+  };
+
+  const setMathTerms = (terms: MathTerm[]) => {
+    if (!selected || !isMathFieldType(selected)) return;
+    const normalized = normalizeMathTermsByType(selected, terms);
+    setFieldValue(MATH_TERMS_KEY, serializeMathTerms(normalized));
+  };
+
+  const toggleMappedFieldOperand = (path: string) => {
+    if (!selected || !isMathFieldType(selected)) return;
+    const current = parseMathTerms(allValues[selected]?.[MATH_TERMS_KEY]);
+    const existsIndex = current.findIndex((t) => t.kind === "mapped" && t.value === path);
+    const next = [...current];
+    if (existsIndex >= 0) {
+      next.splice(existsIndex, 1);
+    } else {
+      const mappedTerm: MathTerm = {
+        id: `map-${Date.now()}`,
+        kind: "mapped",
+        operator: "+",
+        value: path,
+      };
+      next.push(mappedTerm);
+    }
+    setMathTerms(next);
+  };
+
+  const addMathNumberTerm = () => {
+    if (!selected || !isMathFieldType(selected)) return;
+    const current = parseMathTerms(allValues[selected]?.[MATH_TERMS_KEY]);
+    const numberTerm: MathTerm = {
+      id: `num-${Date.now()}`,
+      kind: "number",
+      operator: "+",
+      value: "",
+    };
+    const next = [...current, numberTerm];
+    setMathTerms(next);
+  };
+
+  const addMathSelfTerm = () => {
+    if (!selected || !isMathFieldType(selected)) return;
+    const current = parseMathTerms(allValues[selected]?.[MATH_TERMS_KEY]);
+    const selfTerm: MathTerm = {
+      id: `self-${Date.now()}`,
+      kind: "self",
+      operator: "+",
+    };
+    const next = [...current, selfTerm];
+    setMathTerms(next);
+  };
+
+  const updateMathTerm = (index: number, updates: Partial<MathTerm>) => {
+    if (!selected || !isMathFieldType(selected)) return;
+    const terms = parseMathTerms(allValues[selected]?.[MATH_TERMS_KEY]);
+    if (!terms[index]) return;
+    const next = [...terms];
+    next[index] = { ...next[index], ...updates };
+    setMathTerms(next);
+  };
+
+  const removeMathTerm = (index: number) => {
+    if (!selected || !isMathFieldType(selected)) return;
+    const terms = parseMathTerms(allValues[selected]?.[MATH_TERMS_KEY]);
+    const next = terms.filter((_, i) => i !== index);
+    setMathTerms(next);
+  };
+
+  const reorderMathTerms = (fromIndex: number, toIndex: number) => {
+    if (!selected || !isMathFieldType(selected) || fromIndex === toIndex) return;
+    const terms = parseMathTerms(allValues[selected]?.[MATH_TERMS_KEY]);
+    const next = [...terms];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setMathTerms(next);
   };
 
   const handleApply = () => {
@@ -699,6 +915,125 @@ export function TransformationModal({
                           onCheckedChange={(checked) => toggleNoConfig(selected, checked)}
                         />
                       </div>
+                    ) : isMathFieldType(selected) ? (
+                      <>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                            Expression Builder
+                          </label>
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={addMathSelfTerm}>
+                              + Current Field
+                            </Button>
+                            <Button type="button" variant="outline" size="sm" className="text-xs h-7" onClick={addMathNumberTerm}>
+                              + Number
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                            Mapped Fields (Optional)
+                          </label>
+                          <div className="border border-border rounded-lg bg-card p-2 max-h-44 overflow-y-auto custom-scrollbar space-y-1">
+                            {targetFields.map((f, index) => {
+                              const path = f.path ?? f.name;
+                              const selectedMappedFields = parseMathTerms(fieldValues[MATH_TERMS_KEY])
+                                .filter((t) => t.kind === "mapped")
+                                .map((t) => t.value ?? "");
+                              const isSelected = selectedMappedFields.includes(path);
+                              return (
+                                <button
+                                  key={path ?? `${f.name}-${index}`}
+                                  type="button"
+                                  onClick={() => toggleMappedFieldOperand(path)}
+                                  className={cn(
+                                    "w-full text-left text-xs px-2 py-1.5 rounded transition-colors",
+                                    isSelected ? "bg-accent/15 text-foreground border border-accent/40" : "hover:bg-accent/10 border border-transparent",
+                                  )}
+                                >
+                                  {f.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {parseMathTerms(fieldValues[MATH_TERMS_KEY]).filter((t) => t.kind === "mapped").length > 0 && (
+                            <p className="text-[10px] text-muted-foreground">
+                              Selected: {parseMathTerms(fieldValues[MATH_TERMS_KEY]).filter((t) => t.kind === "mapped").length} field(s)
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground">
+                            Ordered Terms (Drag to reorder)
+                          </label>
+                          {parseMathTerms(fieldValues[MATH_TERMS_KEY]).length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+                              Add terms to build the expression.
+                            </div>
+                          ) : (
+                            <ul className="space-y-1.5">
+                              {parseMathTerms(fieldValues[MATH_TERMS_KEY]).map((term, index) => (
+                                <li
+                                  key={term.id}
+                                  draggable
+                                  onDragStart={() => setMathDragIndex(index)}
+                                  onDragOver={(e) => e.preventDefault()}
+                                  onDrop={(e) => {
+                                    e.preventDefault();
+                                    if (mathDragIndex !== null) reorderMathTerms(mathDragIndex, index);
+                                    setMathDragIndex(null);
+                                  }}
+                                  onDragEnd={() => setMathDragIndex(null)}
+                                  className={cn(
+                                    "grid grid-cols-[66px_1fr_auto] gap-2 items-center rounded-lg border border-border bg-card px-2 py-2",
+                                    mathDragIndex === index && "opacity-50",
+                                  )}
+                                >
+                                  <div className="border border-border rounded px-1 py-1 text-xs bg-card text-center font-mono">
+                                    {index === 0 ? "=" : (selected === "SUBTRACT" ? "-" : "+")}
+                                  </div>
+
+                                  {term.kind === "number" ? (
+                                    <input
+                                      value={term.value ?? ""}
+                                      placeholder="Enter number"
+                                      onChange={(e) => updateMathTerm(index, { value: e.target.value })}
+                                      className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card"
+                                    />
+                                  ) : term.kind === "mapped" ? (
+                                    <select
+                                      value={term.value ?? ""}
+                                      onChange={(e) => updateMathTerm(index, { value: e.target.value })}
+                                      className="w-full border border-border rounded px-2 py-1.5 text-xs bg-card"
+                                    >
+                                      <option value="">Select mapped field</option>
+                                      {targetFields.map((f, idx) => (
+                                        <option key={f.path ?? `${f.name}-${idx}`} value={f.path ?? f.name}>
+                                          {f.name}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <div className="text-xs font-medium text-foreground px-2 py-1.5 border border-border rounded bg-muted/40">
+                                      Current Field
+                                    </div>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => removeMathTerm(index)}
+                                    className="text-[10px] text-destructive hover:underline px-1"
+                                  >
+                                    Remove
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </>
                     ) : (
                       fieldDefs.map((f) => (
                         <div key={f.label} className="space-y-1.5">

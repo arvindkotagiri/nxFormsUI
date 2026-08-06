@@ -552,7 +552,7 @@ export default function Outputs() {
       {/* Bulk action bar */}
       {selected.length > 0 && (
         <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 rounded-2xl shadow-elevated-lg"
+          className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 flex flex-col sm:flex-row items-center gap-3 sm:gap-4 px-4 sm:px-6 py-3 rounded-2xl shadow-elevated-lg w-[calc(100vw-1.5rem)] sm:w-auto max-w-[42rem]"
           style={{
             background: "hsl(var(--primary))",
             color: "hsl(var(--primary-foreground))",
@@ -574,7 +574,7 @@ export default function Outputs() {
 
       {/* Detail modal */}
       {detailOutput && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
           <div
             className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
             onClick={() => setDetailOutput(null)}
@@ -594,7 +594,7 @@ export default function Outputs() {
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-1 px-6 pt-4">
+            <div className="flex items-center gap-1 px-3 sm:px-6 pt-4 overflow-x-auto no-scrollbar">
               {OUTPUT_TABS.map((tab, idx) => (
                 <button
                   key={tab}
@@ -606,9 +606,9 @@ export default function Outputs() {
               ))}
             </div>
 
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {activeTab === 0 && (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
                     ["Output ID", detailOutput.id],
                     ["Event No", detailOutput.evt_no],

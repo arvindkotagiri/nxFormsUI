@@ -194,9 +194,9 @@ export function TemplateSave() {
       </div>
 
       {/* Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-6 py-3 z-40">
-        <div className="container flex items-center justify-between">
-          <div className="flex gap-2">
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-3 py-3 sm:px-6 z-40">
+        <div className="container flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={prevStep}>
               <ArrowLeft className="w-4 h-4 mr-2" /> Back
             </Button>
@@ -204,7 +204,7 @@ export function TemplateSave() {
               <RotateCcw className="w-4 h-4 mr-2" /> Start Over
             </Button>
           </div>
-          <Button onClick={handleSave} disabled={!labelName.trim() || isSaving}>
+          <Button onClick={handleSave} disabled={!labelName.trim() || isSaving} className="w-full sm:w-auto">
             {isSaving ? (
               <>Saving...</>
             ) : (
