@@ -18,6 +18,12 @@ ENV VITE_NODE_API=$VITE_NODE_API
 ENV VITE_DEV_EMAIL=$VITE_DEV_EMAIL
 ENV VITE_DEV_PASSWORD=$VITE_DEV_PASSWORD
 
+# Write build arguments to .env file for Vite build stage
+RUN echo "VITE_FLASK_API=$VITE_FLASK_API" > .env && \
+    echo "VITE_NODE_API=$VITE_NODE_API" >> .env && \
+    echo "VITE_DEV_EMAIL=$VITE_DEV_EMAIL" >> .env && \
+    echo "VITE_DEV_PASSWORD=$VITE_DEV_PASSWORD" >> .env
+
 RUN npm run build
 
 # Stage 2: Serve static files
