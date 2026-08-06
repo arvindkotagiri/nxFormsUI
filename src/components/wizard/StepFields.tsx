@@ -208,11 +208,10 @@ export function StepFields({ entities, fields, connection, onChange }: Props) {
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 border-b">
                   <tr className="text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="text-left font-medium px-4 py-2.5 w-24">Context</th>
-                    <th className="text-left font-medium px-4 py-2.5 w-24">Show in Output</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-24">Include</th>
+                    <th className="text-left font-medium px-4 py-2.5 w-32">Show in Output</th>
                     <th className="text-left font-medium px-4 py-2.5">Field</th>
                     <th className="text-left font-medium px-4 py-2.5">Business Label</th>
-                    <th className="text-left font-medium px-4 py-2.5">Show in Output</th>
                     <th className="text-left font-medium px-4 py-2.5">Type</th>
                     <th className="text-left font-medium px-4 py-2.5">Description</th>
                     <th className="text-left font-medium px-4 py-2.5">Sample</th>
@@ -277,13 +276,6 @@ export function StepFields({ entities, fields, connection, onChange }: Props) {
                             value={f.label}
                             onChange={(e) => updateField(active.originalName, f.originalName, { label: e.target.value })}
                             className="h-8 bg-background"
-                          />
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <Switch
-                            checked={!!f.showInOutputDefinition}
-                            onCheckedChange={(value) => updateField(active.originalName, f.originalName, { showInOutputDefinition: value })}
-                            aria-label={`Show ${f.originalName} in output definition`}
                           />
                         </td>
                         <td className="px-4 py-2.5">

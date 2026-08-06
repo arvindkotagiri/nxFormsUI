@@ -26,12 +26,19 @@ import {
     Zap,
     Layers,
     Undo2,
-    Redo2
+    Redo2,
+    Minus,
+    Plus,
+    Maximize2,
+    ChevronLeft,
+    ChevronRight,
+    Table2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { FieldMappingSelector } from './FieldMappingSelector';
 import { TransformationModal, type TransformationPayload } from './TransformationModal';
+import { TableLoopConfigPanel, type TableLoopConfig } from './TableLoopConfigPanel';
 
 const flaskAPI = import.meta.env.VITE_FLASK_API;
 const nodeAPI = import.meta.env.VITE_NODE_API;
@@ -53,6 +60,9 @@ export function TemplateAdapt() {
         setGeneratedXDP,
         selectedContext
     } = useWizard();
+
+    const [zoomLevel, setZoomLevel] = useState(1);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
     const { fonts: customFonts } = useCustomFonts();
 
@@ -120,6 +130,9 @@ export function TemplateAdapt() {
 
     // Mapping & Transformations Modal detailed states
     const [openTransformModal, setOpenTransformModal] = useState(false);
+
+    // Table loop config state
+    const [tableConfigMap, setTableConfigMap] = useState<Record<string, TableLoopConfig>>({});
 
     const editorRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -197,12 +210,31 @@ export function TemplateAdapt() {
         if (!htmlStr) return htmlStr;
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlStr, 'text/html');
+        if (!doc || !doc.body) {
+            console.warn("[annotateHtmlPlaceholders] Parsed document or body is null.");
+            return htmlStr;
+        }
         
         const elements = Array.from(doc.body.getElementsByTagName('*')) as HTMLElement[];
         
         // Match text fields with dynamic placeholders
         elements.forEach(el => {
             if (el.tagName.toLowerCase() === 'img') return;
+            
+            // If the element already has a saved mapping, display it directly on the canvas
+            const sapMapping = el.getAttribute("data-sap-mapping");
+            if (sapMapping && sapMapping !== "unmapped") {
+                el.textContent = `{{${sapMapping}}}`;
+                el.setAttribute("data-editor-element", "true");
+                const matchingChunk = chunksList.find(c => c.fieldMapping === sapMapping);
+                if (matchingChunk) {
+                    el.id = matchingChunk.id;
+                    if (matchingChunk.transformations && !el.getAttribute("data-transformations")) {
+                        el.setAttribute("data-transformations", JSON.stringify(matchingChunk.transformations));
+                    }
+                }
+                return;
+            }
             
             const textContent = el.textContent?.trim() || '';
             const match = textContent.match(/^\{\{(.+)\}\}$/);
@@ -219,6 +251,7 @@ export function TemplateAdapt() {
                     if (!el.getAttribute("data-sap-mapping")) {
                         el.setAttribute("data-sap-mapping", matchingChunk.fieldMapping);
                     }
+                    el.textContent = `{{${matchingChunk.fieldMapping}}}`;
                     el.setAttribute("data-editor-element", "true");
                     if (matchingChunk.transformations && !el.getAttribute("data-transformations")) {
                         el.setAttribute("data-transformations", JSON.stringify(matchingChunk.transformations));
@@ -229,6 +262,27 @@ export function TemplateAdapt() {
                         el.setAttribute("data-editor-element", "true");
                     }
                 }
+            }
+        });
+
+        // Annotate <table> elements as entity set loop elements
+        const tableElements = Array.from(doc.body.querySelectorAll('table')) as HTMLElement[];
+        tableElements.forEach((tableEl, tableIndex) => {
+            if (!tableEl.id) {
+                tableEl.id = `chunk-table-${tableIndex}-${Date.now()}`;
+            }
+            
+            // Check if this table is a dynamic data table rather than a layout table
+            const hasTh = tableEl.querySelector('th') !== null;
+            const hasPlaceholders = tableEl.innerHTML.includes('{{');
+            
+            if (hasTh && hasPlaceholders) {
+                tableEl.setAttribute('data-chunk-type', 'table');
+                tableEl.setAttribute('data-editor-element', 'true');
+            } else {
+                // Layout table: do not mark it as a table chunk so children can be moved and mapped individually
+                tableEl.removeAttribute('data-chunk-type');
+                tableEl.setAttribute('data-editor-element', 'false');
             }
         });
 
@@ -339,8 +393,11 @@ export function TemplateAdapt() {
                 }
             }
         });
+        // Extract all style elements to preserve absolute positioning stylesheet rules
+        const styleElements = Array.from(doc.querySelectorAll('style')) as HTMLStyleElement[];
+        const stylesHtml = styleElements.map(el => el.outerHTML).join('\n');
 
-        return doc.body.innerHTML;
+        return stylesHtml + '\n' + doc.body.innerHTML;
     }, []);
 
     // Sync canvas to chunks on save
@@ -378,6 +435,16 @@ export function TemplateAdapt() {
                     console.error("Error parsing transformations:", e);
                 }
             }
+
+            const tableConfigRaw = el.getAttribute("data-table-config");
+            let tableConfig = null;
+            if (tableConfigRaw) {
+                try {
+                    tableConfig = JSON.parse(tableConfigRaw);
+                } catch (e) {
+                    console.error("Error parsing table config:", e);
+                }
+            }
             
             const textContent = el.textContent?.trim() || "";
             
@@ -387,7 +454,9 @@ export function TemplateAdapt() {
             const chunkTypeAttr = el.getAttribute("data-chunk-type");
             const barcodeTypeAttr = el.getAttribute("data-barcode-type");
 
-            if (chunkTypeAttr) {
+            if (chunkTypeAttr === 'table') {
+                type = 'table';
+            } else if (chunkTypeAttr) {
                 type = chunkTypeAttr as any;
                 if (type === 'barcode') {
                     barcodeType = (barcodeTypeAttr || 'code128') as any;
@@ -440,7 +509,8 @@ export function TemplateAdapt() {
                 isStatic,
                 fieldMapping: sapMapping && sapMapping !== "unmapped" ? sapMapping : undefined,
                 transformations,
-                barcodeType
+                barcodeType,
+                tableConfig: tableConfig ?? undefined
             };
         });
         
@@ -478,8 +548,47 @@ export function TemplateAdapt() {
     // -------------------------------------------------
     const getTransform = (el: HTMLElement) => {
         const style = window.getComputedStyle(el);
-        const matrix = new DOMMatrixReadOnly(style.transform);
-        return { x: matrix.m41, y: matrix.m42 };
+        const transform = style.transform;
+        if (!transform || transform === "none") {
+            return { x: 0, y: 0 };
+        }
+        
+        // 1. Try DOMMatrixReadOnly if available
+        if (typeof window !== "undefined" && (window.DOMMatrixReadOnly || (window as any).DOMMatrix)) {
+            try {
+                const MatrixClass = window.DOMMatrixReadOnly || (window as any).DOMMatrix;
+                const matrix = new MatrixClass(transform);
+                return { x: matrix.m41, y: matrix.m42 };
+            } catch (e) {
+                // fallback
+            }
+        }
+        
+        // 2. Try WebKitCSSMatrix fallback
+        if (typeof window !== "undefined" && (window as any).WebKitCSSMatrix) {
+            try {
+                const matrix = new (window as any).WebKitCSSMatrix(transform);
+                return { x: matrix.m41, y: matrix.m42 };
+            } catch (e) {
+                // fallback
+            }
+        }
+        
+        // 3. Regex parser fallback
+        if (transform.startsWith("matrix(")) {
+            const values = transform.slice(7, -1).split(",").map(parseFloat);
+            return { x: values[4] || 0, y: values[5] || 0 };
+        }
+        if (transform.startsWith("matrix3d(")) {
+            const values = transform.slice(9, -1).split(",").map(parseFloat);
+            return { x: values[12] || 0, y: values[13] || 0 };
+        }
+        if (transform.startsWith("translate(")) {
+            const values = transform.slice(10, -1).split(",").map(val => parseFloat(val.trim()));
+            return { x: values[0] || 0, y: values[1] || 0 };
+        }
+        
+        return { x: 0, y: 0 };
     };
 
     const clearSelection = () => {
@@ -494,11 +603,29 @@ export function TemplateAdapt() {
     const getAbsoluteAncestor = (el: HTMLElement | null): HTMLElement | null => {
         if (!el || !editorRef.current) return null;
         if (el === editorRef.current) return null;
+
+        // Check if the user clicked directly on a text node or text element.
+        // If it's a dynamic field placeholder, a mapped field, or a text leaf container, 
+        // return it directly so they can map or configure it as a text element.
+        const isPlaceholderText = el.textContent?.includes('{{') && el.textContent?.includes('}}');
+        const isMappedField = el.hasAttribute('data-sap-mapping') || el.closest('[data-sap-mapping]') !== null;
+        const isLeafText = el.tagName.toLowerCase() === 'span' || 
+                           el.tagName.toLowerCase() === 'p' || 
+                           el.tagName.toLowerCase() === 'label' ||
+                           el.tagName.toLowerCase() === 'font' ||
+                           (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3);
+
+        if (isPlaceholderText || isMappedField || isLeafText) {
+            return el;
+        }
+
         let current: HTMLElement | null = el;
         while (current && current !== editorRef.current) {
             const style = window.getComputedStyle(current);
             const isAbsolute = style.position === "absolute" || current.getAttribute("data-editor-element") === "true";
-            if (isAbsolute) {
+            const isTable = current.tagName.toLowerCase() === "table";
+
+            if (isAbsolute || isTable) {
                 // Ignore the top-level full page absolute wrapper
                 if (current.parentElement === editorRef.current) {
                     const w = current.offsetWidth;
@@ -534,6 +661,9 @@ export function TemplateAdapt() {
             return;
         }
 
+        if (!target.id) {
+            target.id = `chunk-cell-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        }
         const targetId = target.id;
         if (e.shiftKey || e.metaKey) {
             if (selectedIds.includes(targetId)) {
@@ -568,6 +698,9 @@ export function TemplateAdapt() {
         });
 
         if (target) {
+            if (!target.id) {
+                target.id = `chunk-cell-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+            }
             let nextSelection = [...selectedElements];
             const targetId = target.id;
 
@@ -588,13 +721,52 @@ export function TemplateAdapt() {
                 }
             }
 
-            setIsDragging(true);
-            setInitialTransforms(
-                nextSelection.map(el => ({
-                    el,
-                    ...getTransform(el)
-                }))
-            );
+            // Find the closest draggable absolute container block
+            let draggableEl: HTMLElement | null = target;
+            while (draggableEl && draggableEl !== editorRef.current) {
+                const style = window.getComputedStyle(draggableEl);
+                if (style.position === "absolute") {
+                    if (draggableEl.parentElement === editorRef.current) {
+                        const w = draggableEl.offsetWidth;
+                        const h = draggableEl.offsetHeight;
+                        if (w > 700 && h > 900) {
+                            draggableEl = draggableEl.parentElement;
+                            continue;
+                        }
+                    }
+                    break;
+                }
+                draggableEl = draggableEl.parentElement;
+            }
+
+            if (draggableEl && draggableEl !== editorRef.current) {
+                setIsDragging(true);
+                setInitialTransforms(
+                    nextSelection.map(el => {
+                        let absEl: HTMLElement | null = el;
+                        while (absEl && absEl !== editorRef.current) {
+                            const style = window.getComputedStyle(absEl);
+                            if (style.position === "absolute") {
+                                if (absEl.parentElement === editorRef.current) {
+                                    const w = absEl.offsetWidth;
+                                    const h = absEl.offsetHeight;
+                                    if (w > 700 && h > 900) {
+                                        absEl = absEl.parentElement;
+                                        continue;
+                                    }
+                                }
+                                break;
+                            }
+                            absEl = absEl.parentElement;
+                        }
+                        const dragTarget = (absEl && absEl !== editorRef.current) ? absEl : el;
+                        return {
+                            el: dragTarget,
+                            ...getTransform(dragTarget)
+                        };
+                    })
+                );
+            }
         } else {
             setMarquee({
                 x1: e.clientX,
@@ -622,8 +794,8 @@ export function TemplateAdapt() {
             const newY = e.clientY - toolbarDragStart.current.y;
             setToolbarPos({ x: newX, y: newY });
         } else if (isDragging) {
-            const dx = e.clientX - dragStart.x;
-            const dy = e.clientY - dragStart.y;
+            const dx = (e.clientX - dragStart.x) / zoomLevel;
+            const dy = (e.clientY - dragStart.y) / zoomLevel;
 
             initialTransforms.forEach(({ el, x, y }) => {
                 const newX = Math.round((x + dx) / GRID_SIZE) * GRID_SIZE;
@@ -730,6 +902,30 @@ export function TemplateAdapt() {
     const activeImageNode = getSelectedImageNode(selectedElement);
     
     const selectedChunk = selectedElement ? chunks.find(c => c.id === selectedElement.id) : null;
+
+    const imageNode = selectedElement ? getSelectedImageNode(selectedElement) : null;
+    const currentWidth = imageNode ? parseInt(imageNode.style.width || imageNode.getAttribute("width") || "0") || imageNode.offsetWidth : 0;
+    const currentHeight = imageNode ? parseInt(imageNode.style.height || imageNode.getAttribute("height") || "0") || imageNode.offsetHeight : 0;
+
+    const handleResizeLogo = (width: number, height: number) => {
+        const imgNode = getSelectedImageNode(selectedElement);
+        if (imgNode) {
+            imgNode.style.width = `${width}px`;
+            imgNode.style.height = `${height}px`;
+            imgNode.setAttribute("width", String(width));
+            imgNode.setAttribute("height", String(height));
+            
+            // Also adjust parent wrapper if it is an absolute container
+            if (selectedElement && selectedElement !== imgNode) {
+                selectedElement.style.width = `${width}px`;
+                selectedElement.style.height = `${height}px`;
+            }
+
+            if (editorRef.current) {
+                pushState(editorRef.current.innerHTML);
+            }
+        }
+    };
 
     const isBarcodeOrQr = (el: HTMLElement | null): boolean => {
         if (!el) return false;
@@ -941,7 +1137,12 @@ export function TemplateAdapt() {
     // -------------------------------------------------
     const isTextSelected = selectedElement !== null && 
         selectedElement.tagName.toLowerCase() !== "img" && 
-        selectedElement.id !== "watermark-element";
+        selectedElement.id !== "watermark-element" &&
+        selectedElement.getAttribute('data-chunk-type') !== 'table';
+
+    const isTableSelected = selectedElement !== null &&
+        (selectedElement.tagName.toLowerCase() === 'table' ||
+         selectedElement.getAttribute('data-chunk-type') === 'table');
 
     const selectedElementMapping = selectedElement?.getAttribute("data-sap-mapping") || "";
     const isElementStatic = !selectedElementMapping;
@@ -962,7 +1163,7 @@ export function TemplateAdapt() {
     const handleMappingSelect = (fullPath: string, fieldName: string) => {
         if (!selectedElement) return;
         
-        selectedElement.textContent = `{{${fieldName}}}`;
+        selectedElement.textContent = `{{${fullPath}}}`;
         selectedElement.setAttribute("data-sap-mapping", fullPath);
         selectedElement.setAttribute("data-editor-element", "true");
         
@@ -1013,6 +1214,19 @@ export function TemplateAdapt() {
         }
         setOpenTransformModal(false);
         toast.success("Applied transformations successfully");
+    };
+
+    const handleApplyTableLoopConfig = (config: TableLoopConfig) => {
+        if (!selectedElement) return;
+        const tableId = selectedElement.id;
+        // Write config to DOM attribute so it is serialised in the HTML
+        selectedElement.setAttribute('data-table-config', JSON.stringify(config));
+        // Also keep in local state for re-opening the panel
+        setTableConfigMap(prev => ({ ...prev, [tableId]: config }));
+        if (editorRef.current) {
+            pushState(editorRef.current.innerHTML);
+        }
+        toast.success(`Table loop configured: ${config.entitySetKey}${config.innerEntitySetKey ? ' → ' + config.innerEntitySetKey : ''}`);
     };
 
     const contextFields = (() => {
@@ -1131,102 +1345,62 @@ export function TemplateAdapt() {
     const isMultiPage = localHtml.includes("multi-page-container") || localHtml.includes("pdf-page-wrapper");
 
     return (
-        <div className="flex h-[calc(100vh-140px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
+        <div className="flex h-[calc(100vh-200px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
             {/* Editor Workspace (Left) */}
-            <div className="flex-1 flex flex-col relative h-full">
-                <div 
-                    onMouseDown={handleToolbarMouseDown}
-                    style={{ transform: `translate(calc(-50% + ${toolbarPos.x}px), ${toolbarPos.y}px)` }}
-                    className="absolute top-6 left-1/2 z-50 bg-white/95 backdrop-blur shadow-2xl rounded-full px-6 py-2.5 flex items-center gap-6 border border-slate-200 animate-in fade-in duration-300 cursor-move"
-                >
-                    <div className="flex items-center gap-3 border-r border-slate-200 pr-6">
-                        <MousePointer2 className="w-4 h-4 text-rose-500 animate-pulse" />
-                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700">Editor</span>
-                    </div>
+            <div className="flex-1 flex flex-col relative h-full min-w-0">
 
-                    {/* Undo / Redo controls */}
-                    <div className="flex items-center gap-1 border-r border-slate-200 pr-4">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-                            onClick={undo}
-                            disabled={historyState.index <= 0}
-                            title="Undo (Ctrl+Z)"
-                        >
-                            <Undo2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-                            onClick={redo}
-                            disabled={historyState.index >= historyState.list.length - 1}
-                            title="Redo (Ctrl+Y)"
-                        >
-                            <Redo2 className="w-4 h-4" />
-                        </Button>
-                    </div>
-
-                    {selectedElements.length > 0 ? (
-                        <>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase">
-                                {selectedElements.length} Selected
-                            </span>
-
-                            {selectedElements.length === 1 && (
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 text-slate-600 hover:bg-slate-50"
-                                    onClick={() => {
-                                        if (selectedElement) {
-                                            selectedElement.contentEditable = "true";
-                                            selectedElement.focus();
-                                        }
-                                    }}
-                                >
-                                    <Type className="w-4 h-4" />
-                                </Button>
-                            )}
-
-                            <Button
-                                size="icon"
-                                variant="ghost"
-                                className="h-8 w-8 text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                    selectedElements.forEach(el => el.remove());
-                                    setSelectedElements([]);
-                                    if (editorRef.current) {
-                                        pushState(editorRef.current.innerHTML);
-                                    }
-                                }}
-                            >
-                                <Trash2 className="w-4 h-4" />
-                            </Button>
-                        </>
-                    ) : (
-                        <span className="text-[10px] text-slate-400 italic">
-                            Shift + Click to select multiple elements
-                        </span>
-                    )}
-
+                {/* Floating Zoom Controls */}
+                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md rounded-xl p-1 z-50 flex items-center gap-1">
                     <Button
                         variant="ghost"
-                        size="sm"
-                        className="text-slate-600 hover:bg-slate-50 text-[10px] font-bold"
-                        onClick={() => {
-                            if (generatedHTML) {
-                                pushState(generatedHTML);
-                                toast.info("Canvas reset to initial template");
-                            }
-                        }}
-                        disabled={isLoading}
+                        size="icon"
+                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                        onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))}
+                        disabled={zoomLevel <= 0.5}
+                        title="Zoom Out"
                     >
-                        <RefreshCw className={cn("w-3 h-3 mr-2", isLoading && "animate-spin")} />
-                        Reset Canvas
+                        <Minus className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-[10px] font-bold text-slate-600 min-w-[36px] text-center">
+                        {Math.round(zoomLevel * 100)}%
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
+                        onClick={() => setZoomLevel(z => Math.min(1.5, z + 0.1))}
+                        disabled={zoomLevel >= 1.5}
+                        title="Zoom In"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 border-l border-slate-200 pl-2 rounded-none"
+                        onClick={() => setZoomLevel(1)}
+                        title="Reset Zoom"
+                    >
+                        <Maximize2 className="w-3.5 h-3.5" />
                     </Button>
                 </div>
+
+                {/* Floating Properties Panel Toggle */}
+                <button
+                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                    className="absolute right-4 top-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md hover:bg-slate-50 text-slate-700 rounded-xl p-2 z-50 transition-all flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
+                    title={isSidebarOpen ? "Collapse Inspector" : "Expand Inspector"}
+                >
+                    {isSidebarOpen ? (
+                        <>
+                            Collapse Inspector <ChevronRight className="w-4 h-4 text-rose-500" />
+                        </>
+                    ) : (
+                        <>
+                            <ChevronLeft className="w-4 h-4 text-emerald-500 animate-pulse" /> Expand Inspector
+                        </>
+                    )}
+                </button>
 
                 {/* Canvas Area (Removed p-12 double-whitespace padding on page wrappers) */}
                 <div className="flex-1 bg-slate-100 overflow-auto flex justify-center p-2 relative custom-scrollbar shadow-inner">
@@ -1243,6 +1417,13 @@ export function TemplateAdapt() {
                                 <div
                                     ref={editorRef}
                                     data-editor-container="true"
+                                    style={{
+                                        transform: `scale(${zoomLevel})`,
+                                        transformOrigin: "top center",
+                                        transition: "transform 0.15s ease-out",
+                                        marginBottom: `${(zoomLevel - 1) * 11}in`,
+                                        marginRight: `${(zoomLevel - 1) * 8.5}in`,
+                                    }}
                                     className={cn(
                                         "relative border border-slate-200/50 transition-all duration-300",
                                         isMultiPage 
@@ -1255,6 +1436,11 @@ export function TemplateAdapt() {
                                 />
 
                                 <style dangerouslySetInnerHTML={{ __html: `
+                                    @media screen {
+                                        [data-editor-container], .pdf-page-wrapper {
+                                            transform: translate(0, 0) !important;
+                                        }
+                                    }
                                     [data-editor-container] * {
                                         transition: outline 0.08s ease-in-out;
                                     }
@@ -1264,6 +1450,16 @@ export function TemplateAdapt() {
                                     }
                                     [data-editor-container] [data-sap-mapping] {
                                         border-bottom: 2px double #f43f5e;
+                                    }
+                                    [data-editor-container] table {
+                                        width: 100% !important;
+                                        max-width: 100% !important;
+                                        table-layout: fixed !important;
+                                        word-break: break-all !important;
+                                    }
+                                    [data-editor-container] td, [data-editor-container] th {
+                                        word-break: break-word !important;
+                                        overflow-wrap: break-word !important;
                                     }
                                 `}} />
 
@@ -1297,8 +1493,11 @@ export function TemplateAdapt() {
                 </div>
             </div>
 
-            {/* Premium, High-End Control Inspector Panel (Right) - FIXED flex-shrink-0 to prevent compression */}
-            <div className="w-[360px] flex-shrink-0 border-l border-slate-200 bg-white p-6 flex flex-col justify-between overflow-y-auto z-40 shadow-2xl select-none custom-scrollbar transition-all duration-300">
+            {/* Premium, High-End Control Inspector Panel (Right) */}
+            <div className={cn(
+                "border-l border-slate-200 bg-white flex flex-col justify-between overflow-y-auto z-40 shadow-2xl select-none custom-scrollbar transition-all duration-300 relative",
+                isSidebarOpen ? "w-[360px] p-6 opacity-100" : "w-0 p-0 border-0 opacity-0 pointer-events-none"
+            )}>
                 <div className="space-y-6">
                     {/* Header */}
                     <div className="border-b border-slate-100 pb-4">
@@ -1311,6 +1510,119 @@ export function TemplateAdapt() {
                         <p className="text-[11px] text-muted-foreground mt-1 font-body">
                             Customize and configure logo positions and mappings
                         </p>
+                    </div>
+
+                    {/* General Canvas & Editor Controls */}
+                    <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 space-y-3 shadow-inner">
+                        <div className="flex items-center justify-between border-b border-slate-200/50 pb-2">
+                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-500">Editor Controls</span>
+                            {selectedElements.length > 0 && (
+                                <span className="text-[9px] font-bold bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full uppercase tracking-tight">
+                                    {selectedElements.length} Selected
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                            {/* Undo / Redo */}
+                            <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-xl p-0.5 shadow-sm">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                                    onClick={undo}
+                                    disabled={historyState.index <= 0}
+                                    title="Undo (Ctrl+Z)"
+                                >
+                                    <Undo2 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-600 hover:bg-slate-100 disabled:opacity-30"
+                                    onClick={redo}
+                                    disabled={historyState.index >= historyState.list.length - 1}
+                                    title="Redo (Ctrl+Y)"
+                                >
+                                    <Redo2 className="w-4 h-4" />
+                                </Button>
+                            </div>
+
+                            {/* Delete Selected */}
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-red-600 hover:bg-red-50 hover:text-red-700 border-slate-200 hover:border-red-200 text-[10px] font-bold uppercase tracking-wider disabled:opacity-30 disabled:pointer-events-none"
+                                disabled={selectedElements.length === 0}
+                                onClick={() => {
+                                    selectedElements.forEach(el => el.remove());
+                                    setSelectedElements([]);
+                                    if (editorRef.current) {
+                                        pushState(editorRef.current.innerHTML);
+                                    }
+                                }}
+                            >
+                                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                Delete
+                            </Button>
+
+                            {/* Reset Canvas */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-slate-600 hover:bg-slate-100 border-slate-200 text-[10px] font-bold uppercase tracking-wider"
+                                onClick={() => {
+                                    if (generatedHTML) {
+                                        pushState(generatedHTML);
+                                        toast.info("Canvas reset to initial template");
+                                    }
+                                }}
+                                disabled={isLoading}
+                            >
+                                <RefreshCw className={cn("w-3 h-3 mr-1", isLoading && "animate-spin")} />
+                                Reset
+                            </Button>
+                        </div>
+
+                        {selectedElements.length === 1 && (
+                            <div className="flex flex-col gap-2 w-full">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full h-8 text-slate-700 hover:bg-slate-100 border-slate-200 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                    onClick={() => {
+                                        if (selectedElement) {
+                                            selectedElement.contentEditable = "true";
+                                            selectedElement.focus();
+                                        }
+                                    }}
+                                >
+                                    <Type className="w-3.5 h-3.5" />
+                                    Edit Inline Text
+                                </Button>
+
+                                {selectedElement?.closest("table") && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full h-8 text-blue-600 hover:bg-blue-50 border-blue-200 hover:border-blue-300 text-[10px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5"
+                                        onClick={() => {
+                                            const tableEl = selectedElement.closest("table");
+                                            if (tableEl) {
+                                                if (!tableEl.id) {
+                                                    tableEl.id = `chunk-table-${Date.now()}`;
+                                                }
+                                                setSelectedIds([tableEl.id]);
+                                                setSelectedElements([tableEl]);
+                                            }
+                                        }}
+                                    >
+                                        <Table2 className="w-3.5 h-3.5 text-blue-500" />
+                                        Configure Table Loop
+                                    </Button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* Unified Graphic Type Selector & Image Inspector Section */}
@@ -1365,6 +1677,86 @@ export function TemplateAdapt() {
                                 <p className="text-[9px] text-muted-foreground mt-1 leading-normal">
                                     Select any image imported in your Image Retention master to swap it into this placeholder position.
                                 </p>
+                            </div>
+
+                            {/* Upload Local Custom Logo */}
+                            <div className="space-y-2 pt-3 border-t border-slate-100">
+                                <label className="text-[11px] font-bold text-slate-600 block">
+                                    Upload Custom Logo (Local File)
+                                </label>
+                                <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) {
+                                            const reader = new FileReader();
+                                            reader.onloadend = () => {
+                                                const imageNode = getSelectedImageNode(selectedElement);
+                                                if (imageNode) {
+                                                    imageNode.src = reader.result as string;
+                                                    if (editorRef.current) {
+                                                        pushState(editorRef.current.innerHTML);
+                                                    }
+                                                    toast.success("Logo replaced with local file");
+                                                }
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }
+                                    }}
+                                    className="w-full text-xs text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-bold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100 transition-all cursor-pointer"
+                                />
+                                <p className="text-[9px] text-muted-foreground mt-1 leading-normal">
+                                    Upload an image directly from your computer to replace this graphic.
+                                </p>
+                            </div>
+
+                            {/* Resize Logo Controls */}
+                            <div className="space-y-3 pt-3 border-t border-slate-100">
+                                <label className="text-[11px] font-bold text-slate-600 block">
+                                    Resize Logo
+                                </label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <span className="text-[9px] text-slate-500 font-bold uppercase">Width (px)</span>
+                                        <input
+                                            type="number"
+                                            value={currentWidth || 100}
+                                            onChange={(e) => handleResizeLogo(parseInt(e.target.value) || 10, currentHeight || 100)}
+                                            className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                                            min="10"
+                                            max="800"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <span className="text-[9px] text-slate-500 font-bold uppercase">Height (px)</span>
+                                        <input
+                                            type="number"
+                                            value={currentHeight || 100}
+                                            onChange={(e) => handleResizeLogo(currentWidth || 100, parseInt(e.target.value) || 10)}
+                                            className="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-mono"
+                                            min="10"
+                                            max="800"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="space-y-1 pt-1">
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="500"
+                                        value={currentWidth || 100}
+                                        onChange={(e) => {
+                                            const w = parseInt(e.target.value);
+                                            // Maintain aspect ratio or adjust both
+                                            const ratio = currentWidth > 0 ? currentHeight / currentWidth : 1;
+                                            const h = Math.round(w * ratio);
+                                            handleResizeLogo(w, h);
+                                        }}
+                                        className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                                    />
+                                    <span className="text-[8px] text-slate-400 block text-right leading-none">Drag to scale proportionally</span>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1628,8 +2020,22 @@ export function TemplateAdapt() {
                         </div>
                     )}
 
+                    {/* Table / Entity Set Loop Config Panel */}
+                    {isTableSelected && (
+                        <TableLoopConfigPanel
+                            initialConfig={(() => {
+                                if (!selectedElement) return null;
+                                const raw = selectedElement.getAttribute('data-table-config');
+                                if (!raw) return tableConfigMap[selectedElement.id] ?? null;
+                                try { return JSON.parse(raw); } catch { return null; }
+                            })()}
+                            selectedContext={selectedContext}
+                            onApply={handleApplyTableLoopConfig}
+                        />
+                    )}
+
                     {/* Default state Help Inspector */}
-                    {!isImageSelected && !isTextSelected && !isBarcodeOrQrSelected && (
+                    {!isImageSelected && !isTextSelected && !isBarcodeOrQrSelected && !isTableSelected && (
                         <div className="space-y-4 text-center py-8 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 animate-in fade-in duration-300 shadow-sm">
                             <HelpCircle className="w-8 h-8 text-slate-400 mx-auto animate-pulse" />
                             <div className="space-y-1.5 px-5">

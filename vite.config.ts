@@ -17,6 +17,11 @@ export default defineConfig(({ mode }) => ({
         target: process.env.VITE_NODE_API || "http://localhost:4000",
         changeOrigin: true,
       },
+      "^/node(?:/|$)": {
+        target: "http://localhost:4000",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/node/, ""),
+      },
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),

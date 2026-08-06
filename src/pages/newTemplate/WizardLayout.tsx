@@ -19,22 +19,41 @@ export function WizardLayout() {
   };
 
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-4 animate-fade-in">
 
-      {/* Header */}
-      <div>
-        <h1 className="font-display text-3xl font-semibold text-foreground">
-          New Template
-        </h1>
-        <p className="text-sm text-muted-foreground font-body mt-1">
-          Create and configure output template
-        </p>
-      </div>
+      {/* Conditionally render header based on step 2 (Studio) for maximum workspace height */}
+      {currentStep === 2 ? (
+        <div className="flex items-center justify-between gap-4 py-1.5 px-4 card-elevated rounded-2xl">
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-sm font-bold text-foreground">
+              New Template
+            </h1>
+            <span className="text-xs text-muted-foreground font-medium hidden sm:inline">
+              • Studio
+            </span>
+          </div>
+          <div className="flex-1 max-w-lg md:max-w-xl">
+            <StepIndicator compact />
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Header */}
+          <div>
+            <h1 className="font-display text-3xl font-semibold text-foreground">
+              New Template
+            </h1>
+            <p className="text-sm text-muted-foreground font-body mt-1">
+              Create and configure output template
+            </p>
+          </div>
 
-      {/* Step Indicator */}
-      <div className="card-elevated p-4">
-        <StepIndicator />
-      </div>
+          {/* Step Indicator */}
+          <div className="card-elevated p-4">
+            <StepIndicator />
+          </div>
+        </>
+      )}
 
       {/* Main Step Content */}
       {currentStep === 2 ? (

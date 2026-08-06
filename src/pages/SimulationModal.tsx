@@ -71,6 +71,7 @@ type SimulationOption = {
     label: string;
     entityKey: string;
     data: Record<string, string>;
+    isLive?: boolean;
 };
 
 export default function SimulationModal({ open, onClose, formName, formId, context }: Props) {
@@ -89,29 +90,55 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
         setOptionsLoading(true);
         setOptionsError(null);
         try {
-            await bootstrapTokenIfMissing();
+            try {
+                await bootstrapTokenIfMissing();
+            } catch (authErr) {
+                console.warn("Bootstrap token failed, continuing without token:", authErr);
+            }
             const token = localStorage.getItem("access_token") ?? "";
-            const res = await fetch(`${API_URL}/simulation`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const headers: Record<string, string> = {};
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
+            // 1. Try live SAP records first (fetches directly from SAP API)
+            const liveRes = await fetch(`${API_URL}/simulation/live-records?context=${encodeURIComponent(context)}`, { headers });
+            if (liveRes.ok) {
+                const liveData = await liveRes.json();
+                if (liveData.source === 'live-sap' && Array.isArray(liveData.records) && liveData.records.length > 0) {
+                    // Map live SAP records — entityKey = the SAP record ID (e.g. "1", "6")
+                    const liveOptions = liveData.records.map((r: { id: string; label: string; meta: Record<string, string> }) => ({
+                        label: r.label,
+                        entityKey: r.id,   // SAP order number passed to trigger
+                        data: r.meta ?? {},
+                        isLive: true,
+                    }));
+                    setOptions(liveOptions);
+                    setOptionsLoading(false);
+                    return;
+                }
+            }
+
+            // 2. Fall back to simulation_master records filtered by context name
+            const res = await fetch(`${API_URL}/simulation`, { headers });
             if (!res.ok) throw new Error("Failed to fetch simulation records");
             const data: {
                 id: string;
                 simulationName: string;
-                context: string;
+                context: any;
                 form: string;
                 inputValues: Record<string, string>;
             }[] = await res.json();
-            console.log(data)
             const filtered = data
                 .filter(
                     (r) =>
-                        r.context?.toLowerCase() === context?.toLowerCase()
+                        r.context &&
+                        typeof r.context === "string" &&
+                        r.context.toLowerCase() === context?.toLowerCase()
                 )
                 .map((r) => ({
                     label: r.simulationName,
                     entityKey: r.id,
                     data: r.inputValues ?? {},
+                    isLive: false,
                 }));
 
             setOptions(filtered);
@@ -196,9 +223,12 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
         setStatusMessage("Triggering simulation...");
         setPollResult(null);
 
-        await bootstrapTokenIfMissing();
-
         try {
+            try {
+                await bootstrapTokenIfMissing();
+            } catch (authErr) {
+                console.warn("Bootstrap token failed, continuing simulation trigger without token:", authErr);
+            }
             const token = localStorage.getItem("access_token") ?? "";
 
             const payload = buildSimulationTriggerPayload(
@@ -271,9 +301,17 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
 
                 {/* Record selector */}
                 <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Select Record
-                    </label>
+                    <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Select Record
+                        </label>
+                        {options.length > 0 && options[0]?.isLive && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-green-500/15 text-green-600">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse inline-block" />
+                                Live from SAP
+                            </span>
+                        )}
+                    </div>
 
                     {optionsLoading ? (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground px-3 py-2">

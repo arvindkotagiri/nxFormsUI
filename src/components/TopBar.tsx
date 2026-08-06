@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Search, Bell, ChevronDown, Wifi, WifiOff, Sun, Moon } from "lucide-react";
+import { Search, Bell, ChevronDown, Wifi, WifiOff, Sun, Moon, LifeBuoy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SupportTicketModal } from "./SupportTicketModal";
 
 interface TopBarProps {
   env?: "DEV" | "QA" | "PROD";
@@ -8,6 +9,7 @@ interface TopBarProps {
 
 export function TopBar({ env = "DEV" }: TopBarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   const envBadgeClass =
     env === "PROD"
@@ -57,6 +59,15 @@ export function TopBar({ env = "DEV" }: TopBarProps) {
         {/* Env badge */}
         <span className={envBadgeClass}>{env}</span>
 
+        {/* Support Ticket Modal Toggle */}
+        <button 
+          onClick={() => setSupportOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:bg-secondary text-xs font-semibold text-muted-foreground hover:text-foreground transition-all shrink-0"
+        >
+          <LifeBuoy size={14} className="text-emerald-500" />
+          <span className="hidden md:inline">Help & Support</span>
+        </button>
+
         {/* Notifications */}
         <button className="relative p-2 rounded-lg hover:bg-secondary transition-colors">
           <Bell size={16} className="text-muted-foreground" />
@@ -65,6 +76,8 @@ export function TopBar({ env = "DEV" }: TopBarProps) {
             style={{ background: "hsl(var(--accent))" }}
           />
         </button>
+
+        <SupportTicketModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} />
 
         {/* Profile */}
         <button className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-secondary transition-colors">

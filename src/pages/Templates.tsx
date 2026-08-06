@@ -8,6 +8,7 @@ import {
   Layers,
   FileText,
   Tag,
+  Trash2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ const flaskAPI = import.meta.env.VITE_FLASK_API;
 import SimulationModal from "./SimulationModal";
 import { Play } from "lucide-react";
 import { useCustomFonts } from "@/hooks/useCustomFonts";
+import { useWizard } from "@/context/WizardContext";
 
 type LabelTemplate = {
   uuid: string;
@@ -34,6 +36,7 @@ type LabelTemplate = {
 export default function Templates() {
   const navigate = useNavigate();
   const { cssString } = useCustomFonts();
+  const { loadSavedTemplate } = useWizard();
   const [view, setView] = useState<"grid" | "editor">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTemplate, setSelectedTemplate] =
@@ -45,9 +48,9 @@ export default function Templates() {
   const [simulateForm, setSimulateForm] = useState("");
   const [simulateFormId, setSimulateFormId] = useState("");
   const [formContext, setFormContext] = useState("");
+  const [contexts, setContexts] = useState<any[]>([]);
 
   useEffect(() => {
-    // fetch("http://localhost:5050/labels")
     fetch(`${flaskAPI}/labels`)
       .then((res) => res.json())
       .then((data) => {
@@ -58,7 +61,58 @@ export default function Templates() {
         console.error("Error fetching labels:", err);
         setLoading(false);
       });
+
+    fetch(`${flaskAPI}/api/catalog`)
+      .then((res) => res.json())
+      .then((apis) => {
+        if (Array.isArray(apis)) {
+          const dynamicContexts = apis.map((api: any) => ({
+            id: `api-${api.id}`,
+            name: api.name,
+            isOData: !!(api.entities && Array.isArray(api.entities) && api.entities.length > 0),
+            entities: api.entities || [],
+            fields: api.fields || {},
+            output_fields: Array.isArray(api.output_fields) ? api.output_fields : [],
+          }));
+          setContexts(dynamicContexts);
+        }
+      })
+      .catch((err) => {
+        console.error("Error fetching contexts:", err);
+      });
   }, []);
+
+  const handleDelete = async (uuid: string) => {
+    if (!window.confirm("Are you sure you want to delete this template? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${flaskAPI}/api/labels/${uuid}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        setLabelTemplates((prev) => prev.filter((t) => t.uuid !== uuid));
+        if (selectedTemplate?.uuid === uuid) {
+          setSelectedTemplate(null);
+          setView("grid");
+        }
+      } else {
+        const text = await response.text();
+        let errMsg = "Unknown error";
+        try {
+          const json = JSON.parse(text);
+          errMsg = json.error || json.message || errMsg;
+        } catch {
+          errMsg = text || errMsg;
+        }
+        alert(`Failed to delete template: ${errMsg}`);
+      }
+    } catch (err) {
+      console.error("Delete template error:", err);
+      alert(`Error deleting template: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+  };
 
   function HtmlPreview({ html }: { html: string }) {
     const srcDoc = `
@@ -134,7 +188,7 @@ export default function Templates() {
                 setView("grid");
                 setSelectedTemplate(null);
               }}
-              className="p-2 rounded-lg hover:bg-secondary transition-colors"
+              className="p-2 rounded-lg hover:bg-secondary transition-colors text-sm"
             >
               ← Back
             </button>
@@ -147,6 +201,32 @@ export default function Templates() {
                 v{selectedTemplate.version} · {selectedTemplate.output_mode}
               </p>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const matchingContext = contexts.find(c => c.name === selectedTemplate.context) || {
+                  name: selectedTemplate.context,
+                  entities: [],
+                  fields: {}
+                };
+                loadSavedTemplate(selectedTemplate, matchingContext);
+                navigate("/templates/new");
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all"
+              style={{ background: "hsl(var(--accent))" }}
+            >
+              <Edit size={14} />
+              Edit in Studio
+            </button>
+            <button
+              onClick={() => handleDelete(selectedTemplate.uuid)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
           </div>
         </div>
 
@@ -416,8 +496,13 @@ export default function Templates() {
               <div className="flex items-center gap-2 pt-1 border-t border-border">
                 <button
                   onClick={() => {
-                    setSelectedTemplate(t);
-                    setView("editor");
+                    const matchingContext = contexts.find(c => c.name === t.context) || {
+                      name: t.context,
+                      entities: [],
+                      fields: {}
+                    };
+                    loadSavedTemplate(t, matchingContext);
+                    navigate("/templates/new");
                   }}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold font-body transition-all"
                   style={{ background: "hsl(var(--accent))", color: "white" }}
@@ -438,11 +523,22 @@ export default function Templates() {
                   Simulate
                 </button>
 
-                <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
+                <button
+                  onClick={() => {
+                    setSelectedTemplate(t);
+                    setView("editor");
+                  }}
+                  title="View Source Code"
+                  className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                >
                   <Eye size={14} />
                 </button>
-                <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-                  <Copy size={14} />
+                <button
+                  onClick={() => handleDelete(t.uuid)}
+                  title="Delete Template"
+                  className="p-2 rounded-lg hover:bg-red-50 transition-colors text-red-500 hover:text-red-700"
+                >
+                  <Trash2 size={14} />
                 </button>
               </div>
             </div>

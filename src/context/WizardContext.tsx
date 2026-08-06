@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import { legacyApiUrl } from '@/lib/legacyApiBase';
 
 export type Transformation = {
   type:
@@ -72,6 +73,8 @@ interface WizardState {
   generatedHTML: string | null;
   generatedXDP: string | null;
   lastAnalyzedFile: string | null; // Name + Size + Type
+  editingUuid: string | null; // Track database template edit ID
+  labelId: string; // Store template ID
 }
 
 interface WizardContextType extends WizardState {
@@ -98,6 +101,8 @@ interface WizardContextType extends WizardState {
   setGeneratedHTML: (html: string | null) => void;
   setGeneratedXDP: (xdp: string | null) => void;
   reset: () => void;
+  loadSavedTemplate: (template: any, contextObj: any) => void;
+  setLabelId: (id: string) => void;
 }
 
 const initialState: WizardState = {
@@ -121,6 +126,8 @@ const initialState: WizardState = {
   generatedHTML: null,
   generatedXDP: null,
   lastAnalyzedFile: null,
+  editingUuid: null,
+  labelId: '',
 };
 
 const WizardContext = createContext<WizardContextType | undefined>(undefined);
@@ -209,7 +216,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       const chunk = prev.chunks.find(c => c.id === id);
       let nextHtml = prev.generatedHTML;
       if (chunk && updates.label && updates.label !== chunk.label && nextHtml) {
-        nextHtml = nextHtml.replaceAll(`{{${chunk.label}}}`, `{{${updates.label}}}`);
+        nextHtml = nextHtml.split(`{{${chunk.label}}}`).join(`{{${updates.label}}}`);
       }
       return {
         ...prev,
@@ -223,7 +230,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       const chunk = prev.chunks.find(c => c.id === id);
       let nextHtml = prev.generatedHTML;
       if (chunk && nextHtml) {
-        nextHtml = nextHtml.replaceAll(`{{${chunk.label}}}`, "");
+        nextHtml = nextHtml.split(`{{${chunk.label}}}`).join("");
       }
       return {
         ...prev,
@@ -246,10 +253,59 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const setGeneratedHTML = (html: string | null) => setState(prev => ({ ...prev, generatedHTML: html }));
   const setGeneratedXDP = (xdp: string | null) => setState(prev => ({ ...prev, generatedXDP: xdp }));
 
+  const setLabelId = (id: string) => setState(prev => ({ ...prev, labelId: id }));
+
+  const loadSavedTemplate = async (template: any, contextObj?: any) => {
+    setState(prev => ({
+      ...prev,
+      editingUuid: template.uuid || null,
+      labelId: template.label_id || '',
+      labelName: template.label_name || '',
+      selectedContext: contextObj || { name: template.context, entities: [], fields: {} },
+      chunks: Array.isArray(template.fields) ? template.fields : (typeof template.fields === 'string' ? JSON.parse(template.fields) : []),
+      generatedHTML: template.html_code || '',
+      generatedZPL: template.zpl_code || '',
+      generatedXDP: template.xdp_code || '',
+      outputMode: template.output_mode || 'zpl',
+      watermarkName: template.watermark || '',
+      printSystemId: template.print_system_id || false,
+      selectedSize: template.page_dimensions ? { id: template.page_dimensions, name: template.page_dimensions, width: 0, height: 0 } : null,
+      currentStep: 2, // Direct to design studio step!
+    }));
+
+    try {
+      const catalogUrl = legacyApiUrl('/api/catalog');
+      const response = await fetch(catalogUrl);
+      const apis = await response.json();
+      if (Array.isArray(apis)) {
+        const matchingApi = apis.find(
+          api => api.name?.trim().toLowerCase() === template.context?.trim().toLowerCase()
+        );
+        if (matchingApi) {
+          const resolvedContext = {
+            id: `api-${matchingApi.id}`,
+            name: matchingApi.name,
+            isOData: !!(matchingApi.entities && Array.isArray(matchingApi.entities) && matchingApi.entities.length > 0),
+            entities: matchingApi.entities || [],
+            fields: matchingApi.fields || {},
+            output_fields: Array.isArray(matchingApi.output_fields) ? matchingApi.output_fields : [],
+          };
+          setState(prev => ({
+            ...prev,
+            selectedContext: resolvedContext
+          }));
+          console.log("[WizardContext] Successfully loaded and resolved full OData context for editing:", matchingApi.name);
+        }
+      }
+    } catch (err) {
+      console.error("[WizardContext] Error fetching catalog for editing template:", err);
+    }
+  };
+
   const reset = () => setState(initialState);
 
   return (
-    <WizardContext.Provider value={{ ...state, setStep, nextStep, prevStep, setUploadedFile, setUploadedImage, setAnnotatedImage, setCleanImage, setAnalysisResults, setChunks, addChunk, updateChunk, removeChunk, setSelectedContext, setSelectedSize, setLabelName, setOutputMode, setWatermarkName, setPrintSystemId, setModifiedLabelBlob, setGeneratedZPL, setGeneratedHTML, setGeneratedXDP, reset }}>
+    <WizardContext.Provider value={{ ...state, setStep, nextStep, prevStep, setUploadedFile, setUploadedImage, setAnnotatedImage, setCleanImage, setAnalysisResults, setChunks, addChunk, updateChunk, removeChunk, setSelectedContext, setSelectedSize, setLabelName, setOutputMode, setWatermarkName, setPrintSystemId, setModifiedLabelBlob, setGeneratedZPL, setGeneratedHTML, setGeneratedXDP, reset, loadSavedTemplate, setLabelId }}>
       {children}
     </WizardContext.Provider>
   );

@@ -21,6 +21,8 @@ import { ConfigDetailPage } from "./pages/newConfiguration/ConfigDetailPage";
 import { SimulationPage } from "./pages/Simulation";
 import { PrintAgent } from "./components/PrintAgent";
 import ImageRetention from "./pages/ImageRetention";
+import Observability from "./pages/Observability";
+import Tickets from "./pages/Tickets";
 import { WizardProvider } from "@/context/WizardContext";
 
 
@@ -60,6 +62,8 @@ const App = () => (
 
             {/* Additional routes can be added here following the same pattern */}
             <Route path="/image-retention" element={<ImageRetention />} />
+            <Route path="/observability" element={<Observability />} />
+            <Route path="/tickets" element={<Tickets />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
