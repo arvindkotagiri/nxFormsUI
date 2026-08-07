@@ -101,23 +101,26 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
     return subExpands.join(",");
   }
 
-  const [salesOrderNumber, setSalesOrderNumber] = useState<string>("{{SalesOrder-Number}}");
+  const [userInputValue, setUserInputValue] = useState<string | null>(null);
   const [simulationData, setSimulationData] = useState<any>(null);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
 
+  // Dynamic Key Resolving
+  const rootEntity = enabledEntities.find((e) => e.isCore) || enabledEntities[0];
+  const rootFields = rootEntity ? (state?.fields || {})[rootEntity.originalName] || {} : {};
+  const keyField = Object.values(rootFields).find((f) => f.isKey && f.enabled) 
+    || Object.values(rootFields).find((f) => f.isKey)
+    || Object.values(rootFields)[0];
+    
+  const keyFieldName = keyField ? keyField.originalName : "SalesOrder";
+  const defaultPlaceholder = `{{${keyFieldName}}}`;
+  const salesOrderNumber = userInputValue !== null ? userInputValue : defaultPlaceholder;
+
   // Composes the final OData GET URL dynamically
   const composedGetUrl = (() => {
-    const rootEntity = enabledEntities.find((e) => e.isCore) || enabledEntities[0];
     if (!rootEntity) return "";
 
     const expandStr = buildExpandString(rootEntity.originalName, entities);
-    
-    // Find the key field of the root entity set safely using originalName
-    const rootFields = (state?.fields || {})[rootEntity.originalName] || {};
-    const keyField = Object.values(rootFields).find((f) => f.isKey && f.enabled) 
-      || Object.values(rootFields).find((f) => f.isKey)
-      || Object.values(rootFields)[0];
-      
     const filterQuery = keyField ? `$filter=${keyField.originalName} eq '${salesOrderNumber}'` : "";
 
     let baseUrl = state?.connection?.baseUrl || "";
@@ -132,8 +135,8 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
   })();
 
   const handleSimulate = async () => {
-    if (salesOrderNumber === "{{SalesOrder-Number}}" || !salesOrderNumber.trim()) {
-      toast.warning("Please enter a valid Sales Order Number for simulation (e.g., 203).");
+    if (salesOrderNumber === defaultPlaceholder || !salesOrderNumber.trim()) {
+      toast.warning(`Please enter a valid ${keyFieldName} for simulation (e.g., 203).`);
       return;
     }
     setIsSimulating(true);
@@ -262,12 +265,12 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
             <div className="flex flex-col sm:flex-row sm:items-end gap-3">
               <div className="flex-1 space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  Key Filter Value (SalesOrder)
+                  Key Filter Value ({keyFieldName})
                 </label>
                 <input
                   type="text"
                   value={salesOrderNumber}
-                  onChange={(e) => setSalesOrderNumber(e.target.value)}
+                  onChange={(e) => setUserInputValue(e.target.value)}
                   placeholder="e.g. 203"
                   className="w-full max-w-[240px] h-9 px-3 text-sm bg-background border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                 />
