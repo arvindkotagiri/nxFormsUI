@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import type { WizardState, EntityConfig } from "./types";
 import { CheckCircle2, Database, Layers, Link2, Pencil, Server, Tag, Copy, Download, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { fetchLegacyApi } from "../../lib/legacyApiBase";
 
 interface Props {
   state: WizardState;
@@ -134,23 +135,22 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
     setIsSimulating(true);
     setSimulationData(null);
     try {
-      const response = await fetch("/api/simulate-query", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: composedGetUrl,
-          tokenUrl: state?.connection?.tokenUrl,
-          clientId: state?.connection?.clientId,
-          clientSecret: state?.connection?.clientSecret,
-          authType: state?.connection?.authType,
-          username: state?.connection?.username,
-          password: state?.connection?.password,
-        }),
-      });
+      const resData = await fetchLegacyApi<{ status: string; data?: any; message?: string }>(
+        "/api/simulate-query",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            url: composedGetUrl,
+            tokenUrl: state?.connection?.tokenUrl,
+            clientId: state?.connection?.clientId,
+            clientSecret: state?.connection?.clientSecret,
+            authType: state?.connection?.authType,
+            username: state?.connection?.username,
+            password: state?.connection?.password,
+          }),
+        }
+      );
 
-      const resData = await response.json();
       if (resData.status === "success") {
         setSimulationData(resData.data);
         toast.success("Simulation fetched successfully!");
