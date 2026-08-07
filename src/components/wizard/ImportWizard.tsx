@@ -72,7 +72,8 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
             fieldCount: e.fieldCount || 0,
             keyCount: e.keyCount || 0,
             isCore: e.isCore,
-            relationships: e.relationships || []
+            relationships: e.relationships || [],
+            navigationBindings: e.navigationBindings || []
           };
         });
       }
@@ -225,12 +226,14 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
             fieldCount: e.fields.length,
             keyCount: e.fields.filter((f: any) => f.isKey).length,
             isCore: true,
-            relationships: e.navigation ? e.navigation.map((n: any) => n.name) : []
+            relationships: e.navigation ? e.navigation.map((n: any) => n.name) : [],
+            navigationBindings: e.navigationBindings || []
           };
         } else {
             // Update counts if entity exists
             newEntities[e.name].fieldCount = e.fields.length;
             newEntities[e.name].keyCount = e.fields.filter((f: any) => f.isKey).length;
+            newEntities[e.name].navigationBindings = e.navigationBindings || [];
         }
 
         if (!newFields[e.name]) newFields[e.name] = {};

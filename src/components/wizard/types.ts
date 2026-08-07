@@ -27,6 +27,7 @@ export type EntityConfig = {
   keyCount: number;
   isCore?: boolean;
   relationships?: string[];
+  navigationBindings?: Array<{ path: string; target: string }>;
 };
 
 export type FieldConfig = {
