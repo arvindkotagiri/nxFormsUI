@@ -261,7 +261,8 @@ export default function OutputRules() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/config/${rule.config_id}`); // or your edit logic
+                            if (!rule.config_id) return;
+                            navigate(`/config/${rule.config_id}`, { state: { rule } });
                           }}
                           className="p-1.5 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
                         >

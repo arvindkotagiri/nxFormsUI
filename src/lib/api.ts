@@ -1,4 +1,10 @@
-const API_URL = import.meta.env.VITE_NODE_API;
+import { getLegacyApiBase, parseJsonResponse } from "./legacyApiBase";
+
+function apiUrl(path: string): string {
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const base = getLegacyApiBase();
+  return base ? `${base}${normalizedPath}` : normalizedPath;
+}
 
 function getToken() {
   return localStorage.getItem("access_token");
@@ -30,7 +36,7 @@ async function refreshToken(): Promise<void> {
   if (!DEV_EMAIL || !DEV_PASSWORD) {
     throw new Error("Missing VITE_DEV_EMAIL / VITE_DEV_PASSWORD in .env");
   }
-  const res = await fetch(`${API_URL}/auth/login`, {
+  const res = await fetch(apiUrl("/auth/login"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: DEV_EMAIL, password: DEV_PASSWORD }),
@@ -65,22 +71,33 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
   });
 
-  const res = await fetch(`${API_URL}${path}`, { ...options, headers: buildHeaders() });
+  const url = apiUrl(path);
+  const res = await fetch(url, { ...options, headers: buildHeaders() });
 
-  // ✅ If the server says 401, force a token refresh and retry ONCE
+  // If the server says 401, force a token refresh and retry ONCE
   if (res.status === 401) {
     await refreshToken();
-    const retryRes = await fetch(`${API_URL}${path}`, { ...options, headers: buildHeaders() });
-    const retryText = await retryRes.text();
-    const retryData = retryText ? JSON.parse(retryText) : null;
-    if (!retryRes.ok) throw new Error(retryData?.detail || retryData?.message || "Request failed after token refresh");
-    return retryData as T;
+    const retryRes = await fetch(url, { ...options, headers: buildHeaders() });
+    const retryData = await parseJsonResponse<T>(retryRes);
+    if (!retryRes.ok) {
+      const message =
+        (retryData as { detail?: string })?.detail ||
+        (retryData as { message?: string })?.message ||
+        "Request failed after token refresh";
+      throw new Error(typeof message === "string" ? message : "Request failed after token refresh");
+    }
+    return retryData;
   }
 
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new Error(data?.detail || data?.message || "Request failed");
-  return data as T;
+  const data = await parseJsonResponse<T>(res);
+  if (!res.ok) {
+    const message =
+      (data as { detail?: string })?.detail ||
+      (data as { message?: string })?.message ||
+      `Request failed (${res.status})`;
+    throw new Error(typeof message === "string" ? message : `Request failed (${res.status})`);
+  }
+  return data;
 }
 
 // Auth
@@ -113,18 +130,18 @@ export async function getLabelConfigs(filters: Record<string, any> = {}) {
     qs.set(k, String(v));
   });
   const q = qs.toString() ? `?${qs.toString()}` : "";
-  return request<any[]>(`/label-configs${q}`);
+  return request<any[]>(`/api/label-configs${q}`);
 }
 
 export async function createLabelConfig(payload: any) {
-  return request(`/label-configs`, {
+  return request(`/api/label-configs`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function deleteLabelConfig(id: string) {
-  return request(`/label-configs/${id}`, {
+  return request(`/api/label-configs/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 }
@@ -150,11 +167,18 @@ export async function determineLabels(
 }
 
 export async function getLabelConfig(id: string) {
-  return request<any>(`/label-configs/${id}`);
+  try {
+    return await request<any>(`/api/label-configs/${encodeURIComponent(id)}`);
+  } catch (primaryError) {
+    const configs = await getLabelConfigs();
+    const match = configs.find((config) => String(config.config_id) === String(id));
+    if (match) return match;
+    throw primaryError;
+  }
 }
 
 export async function updateLabelConfig(id: string, payload: any) {
-  return request(`/label-configs/${id}`, {
+  return request(`/api/label-configs/${encodeURIComponent(id)}`, {
     method: "PUT",
     body: JSON.stringify(payload),
   });

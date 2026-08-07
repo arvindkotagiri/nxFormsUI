@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Text } from "@ui5/webcomponents-react";
 
 import "@ui5/webcomponents-icons/dist/nav-back.js";
@@ -13,20 +13,14 @@ import {
   getLabelConfig,
   createLabelConfig,
   updateLabelConfig,
-  getCustomers,
-  getPlants,
-  getCompanyCodes,
-  getSalesOrgs,
-  getWarehouses,
-  getShippingPoints,
-  getProcessTypes,
   getLabels,
-  getPrinters,
   getCatalog,
+  getPrinters,
 } from "../../lib/api";
 import {
   flattenActiveOutputFields,
   matchOrgConditionKey,
+  ORG_CONDITION_DEFS,
   type ActiveOutputField,
 } from "../../lib/outputDefinitionFields";
 import { fetchLegacyApi } from "../../lib/legacyApiBase";
@@ -60,47 +54,118 @@ type Props = {
   isConfigurator?: boolean;
 };
 
+type LabelConfigRecord = LabelConfigPayload & {
+  config_id?: string;
+  output_conditions?: Record<string, string>;
+};
+
+function mapConfigToFormData(data: Partial<LabelConfigRecord>): LabelConfigPayload {
+  return {
+    label_name: data.label_name || "",
+    label_id: data.label_id || "",
+    customer: data.customer || "",
+    plant: data.plant || "",
+    company_code: data.company_code || "",
+    sales_organization: data.sales_organization || "",
+    warehouse: data.warehouse || "",
+    shipping_point: data.shipping_point || "",
+    process_type: data.process_type || "",
+    number_of_labels: data.number_of_labels ?? 1,
+    priority: data.priority ?? 10,
+    active: data.active ?? true,
+    valid_from: data.valid_from || "",
+    valid_to: data.valid_to || "",
+    printer: data.printer || "",
+    custom_fields: data.custom_fields || {},
+  };
+}
+
+function collectConditions(data: Partial<LabelConfigRecord>): Record<string, string> {
+  const merged: Record<string, string> = {};
+
+  const add = (obj: unknown) => {
+    if (!obj || typeof obj !== "object") return;
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (value != null && String(value).trim() !== "") {
+        merged[key] = String(value);
+      }
+    }
+  };
+
+  add(data.output_conditions);
+  add(data.custom_fields);
+  return merged;
+}
+
+function hydrateConfigRecord(data: Partial<LabelConfigRecord>): {
+  formData: LabelConfigPayload;
+  outputConditions: Record<string, string>;
+} {
+  const conditions = collectConditions(data);
+  const formData = mapConfigToFormData(data);
+
+  for (const [fieldKey, value] of Object.entries(conditions)) {
+    const fieldName = fieldKey.includes(".") ? fieldKey.split(".").pop()! : fieldKey;
+    const orgKey = matchOrgConditionKey({ name: fieldName, label: fieldName });
+    if (orgKey) {
+      const current = formData[orgKey as keyof LabelConfigPayload];
+      if (!current) {
+        (formData as Record<string, string>)[orgKey] = value;
+      }
+    }
+  }
+
+  for (const def of ORG_CONDITION_DEFS) {
+    const conditionValue = conditions[def.formKey];
+    if (conditionValue && !formData[def.formKey as keyof LabelConfigPayload]) {
+      (formData as Record<string, string>)[def.formKey] = conditionValue;
+    }
+  }
+
+  if (!formData.customer && conditions.customer) formData.customer = conditions.customer;
+  if (!formData.process_type && conditions.process_type) formData.process_type = conditions.process_type;
+
+  const customFields = { ...(formData.custom_fields || {}) };
+  for (const [fieldKey, value] of Object.entries(conditions)) {
+    const fieldName = fieldKey.includes(".") ? fieldKey.split(".").pop()! : fieldKey;
+    if (!matchOrgConditionKey({ name: fieldName, label: fieldName }) && !ORG_CONDITION_DEFS.some((def) => def.formKey === fieldKey)) {
+      customFields[fieldName] = value;
+    }
+  }
+  formData.custom_fields = customFields;
+
+  return { formData, outputConditions: conditions };
+}
+
 export function ConfigDetailPage({ isConfigurator = true }: Props) {
   const { configId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const prefilledRule = (location.state as { rule?: LabelConfigRecord } | null)?.rule;
 
-  const isEditMode = Boolean(configId);
+  const isEditMode = Boolean(configId && configId !== "new");
   const isReadOnly = !isConfigurator;
 
-  const [loading, setLoading] = useState<boolean>(isEditMode);
+  const [loading, setLoading] = useState<boolean>(isEditMode && !prefilledRule);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   const [referenceData, setReferenceData] = useState<{
-    customers: RefItem[];
-    plants: RefItem[];
-    companyCodes: RefItem[];
-    salesOrgs: RefItem[];
-    warehouses: RefItem[];
-    shippingPoints: RefItem[];
-    processTypes: RefItem[];
     labels: LabelRefItem[];
-    printers: RefItem[];
     contexts: any[];
+    printers: RefItem[];
   }>({
-    customers: [],
-    plants: [],
-    companyCodes: [],
-    salesOrgs: [],
-    warehouses: [],
-    shippingPoints: [],
-    processTypes: [],
     labels: [],
-    printers: [],
     contexts: [],
+    printers: [],
   });
-
-  const [outputFields, setOutputFields] = useState<ActiveOutputField[]>([]);
-  const [outputFieldsError, setOutputFieldsError] = useState<string | null>(null);
-  const [outputConditions, setOutputConditions] = useState<Record<string, string>>({});
 
   const normalizeContextValue = (value: string | number | null | undefined): string =>
     String(value ?? "").trim().toLowerCase();
+
+  const [outputFields, setOutputFields] = useState<ActiveOutputField[]>([]);
+  const [outputFieldsError, setOutputFieldsError] = useState<string | null>(null);
 
   const doesFieldMatchLabelContext = (field: ActiveOutputField, labelContext: string): boolean => {
     const normalizedLabelContext = normalizeContextValue(labelContext);
@@ -112,63 +177,50 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     );
   };
 
-  const [formData, setFormData] = useState<LabelConfigPayload>({
-    label_name: "",
-    label_id: "",
-    customer: "",
-    plant: "",
-    company_code: "",
-    sales_organization: "",
-    warehouse: "",
-    shipping_point: "",
-    process_type: "",
-    number_of_labels: 1,
-    priority: 10,
-    active: true,
-    valid_from: "",
-    valid_to: "",
-    printer: "",
-    custom_fields: {},
-  });
+  const [formData, setFormData] = useState<LabelConfigPayload>(() =>
+    prefilledRule ? hydrateConfigRecord(prefilledRule).formData : {
+      label_name: "",
+      label_id: "",
+      customer: "",
+      plant: "",
+      company_code: "",
+      sales_organization: "",
+      warehouse: "",
+      shipping_point: "",
+      process_type: "",
+      number_of_labels: 1,
+      priority: 10,
+      active: true,
+      valid_from: "",
+      valid_to: "",
+      printer: "",
+      custom_fields: {},
+    },
+  );
+
+  const [outputConditions, setOutputConditions] = useState<Record<string, string>>(() =>
+    prefilledRule ? hydrateConfigRecord(prefilledRule).outputConditions : {},
+  );
+
+  const applyConfigRecord = useCallback((record: Partial<LabelConfigRecord>) => {
+    const hydrated = hydrateConfigRecord(record);
+    setFormData(hydrated.formData);
+    setOutputConditions(hydrated.outputConditions);
+  }, []);
 
   // ---------- Fetch reference data ----------
   const fetchReferenceData = useCallback(async () => {
     try {
-      const [
-        customers,
-        plants,
-        companyCodes,
-        salesOrgs,
-        warehouses,
-        shippingPoints,
-        processTypes,
-        labels,
-        printers,
-        contexts,
-      ] = await Promise.all([
-        getCustomers(),
-        getPlants(),
-        getCompanyCodes(),
-        getSalesOrgs(),
-        getWarehouses(),
-        getShippingPoints(),
-        getProcessTypes(),
+      const [labels, contexts, printers] = await Promise.all([
         getLabels(),
-        getPrinters(),
         getCatalog(),
+        getPrinters(),
       ]);
 
       setReferenceData({
-        customers,
-        plants,
-        companyCodes,
-        salesOrgs,
-        warehouses,
-        shippingPoints,
-        processTypes,
         labels,
-        printers,
         contexts,
+        printers,
       });
     } catch (e: any) {
       // keep non-blocking, but show a banner
@@ -191,58 +243,45 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
 
   // ---------- Fetch existing config ----------
   const fetchConfig = useCallback(async () => {
-    if (!configId) return;
+    if (!isEditMode || !configId) {
+      setLoading(false);
+      return;
+    }
+
+    if (prefilledRule) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setErrorBanner(null);
 
     try {
       const data = await getLabelConfig(configId);
-
-      setFormData({
-        label_name: data.label_name || "",
-        label_id: data.label_id || "",
-        customer: data.customer || "",
-        plant: data.plant || "",
-        company_code: data.company_code || "",
-        sales_organization: data.sales_organization || "",
-        warehouse: data.warehouse || "",
-        shipping_point: data.shipping_point || "",
-        process_type: data.process_type || "",
-        number_of_labels: data.number_of_labels ?? 1,
-        priority: data.priority ?? 10,
-        active: data.active ?? true,
-        valid_from: data.valid_from || "",
-        valid_to: data.valid_to || "",
-        printer: data.printer || "",
-        custom_fields: data.custom_fields || {},
-      });
-      setOutputConditions(
-        data.output_conditions && typeof data.output_conditions === "object"
-          ? data.output_conditions
-          : {},
-      );
+      applyConfigRecord(data);
     } catch (e: any) {
-      setErrorBanner(e?.message || "Failed to load configuration");
-      navigate("/labelConfigurator");
+      if (prefilledRule) {
+        applyConfigRecord(prefilledRule);
+        setErrorBanner(
+          (e?.message || "Failed to refresh configuration") +
+            ". Showing data from the rules list.",
+        );
+      } else {
+        setErrorBanner(e?.message || "Failed to load configuration");
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [configId, navigate]);
+  }, [configId, isEditMode, prefilledRule, applyConfigRecord]);
 
   useEffect(() => {
     fetchReferenceData();
     fetchOutputFields();
-    fetchConfig();
-  }, [fetchReferenceData, fetchOutputFields, fetchConfig]);
+  }, [fetchReferenceData, fetchOutputFields]);
 
-  const orgFieldOptions: Record<string, RefItem[]> = useMemo(
-    () => ({
-      company_code: referenceData.companyCodes,
-      sales_organization: referenceData.salesOrgs,
-      plant: referenceData.plants,
-      warehouse: referenceData.warehouses,
-      shipping_point: referenceData.shippingPoints,
-    }),
-    [referenceData],
-  );
+  useEffect(() => {
+    fetchConfig();
+  }, [fetchConfig]);
 
   const setOutputCondition = (fieldKey: string, value: string) => {
     setOutputConditions((prev) => ({ ...prev, [fieldKey]: value }));
@@ -258,43 +297,35 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
 
   const selectedLabelContext = normalizeContextValue(selectedLabel?.context);
 
-  const filteredOutputFields = useMemo(() => {
+  const organizationalFields = useMemo(() => {
     if (!selectedLabelContext) return [];
     return outputFields.filter((field) => doesFieldMatchLabelContext(field, selectedLabelContext));
   }, [outputFields, selectedLabelContext]);
 
   const getOutputFieldValue = (field: ActiveOutputField, orgKey: string | null) => {
     const fieldKey = `${field.entity}.${field.name}`;
+    const outputValue = outputConditions[fieldKey];
+    if (outputValue !== undefined) {
+      return outputValue;
+    }
     if (orgKey) {
       return (formData[orgKey as keyof LabelConfigPayload] as string) || "";
     }
-    return outputConditions[fieldKey] || "";
+    return "";
   };
 
   const setOutputFieldValue = (field: ActiveOutputField, orgKey: string | null, value: string) => {
     const fieldKey = `${field.entity}.${field.name}`;
-    if (orgKey) {
-      setField(orgKey as keyof LabelConfigPayload, value);
-      return;
-    }
     setOutputCondition(fieldKey, value);
+    if (orgKey) {
+      // Keep legacy org columns empty so values persist in output_conditions.
+      setField(orgKey as keyof LabelConfigPayload, "");
+    }
   };
 
   // ---------- Handlers ----------
   const setField = (key: keyof LabelConfigPayload, value: any) => {
     setFormData((p) => ({ ...p, [key]: value }));
-  };
-
-  const resetOrganizationalConditions = () => {
-    setFormData((p) => ({
-      ...p,
-      company_code: "",
-      sales_organization: "",
-      plant: "",
-      warehouse: "",
-      shipping_point: "",
-    }));
-    setOutputConditions({});
   };
 
   const handleLabelChange = (labelName: string) => {
@@ -305,7 +336,19 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
       formData.label_id !== nextLabelId;
 
     if (didLabelChange) {
-      resetOrganizationalConditions();
+      setFormData((p) => ({
+        ...p,
+        label_name: labelName,
+        label_id: nextLabelId,
+        company_code: "",
+        sales_organization: "",
+        plant: "",
+        warehouse: "",
+        shipping_point: "",
+        custom_fields: {},
+      }));
+      setOutputConditions({});
+      return;
     }
 
     setFormData((p) => ({
@@ -320,31 +363,42 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     // keep it simple; you can also focus inputs
   };
 
-  // ---------- Dynamic Fields Filter ----------
-  const dynamicFields = useMemo(() => {
-    const selectedLabel = referenceData.labels.find((l) => l.name === formData.label_name);
-    const selectedContextKey = normalizeContextValue(selectedLabel?.context);
-    if (!selectedContextKey) return [];
+  const selectedContextDef = useMemo(() => {
+    if (!selectedLabelContext) return null;
 
-    const contextDef = referenceData.contexts.find(
-      (c) =>
-        normalizeContextValue(c?.name) === selectedContextKey ||
-        normalizeContextValue(c?.id) === selectedContextKey,
+    return (
+      referenceData.contexts.find(
+        (c) =>
+          normalizeContextValue(c?.name) === selectedLabelContext ||
+          normalizeContextValue(c?.id) === selectedLabelContext,
+      ) || null
     );
-    if (!contextDef || !contextDef.fields) return [];
+  }, [selectedLabelContext, referenceData.contexts]);
 
-    const fieldsList: any[] = [];
-    Object.values(contextDef.fields).forEach((entityFields: any) => {
-      if (Array.isArray(entityFields)) {
-        entityFields.forEach((f: any) => {
-          if (f.outputDetermination) {
-            fieldsList.push(f);
-          }
+  const customOrganizationalFields = useMemo(() => {
+    if (!selectedContextDef?.fields) return [];
+
+    const fieldsList: Array<{ name: string; label: string; conditionHint: string; fieldKey: string }> = [];
+    Object.entries(selectedContextDef.fields).forEach(([entityName, entityFields]: [string, any]) => {
+      if (!Array.isArray(entityFields)) return;
+
+      entityFields.forEach((f: any) => {
+        if (!f.outputDetermination) return;
+
+        const name = f.name || f.originalName;
+        if (!name) return;
+
+        fieldsList.push({
+          name,
+          label: f.label || name,
+          conditionHint: `${selectedContextDef.name} · ${entityName}.${name}`,
+          fieldKey: `${entityName}.${name}`,
         });
-      }
+      });
     });
+
     return fieldsList;
-  }, [formData.label_name, referenceData.labels, referenceData.contexts]);
+  }, [selectedContextDef]);
 
   const handleSave = async () => {
     setErrorBanner(null);
@@ -366,17 +420,17 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     try {
       const payload: LabelConfigPayload = {
         ...formData,
-        customer: formData.customer ? formData.customer : null,
-        plant: formData.plant ? formData.plant : null,
-        company_code: formData.company_code ? formData.company_code : null,
-        sales_organization: formData.sales_organization ? formData.sales_organization : null,
-        warehouse: formData.warehouse ? formData.warehouse : null,
-        shipping_point: formData.shipping_point ? formData.shipping_point : null,
-        process_type: formData.process_type ? formData.process_type : null,
+        customer: null,
+        plant: null,
+        company_code: null,
+        sales_organization: null,
+        warehouse: null,
+        shipping_point: null,
+        process_type: null,
         valid_from: formData.valid_from ? formData.valid_from : null,
         valid_to: formData.valid_to ? formData.valid_to : null,
         printer: formData.printer ? formData.printer : null,
-        custom_fields: formData.custom_fields ? formData.custom_fields : null,
+        custom_fields: null,
         output_conditions: outputConditions,
       };
 
@@ -396,7 +450,7 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 py-10">
+      <div className="w-full py-10">
         <div className="rounded-2xl border border-black/10 bg-white p-6 shadow-sm">
           <Text>Loading configuration...</Text>
         </div>
@@ -404,334 +458,257 @@ export function ConfigDetailPage({ isConfigurator = true }: Props) {
     );
   }
 
-function SelectField({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value?: string | null;
-  options: RefItem[];
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <label className="text-xs font-semibold text-muted-foreground font-body">
-        {label}
-      </label>
-
-      <select
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-      >
-        <option value="">Any (fallback)</option>
-        {options.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.name}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
+  const inputClassName =
+    "w-full min-w-0 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30";
 
   return (
-  <div className="space-y-5 animate-fade-in">
+    <div className="w-full space-y-5 animate-fade-in">
 
-    {/* Header */}
-    <div className="flex items-center justify-between">
-      <div>
-        <h1 className="font-display text-3xl font-semibold text-foreground">
-          {isEditMode ? "Edit Rule" : "New Rule"}
-        </h1>
-        <p className="text-sm text-muted-foreground font-body mt-1">
-          Configure label routing conditions
-        </p>
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="font-display text-3xl font-semibold text-foreground">
+            {isEditMode ? "Edit Rule" : "New Rule"}
+          </h1>
+          <p className="text-sm text-muted-foreground font-body mt-1">
+            Configure label routing conditions
+            {refreshing && (
+              <span className="ml-2 text-xs">Refreshing...</span>
+            )}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => navigate("/outputs")}
+            className="px-4 py-2 rounded-lg border border-border text-sm font-body text-muted-foreground hover:text-foreground transition-all"
+          >
+            Cancel
+          </button>
+
+          <button
+            onClick={handleSave}
+            disabled={saving || isReadOnly}
+            className="px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all"
+            style={{ background: "hsl(var(--accent))", color: "white" }}
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => navigate("/outputs")}
-          className="px-4 py-2 rounded-lg border border-border text-sm font-body text-muted-foreground hover:text-foreground transition-all"
-        >
-          Cancel
-        </button>
+      {errorBanner && (
+        <div className="p-4 rounded-xl bg-error-bg text-error text-sm font-body">
+          {errorBanner}
+        </div>
+      )}
 
-        <button
-          onClick={handleSave}
-          disabled={saving || isReadOnly}
-          className="px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all"
-          style={{ background: "hsl(var(--accent))", color: "white" }}
-        >
-          {saving ? "Saving..." : "Save"}
-        </button>
+      {/* General Information */}
+      <div className="card-elevated p-4 sm:p-5">
+        <h2 className="font-display text-sm font-semibold text-foreground mb-4">
+          General Information
+        </h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+          <div className="lg:col-span-5">
+            <label className="text-xs font-semibold text-muted-foreground font-body">
+              Label Name
+            </label>
+            <select
+              value={formData.label_name}
+              onChange={(e) => handleLabelChange(e.target.value)}
+              className={`${inputClassName} mt-1`}
+            >
+              <option value="">Select label</option>
+              {referenceData.labels.map((l) => (
+                <option key={l.id} value={l.name}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="lg:col-span-2">
+            <label className="text-xs font-semibold text-muted-foreground font-body">
+              Priority
+            </label>
+            <input
+              type="number"
+              value={formData.priority}
+              onChange={(e) => setField("priority", Number(e.target.value))}
+              className={`${inputClassName} mt-1`}
+            />
+          </div>
+
+          <div className="lg:col-span-2">
+            <label className="text-xs font-semibold text-muted-foreground font-body">
+              Number of Labels
+            </label>
+            <input
+              type="number"
+              value={formData.number_of_labels}
+              onChange={(e) => setField("number_of_labels", Number(e.target.value))}
+              className={`${inputClassName} mt-1`}
+            />
+          </div>
+
+          <div className="lg:col-span-3">
+            <label className="text-xs font-semibold text-muted-foreground font-body">
+              Active
+            </label>
+            <div className="flex h-[42px] items-center gap-2 mt-1">
+              <input
+                type="checkbox"
+                checked={formData.active}
+                onChange={(e) => setField("active", e.target.checked)}
+                className="h-4 w-4"
+              />
+              <span className="text-sm font-body whitespace-nowrap">
+                {formData.active ? "Active" : "Disabled"}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    {errorBanner && (
-      <div className="p-4 rounded-xl bg-error-bg text-error text-sm font-body">
-        {errorBanner}
-      </div>
-    )}
-
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-
-      {/* LEFT COLUMN */}
-      <div className="lg:col-span-2 space-y-4">
-
-        {/* General */}
-        <div className="card-elevated p-5 space-y-4">
+      {/* Organizational Conditions */}
+      <div className="card-elevated p-4 sm:p-5 space-y-5">
+        <div>
           <h2 className="font-display text-sm font-semibold text-foreground">
-            General Information
+            Organizational Conditions
           </h2>
+          {selectedContextDef && (
+            <p className="text-xs text-muted-foreground font-body mt-1">
+              Routing criteria for context &quot;{selectedContextDef.name}&quot;
+            </p>
+          )}
+        </div>
 
-          <div className="space-y-3">
+        {!formData.label_id ? (
+          <p className="text-xs text-muted-foreground font-body">
+            Select a label to load organizational conditions for its context.
+          </p>
+        ) : outputFieldsError ? (
+          <p className="text-xs text-destructive font-body">{outputFieldsError}</p>
+        ) : organizationalFields.length === 0 && customOrganizationalFields.length === 0 ? (
+          <p className="text-xs text-muted-foreground font-body">
+            No organizational conditions configured for this label context. In API Setup, mark fields as &quot;Show in Output&quot; or &quot;Output Determination&quot; and save the API definition.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {organizationalFields.map((field) => {
+              const orgKey = matchOrgConditionKey(field);
+              const fieldKey = `${field.entity}.${field.name}`;
 
+              return (
+                <div key={fieldKey}>
+                  <label className="text-xs font-semibold text-muted-foreground font-body">
+                    {field.label}
+                  </label>
+                  <input
+                    type="text"
+                    value={getOutputFieldValue(field, orgKey)}
+                    onChange={(e) => setOutputFieldValue(field, orgKey, e.target.value)}
+                    placeholder="Any (fallback)"
+                    className={`${inputClassName} mt-1`}
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1 font-body">
+                    {field.apiName} · {field.entity}.{field.name}
+                  </p>
+                </div>
+              );
+            })}
+
+            {customOrganizationalFields
+              .filter(
+                (field) =>
+                  !organizationalFields.some(
+                    (outputField) =>
+                      outputField.name === field.name ||
+                      `${outputField.entity}.${outputField.name}` === field.conditionHint.split(" · ")[1],
+                  ),
+              )
+              .map((field) => (
+                <div key={field.name}>
+                  <label className="text-xs font-semibold text-muted-foreground font-body">
+                    {field.label}
+                  </label>
+                  <input
+                    type="text"
+                    value={outputConditions[field.fieldKey] || formData.custom_fields?.[field.name] || ""}
+                    onChange={(e) => setOutputCondition(field.fieldKey, e.target.value)}
+                    placeholder="Any (fallback)"
+                    className={`${inputClassName} mt-1`}
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1 font-body">
+                    {field.conditionHint}
+                  </p>
+                </div>
+              ))}
+          </div>
+        )}
+
+        <div className="border-t border-border pt-5">
+          <h3 className="font-display text-sm font-semibold text-foreground mb-3">
+            Validity Period
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="text-xs font-semibold text-muted-foreground font-body">
-                Label Name
+                Valid From
+              </label>
+              <input
+                type="date"
+                value={formData.valid_from || ""}
+                onChange={(e) => setField("valid_from", e.target.value)}
+                className={`${inputClassName} mt-1`}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground font-body">
+                Valid To
+              </label>
+              <input
+                type="date"
+                value={formData.valid_to || ""}
+                onChange={(e) => setField("valid_to", e.target.value)}
+                className={`${inputClassName} mt-1`}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-5">
+          <h3 className="font-display text-sm font-semibold text-foreground mb-3">
+            Printer Settings
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground font-body">
+                Printer
               </label>
               <select
-                value={formData.label_name}
-                onChange={(e) => handleLabelChange(e.target.value)}
-                className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
+                value={formData.printer || ""}
+                onChange={(e) => setField("printer", e.target.value)}
+                className={`${inputClassName} mt-1`}
               >
-                <option value="">Select label</option>
-                {referenceData.labels.map((l) => (
-                  <option key={l.id} value={l.name}>
-                    {l.name}
+                <option value="">Select printer (optional)</option>
+                {formData.printer &&
+                  !referenceData.printers.some((p) => p.id === formData.printer) && (
+                    <option value={formData.printer}>
+                      {formData.printer}
+                    </option>
+                  )}
+                {referenceData.printers.map((printer) => (
+                  <option key={printer.id} value={printer.id}>
+                    {printer.name}
                   </option>
                 ))}
               </select>
             </div>
-
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground font-body">
-                Priority
-              </label>
-              <input
-                type="number"
-                value={formData.priority}
-                onChange={(e) => setField("priority", Number(e.target.value))}
-                className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Lower = higher precedence
-              </p>
-            </div>
-
-{/* Number of labels */}
-      <div>
-        <label className="text-xs font-semibold text-muted-foreground font-body">
-          Number of Labels
-        </label>
-        <input
-          type="number"
-          value={formData.number_of_labels}
-          onChange={(e) => setField("number_of_labels", Number(e.target.value))}
-          className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-        />
-      </div>
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground font-body">
-                Active
-              </label>
-              <div className="flex items-center gap-2 mt-1">
-                <input
-                  type="checkbox"
-                  checked={formData.active}
-                  onChange={(e) => setField("active", e.target.checked)}
-                />
-                <span className="text-sm font-body">
-                  {formData.active ? "Active" : "Disabled"}
-                </span>
-              </div>
-            </div>
-
           </div>
         </div>
-
-        {/* Organizational */}
-        <div className="card-elevated p-5 space-y-4">
-          <h2 className="font-display text-sm font-semibold text-foreground">
-            Organizational Conditions
-          </h2>
-          {outputFieldsError && (
-            <p className="text-xs text-destructive font-body">{outputFieldsError}</p>
-          )}
-          {!formData.label_id ? (
-            <p className="text-xs text-muted-foreground font-body">
-              Select a label to load organizational conditions for its context.
-            </p>
-          ) : filteredOutputFields.length === 0 ? (
-            <p className="text-xs text-muted-foreground font-body">
-              No output fields configured for this label context. In API Setup, mark fields as &quot;Show in Output&quot; on step 4 and save the API definition.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredOutputFields.map((field) => {
-                const orgKey = matchOrgConditionKey(field);
-                const fieldKey = `${field.entity}.${field.name}`;
-                const hasRefOptions = orgKey && (orgFieldOptions[orgKey]?.length ?? 0) > 0;
-                const value = getOutputFieldValue(field, hasRefOptions ? orgKey : null);
-
-                if (hasRefOptions) {
-                  return (
-                    <SelectField
-                      key={fieldKey}
-                      label={field.label}
-                      value={value}
-                      options={orgFieldOptions[orgKey!] || []}
-                      onChange={(v) => setOutputFieldValue(field, orgKey, v)}
-                    />
-                  );
-                }
-
-                return (
-                  <div key={fieldKey}>
-                    <label className="text-xs font-semibold text-muted-foreground font-body">
-                      {field.label}
-                    </label>
-                    <input
-                      type="text"
-                      value={value}
-                      onChange={(e) => setOutputFieldValue(field, null, e.target.value)}
-                      placeholder="Any (fallback)"
-                      className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-                    />
-                    <p className="text-[11px] text-muted-foreground mt-1 font-body">
-                      {field.apiName} · {field.entity}.{field.name}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-<div className="card-elevated p-5 space-y-4">
-    <div>
-      <h2 className="font-display text-sm font-semibold text-foreground">
-        Business Context
-      </h2>
-      <p className="text-xs text-muted-foreground font-body mt-1">
-        Business criteria (leave blank for fallback)
-      </p>
-    </div>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-      <SelectField label="Customer"
-        value={formData.customer}
-        options={referenceData.customers}
-        onChange={(v) => setField("customer", v)}
-      />
-
-      <SelectField label="Process Type"
-        value={formData.process_type}
-        options={referenceData.processTypes}
-        onChange={(v) => setField("process_type", v)}
-      />
-
-    </div>
-  </div>
-
-  {/* Dynamic Conditions */}
-  {dynamicFields.length > 0 && (
-    <div className="card-elevated p-5 space-y-4">
-      <div>
-        <h2 className="font-display text-sm font-semibold text-foreground">
-          Dynamic Conditions
-        </h2>
-        <p className="text-xs text-muted-foreground font-body mt-1">
-          Dynamic routing criteria configured for context "{referenceData.labels.find((l) => l.name === formData.label_name)?.context}"
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {dynamicFields.map((field) => (
-          <div key={field.name}>
-            <label className="text-xs font-semibold text-muted-foreground font-body">
-              {field.label || field.name}
-            </label>
-            <input
-              type="text"
-              value={formData.custom_fields?.[field.name] || ""}
-              onChange={(e) => {
-                const updatedCustom = {
-                  ...formData.custom_fields,
-                  [field.name]: e.target.value,
-                };
-                setField("custom_fields", updatedCustom);
-              }}
-              placeholder="Enter condition value"
-              className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-            />
-          </div>
-        ))}
       </div>
     </div>
-  )}
-      </div>
-
-      {/* RIGHT SIDEBAR */}
-      <div className="space-y-4">
-
-        <div className="card-elevated p-4 space-y-3">
-          <h3 className="font-display text-sm font-semibold text-foreground">
-            Validity Period
-          </h3>
-
-          <div>
-            <label className="text-xs text-muted-foreground font-body">
-              Valid From
-            </label>
-            <input
-              type="date"
-              value={formData.valid_from || ""}
-              onChange={(e) => setField("valid_from", e.target.value)}
-              className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-muted-foreground font-body">
-              Valid To
-            </label>
-            <input
-              type="date"
-              value={formData.valid_to || ""}
-              onChange={(e) => setField("valid_to", e.target.value)}
-              className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-            />
-          </div>
-        </div>
-
-          <div className="card-elevated p-4">
-            <h3 className="font-display text-sm font-semibold text-foreground mb-2">
-              Printer Settings
-            </h3>
-            <SelectField label="Printer"
-              value={formData.printer}
-              options={referenceData.printers}
-              onChange={(v) => setField("printer", v)}
-            />
-          </div>
-
-        <div className="card-elevated p-4">
-          <h3 className="font-display text-sm font-semibold text-foreground mb-2">
-            How Evaluation Works
-          </h3>
-          <p className="text-xs font-body text-muted-foreground">
-            Rules are evaluated by priority (lowest first).
-            If all filled fields match, the rule is applied.
-          </p>
-        </div>
-
-      </div>
-    </div>
-  </div>
-);
+  );
 }
