@@ -101,7 +101,7 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
     return subExpands.join(",");
   }
 
-  const [salesOrderNumber, setSalesOrderNumber] = useState<string>("203");
+  const [salesOrderNumber, setSalesOrderNumber] = useState<string>("{{SalesOrder-Number}}");
   const [simulationData, setSimulationData] = useState<any>(null);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
 
@@ -132,6 +132,10 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
   })();
 
   const handleSimulate = async () => {
+    if (salesOrderNumber === "{{SalesOrder-Number}}" || !salesOrderNumber.trim()) {
+      toast.warning("Please enter a valid Sales Order Number for simulation (e.g., 203).");
+      return;
+    }
     setIsSimulating(true);
     setSimulationData(null);
     try {
