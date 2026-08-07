@@ -264,7 +264,7 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
     });
   }
 
-  async function handleSave() {
+  async function handleSave(get_url?: string) {
     try {
       const isEdit = !!initialData?.id;
       const path = isEdit ? `/api/catalog/${initialData.id}` : "/api/catalog";
@@ -310,6 +310,7 @@ export function ImportWizard({ initialData, startStep, onSaved, onCancel }: Impo
           password: state.connection.password,
           entities: enabledEntities,
           fields: enabledFields,
+          get_url: get_url || "",
         }),
       });
 
