@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { WizardState } from "./types";
-import { CheckCircle2, Database, Layers, Link2, Pencil, Server, Tag } from "lucide-react";
+import type { WizardState, EntityConfig } from "./types";
+import { CheckCircle2, Database, Layers, Link2, Pencil, Server, Tag, Copy, Download, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
 interface Props {
   state: WizardState;
@@ -11,11 +13,92 @@ interface Props {
 }
 
 export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
+  const [activeTab, setActiveTab] = useState<'url' | 'xml' | 'json'>('url');
   const enabledEntities = Object.values(state.entities).filter((e) => e.enabled);
   const totalFields = enabledEntities.reduce(
     (sum, e) => sum + Object.values(state.fields[e.originalName] ?? {}).filter((f) => f.enabled).length,
     0,
   );
+
+  // Helper: Recursive expand path builder
+  function buildExpandString(entityName: string, enabledNames: Set<string>, allEntities: Record<string, EntityConfig>): string {
+    const entity = allEntities[entityName];
+    if (!entity || !entity.navigationBindings || entity.navigationBindings.length === 0) {
+      return "";
+    }
+
+    const subExpands: string[] = [];
+    for (const binding of entity.navigationBindings) {
+      if (enabledNames.has(binding.target)) {
+        const nested = buildExpandString(binding.target, enabledNames, allEntities);
+        if (nested) {
+          subExpands.push(`${binding.path}($expand=${nested})`);
+        } else {
+          subExpands.push(binding.path);
+        }
+      }
+    }
+
+    return subExpands.join(",");
+  }
+
+  // Composes the final OData GET URL dynamically
+  const composedGetUrl = (() => {
+    const enabledNames = new Set(enabledEntities.map((e) => e.originalName));
+    const rootEntity = enabledEntities.find((e) => e.isCore) || enabledEntities[0];
+    if (!rootEntity) return "";
+
+    const expandStr = buildExpandString(rootEntity.originalName, enabledNames, state.entities);
+    let baseUrl = state.connection.baseUrl || "";
+    baseUrl = baseUrl.replace(/\/\$metadata\/?$/i, "").replace(/\/$/, "");
+
+    if (expandStr) {
+      return `${baseUrl}/${rootEntity.originalName}?$expand=${expandStr}&$format=json`;
+    }
+    return `${baseUrl}/${rootEntity.originalName}?$format=json`;
+  })();
+
+  // Composes the Navigation Property Bindings in XML
+  const bindingsXML = (() => {
+    let xml = "";
+    for (const entity of enabledEntities) {
+      if (entity.navigationBindings && entity.navigationBindings.length > 0) {
+        xml += `<EntitySet Name="${entity.originalName}">\n`;
+        for (const binding of entity.navigationBindings) {
+          xml += `    <NavigationPropertyBinding Path="${binding.path}" Target="${binding.target}"/>\n`;
+        }
+        xml += `</EntitySet>\n`;
+      }
+    }
+    return xml.trim();
+  })();
+
+  // Composes the Navigation Property Bindings in JSON
+  const bindingsJSON = (() => {
+    const result: Record<string, Array<{ path: string; target: string }>> = {};
+    for (const entity of enabledEntities) {
+      if (entity.navigationBindings && entity.navigationBindings.length > 0) {
+        result[entity.originalName] = entity.navigationBindings;
+      }
+    }
+    return JSON.stringify(result, null, 2);
+  })();
+
+  const copyToClipboard = (text: string, type: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success(`Copied ${type} to clipboard!`);
+  };
+
+  const downloadTextFile = (content: string, filename: string, contentType: string) => {
+    const blob = new Blob([content], { type: contentType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Downloaded ${filename} successfully`);
+  };
 
   return (
     <div className="space-y-8">
@@ -67,6 +150,86 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
           </ul>
         )}
       </SectionCard>
+
+      {/* OData Composition Card */}
+      <section className="rounded-xl border bg-card shadow-sm overflow-hidden animate-fade-in">
+        <header className="px-5 py-3.5 border-b bg-muted/30 flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2 font-display text-foreground">
+            <Sparkles className="h-4 w-4 text-accent" />
+            OData Endpoint Composition & Bindings
+          </h3>
+        </header>
+        <div className="p-5 space-y-4">
+          <div className="flex border-b text-xs font-medium">
+            <button
+              onClick={() => setActiveTab('url')}
+              className={`pb-2 px-4 border-b-2 transition-all ${activeTab === 'url' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              Composed GET URL
+            </button>
+            <button
+              onClick={() => setActiveTab('xml')}
+              className={`pb-2 px-4 border-b-2 transition-all ${activeTab === 'xml' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              XML Bindings
+            </button>
+            <button
+              onClick={() => setActiveTab('json')}
+              className={`pb-2 px-4 border-b-2 transition-all ${activeTab === 'json' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+            >
+              JSON Bindings
+            </button>
+          </div>
+
+          <div className="relative rounded-lg bg-muted/60 p-4 border font-mono text-xs overflow-x-auto max-h-60">
+            {activeTab === 'url' && (
+              <div className="flex flex-col gap-2">
+                <span className="text-muted-foreground">Auto-generated GET URL based on selections:</span>
+                <code className="text-primary break-all">{composedGetUrl || "(No entities selected)"}</code>
+              </div>
+            )}
+            {activeTab === 'xml' && (
+              <pre className="text-foreground whitespace-pre">{bindingsXML || "<!-- No active navigation bindings -->"}</pre>
+            )}
+            {activeTab === 'json' && (
+              <pre className="text-foreground whitespace-pre">{bindingsJSON}</pre>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {activeTab === 'url' && (
+              <>
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => copyToClipboard(composedGetUrl, "GET URL")}>
+                  <Copy className="h-3.5 w-3.5" /> Copy URL
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadTextFile(composedGetUrl, "get-url.txt", "text/plain")}>
+                  <Download className="h-3.5 w-3.5" /> Download
+                </Button>
+              </>
+            )}
+            {activeTab === 'xml' && (
+              <>
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => copyToClipboard(bindingsXML, "XML Bindings")}>
+                  <Copy className="h-3.5 w-3.5" /> Copy XML
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadTextFile(bindingsXML, "navigation-bindings.xml", "text/xml")}>
+                  <Download className="h-3.5 w-3.5" /> Download XML
+                </Button>
+              </>
+            )}
+            {activeTab === 'json' && (
+              <>
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => copyToClipboard(bindingsJSON, "JSON Bindings")}>
+                  <Copy className="h-3.5 w-3.5" /> Copy JSON
+                </Button>
+                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadTextFile(bindingsJSON, "navigation-bindings.json", "application/json")}>
+                  <Download className="h-3.5 w-3.5" /> Download JSON
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
 
       <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border bg-card p-5 shadow-sm">
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
