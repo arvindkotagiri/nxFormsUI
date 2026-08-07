@@ -20,17 +20,57 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
     0,
   );
 
-  // Helper: Recursive expand path builder
-  function buildExpandString(entityName: string, enabledNames: Set<string>, allEntities: Record<string, EntityConfig>): string {
-    const entity = allEntities[entityName];
-    if (!entity || !entity.navigationBindings || entity.navigationBindings.length === 0) {
-      return "";
+  // Heuristic: retrieve saved navigation bindings or reconstruct them on the fly from relationships
+  function getEntityBindings(entity: EntityConfig, allEntities: Record<string, EntityConfig>): Array<{ path: string; target: string }> {
+    if (entity.navigationBindings && entity.navigationBindings.length > 0) {
+      return entity.navigationBindings;
     }
 
+    if (!entity.relationships || entity.relationships.length === 0) {
+      return [];
+    }
+
+    const reconstructed: Array<{ path: string; target: string }> = [];
+    const allEntityNames = Object.keys(allEntities);
+
+    for (const rel of entity.relationships) {
+      const relWord = rel.replace(/^to_/i, "").toLowerCase();
+      
+      let bestMatch = "";
+      for (const name of allEntityNames) {
+        const lowerName = name.toLowerCase();
+        if (lowerName === relWord + "s" || lowerName === relWord || lowerName.includes(relWord)) {
+          bestMatch = name;
+          break;
+        }
+      }
+
+      if (bestMatch) {
+        reconstructed.push({
+          path: rel,
+          target: bestMatch
+        });
+      }
+    }
+
+    return reconstructed;
+  }
+
+  // Helper: Recursive expand path builder
+  function buildExpandString(entityName: string, allEntities: Record<string, EntityConfig>): string {
+    const entity = allEntities[entityName];
+    if (!entity) return "";
+
+    const bindings = getEntityBindings(entity, allEntities);
+    if (bindings.length === 0) return "";
+
     const subExpands: string[] = [];
-    for (const binding of entity.navigationBindings) {
-      if (enabledNames.has(binding.target)) {
-        const nested = buildExpandString(binding.target, enabledNames, allEntities);
+    for (const binding of bindings) {
+      const targetEntity = Object.values(allEntities).find(
+        (e) => e.originalName.toLowerCase() === binding.target.toLowerCase() && e.enabled
+      );
+      if (targetEntity) {
+        const nested = buildExpandString(targetEntity.originalName, allEntities);
         if (nested) {
           subExpands.push(`${binding.path}($expand=${nested})`);
         } else {
@@ -44,27 +84,37 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
 
   // Composes the final OData GET URL dynamically
   const composedGetUrl = (() => {
-    const enabledNames = new Set(enabledEntities.map((e) => e.originalName));
     const rootEntity = enabledEntities.find((e) => e.isCore) || enabledEntities[0];
     if (!rootEntity) return "";
 
-    const expandStr = buildExpandString(rootEntity.originalName, enabledNames, state.entities);
+    const expandStr = buildExpandString(rootEntity.originalName, state.entities);
+    
+    // Find the key field of the root entity set
+    const keyField = Object.values(state.fields[rootEntity.originalName] ?? {}).find((f) => f.isKey && f.enabled) 
+      || Object.values(state.fields[rootEntity.originalName] ?? {}).find((f) => f.isKey)
+      || Object.values(state.fields[rootEntity.originalName] ?? {})[0];
+      
+    const filterQuery = keyField ? `$filter=${keyField.name} eq '203'` : "";
+
     let baseUrl = state.connection.baseUrl || "";
     baseUrl = baseUrl.replace(/\/\$metadata\/?$/i, "").replace(/\/$/, "");
 
-    if (expandStr) {
-      return `${baseUrl}/${rootEntity.originalName}?$expand=${expandStr}&$format=json`;
-    }
-    return `${baseUrl}/${rootEntity.originalName}?$format=json`;
+    const queryParts: string[] = [];
+    if (filterQuery) queryParts.push(filterQuery);
+    if (expandStr) queryParts.push(`$expand=${expandStr}`);
+    queryParts.push("$format=json");
+
+    return `${baseUrl}/${rootEntity.originalName}?${queryParts.join("&")}`;
   })();
 
   // Composes the Navigation Property Bindings in XML
   const bindingsXML = (() => {
     let xml = "";
     for (const entity of enabledEntities) {
-      if (entity.navigationBindings && entity.navigationBindings.length > 0) {
+      const bindings = getEntityBindings(entity, state.entities);
+      if (bindings.length > 0) {
         xml += `<EntitySet Name="${entity.originalName}">\n`;
-        for (const binding of entity.navigationBindings) {
+        for (const binding of bindings) {
           xml += `    <NavigationPropertyBinding Path="${binding.path}" Target="${binding.target}"/>\n`;
         }
         xml += `</EntitySet>\n`;
@@ -77,8 +127,9 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
   const bindingsJSON = (() => {
     const result: Record<string, Array<{ path: string; target: string }>> = {};
     for (const entity of enabledEntities) {
-      if (entity.navigationBindings && entity.navigationBindings.length > 0) {
-        result[entity.originalName] = entity.navigationBindings;
+      const bindings = getEntityBindings(entity, state.entities);
+      if (bindings.length > 0) {
+        result[entity.originalName] = bindings;
       }
     }
     return JSON.stringify(result, null, 2);
