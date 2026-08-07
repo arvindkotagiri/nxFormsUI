@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { WizardState, EntityConfig } from "./types";
-import { CheckCircle2, Database, Layers, Link2, Pencil, Server, Tag, Copy, Download, Sparkles } from "lucide-react";
+import { CheckCircle2, Database, Layers, Link2, Pencil, Server, Tag, Copy, Download, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
@@ -100,6 +100,10 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
     return subExpands.join(",");
   }
 
+  const [salesOrderNumber, setSalesOrderNumber] = useState<string>("203");
+  const [simulationData, setSimulationData] = useState<any>(null);
+  const [isSimulating, setIsSimulating] = useState<boolean>(false);
+
   // Composes the final OData GET URL dynamically
   const composedGetUrl = (() => {
     const rootEntity = enabledEntities.find((e) => e.isCore) || enabledEntities[0];
@@ -107,13 +111,13 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
 
     const expandStr = buildExpandString(rootEntity.originalName, entities);
     
-    // Find the key field of the root entity set safely
+    // Find the key field of the root entity set safely using originalName
     const rootFields = (state?.fields || {})[rootEntity.originalName] || {};
     const keyField = Object.values(rootFields).find((f) => f.isKey && f.enabled) 
       || Object.values(rootFields).find((f) => f.isKey)
       || Object.values(rootFields)[0];
       
-    const filterQuery = keyField ? `$filter=${keyField.name} eq '203'` : "";
+    const filterQuery = keyField ? `$filter=${keyField.originalName} eq '${salesOrderNumber}'` : "";
 
     let baseUrl = state?.connection?.baseUrl || "";
     baseUrl = baseUrl.replace(/\/\$metadata\/?$/i, "").replace(/\/$/, "");
@@ -126,33 +130,39 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
     return `${baseUrl}/${rootEntity.originalName}?${queryParts.join("&")}`;
   })();
 
-  // Composes the Navigation Property Bindings in XML
-  const bindingsXML = (() => {
-    let xml = "";
-    for (const entity of enabledEntities) {
-      const bindings = getEntityBindings(entity, state.entities);
-      if (bindings.length > 0) {
-        xml += `<EntitySet Name="${entity.originalName}">\n`;
-        for (const binding of bindings) {
-          xml += `    <NavigationPropertyBinding Path="${binding.path}" Target="${binding.target}"/>\n`;
-        }
-        xml += `</EntitySet>\n`;
-      }
-    }
-    return xml.trim();
-  })();
+  const handleSimulate = async () => {
+    setIsSimulating(true);
+    setSimulationData(null);
+    try {
+      const response = await fetch("/api/simulate-query", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: composedGetUrl,
+          tokenUrl: state?.connection?.tokenUrl,
+          clientId: state?.connection?.clientId,
+          clientSecret: state?.connection?.clientSecret,
+          authType: state?.connection?.authType,
+          username: state?.connection?.username,
+          password: state?.connection?.password,
+        }),
+      });
 
-  // Composes the Navigation Property Bindings in JSON
-  const bindingsJSON = (() => {
-    const result: Record<string, Array<{ path: string; target: string }>> = {};
-    for (const entity of enabledEntities) {
-      const bindings = getEntityBindings(entity, state.entities);
-      if (bindings.length > 0) {
-        result[entity.originalName] = bindings;
+      const resData = await response.json();
+      if (resData.status === "success") {
+        setSimulationData(resData.data);
+        toast.success("Simulation fetched successfully!");
+      } else {
+        toast.error(resData.message || "Failed to fetch simulation data.");
       }
+    } catch (err: any) {
+      toast.error(`Error connecting to server: ${err.message}`);
+    } finally {
+      setIsSimulating(false);
     }
-    return JSON.stringify(result, null, 2);
-  })();
+  };
 
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
@@ -221,81 +231,83 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
         )}
       </SectionCard>
 
-      {/* OData Composition Card */}
+      {/* OData Composition & Simulation Card */}
       <section className="rounded-xl border bg-card shadow-sm overflow-hidden animate-fade-in">
         <header className="px-5 py-3.5 border-b bg-muted/30 flex items-center justify-between">
           <h3 className="text-sm font-semibold flex items-center gap-2 font-display text-foreground">
             <Sparkles className="h-4 w-4 text-accent" />
-            OData Endpoint Composition & Bindings
+            OData Query Preview & Live Simulation
           </h3>
         </header>
-        <div className="p-5 space-y-4">
-          <div className="flex border-b text-xs font-medium">
-            <button
-              onClick={() => setActiveTab('url')}
-              className={`pb-2 px-4 border-b-2 transition-all ${activeTab === 'url' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            >
-              Composed GET URL
-            </button>
-            <button
-              onClick={() => setActiveTab('xml')}
-              className={`pb-2 px-4 border-b-2 transition-all ${activeTab === 'xml' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            >
-              XML Bindings
-            </button>
-            <button
-              onClick={() => setActiveTab('json')}
-              className={`pb-2 px-4 border-b-2 transition-all ${activeTab === 'json' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
-            >
-              JSON Bindings
-            </button>
+        <div className="p-5 space-y-5">
+          {/* Composed GET URL Block */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-muted-foreground uppercase tracking-wide">Composed GET URL</span>
+              <Button size="sm" variant="ghost" className="h-7 text-xs px-2 gap-1 text-primary hover:text-primary/95" onClick={() => copyToClipboard(composedGetUrl, "GET URL")}>
+                <Copy className="h-3 w-3" /> Copy URL
+              </Button>
+            </div>
+            <div className="rounded-lg bg-muted/60 p-3.5 border font-mono text-xs overflow-x-auto break-all">
+              <code className="text-primary">{composedGetUrl || "(No entities selected)"}</code>
+            </div>
           </div>
 
-          <div className="relative rounded-lg bg-muted/60 p-4 border font-mono text-xs overflow-x-auto max-h-60">
-            {activeTab === 'url' && (
-              <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground">Auto-generated GET URL based on selections:</span>
-                <code className="text-primary break-all">{composedGetUrl || "(No entities selected)"}</code>
+          {/* Simulation Input Area */}
+          <div className="pt-2 border-t space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <div className="flex-1 space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                  Key Filter Value (SalesOrder)
+                </label>
+                <input
+                  type="text"
+                  value={salesOrderNumber}
+                  onChange={(e) => setSalesOrderNumber(e.target.value)}
+                  placeholder="e.g. 203"
+                  className="w-full max-w-[240px] h-9 px-3 text-sm bg-background border rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                />
               </div>
-            )}
-            {activeTab === 'xml' && (
-              <pre className="text-foreground whitespace-pre">{bindingsXML || "<!-- No active navigation bindings -->"}</pre>
-            )}
-            {activeTab === 'json' && (
-              <pre className="text-foreground whitespace-pre">{bindingsJSON}</pre>
-            )}
-          </div>
+              <Button
+                disabled={isSimulating || !composedGetUrl}
+                onClick={handleSimulate}
+                className="bg-accent text-accent-foreground hover:bg-accent/90 h-9 font-medium shadow-sm transition-all flex items-center gap-1.5 px-4 shrink-0"
+              >
+                {isSimulating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Fetching Data...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Simulate Query
+                  </>
+                )}
+              </Button>
+            </div>
 
-          <div className="flex items-center gap-2">
-            {activeTab === 'url' && (
-              <>
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => copyToClipboard(composedGetUrl, "GET URL")}>
-                  <Copy className="h-3.5 w-3.5" /> Copy URL
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadTextFile(composedGetUrl, "get-url.txt", "text/plain")}>
-                  <Download className="h-3.5 w-3.5" /> Download
-                </Button>
-              </>
-            )}
-            {activeTab === 'xml' && (
-              <>
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => copyToClipboard(bindingsXML, "XML Bindings")}>
-                  <Copy className="h-3.5 w-3.5" /> Copy XML
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadTextFile(bindingsXML, "navigation-bindings.xml", "text/xml")}>
-                  <Download className="h-3.5 w-3.5" /> Download XML
-                </Button>
-              </>
-            )}
-            {activeTab === 'json' && (
-              <>
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => copyToClipboard(bindingsJSON, "JSON Bindings")}>
-                  <Copy className="h-3.5 w-3.5" /> Copy JSON
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => downloadTextFile(bindingsJSON, "navigation-bindings.json", "application/json")}>
-                  <Download className="h-3.5 w-3.5" /> Download JSON
-                </Button>
-              </>
+            {/* Simulation Preview Block */}
+            {simulationData && (
+              <div className="space-y-2 animate-fade-in">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-success-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Simulation Response Preview
+                  </span>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2 gap-1 text-muted-foreground" onClick={() => copyToClipboard(JSON.stringify(simulationData, null, 2), "Simulation Data")}>
+                      <Copy className="h-3 w-3" /> Copy JSON
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs px-2 gap-1 text-muted-foreground" onClick={() => downloadTextFile(JSON.stringify(simulationData, null, 2), "simulation-response.json", "application/json")}>
+                      <Download className="h-3 w-3" /> Download
+                    </Button>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-slate-950 p-4 border font-mono text-xs text-slate-100 overflow-y-auto max-h-64 scrollbar-thin">
+                  <pre className="whitespace-pre">{JSON.stringify(simulationData, null, 2)}</pre>
+                </div>
+              </div>
             )}
           </div>
         </div>
