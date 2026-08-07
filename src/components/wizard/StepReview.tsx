@@ -9,7 +9,7 @@ import { fetchLegacyApi } from "../../lib/legacyApiBase";
 interface Props {
   state: WizardState;
   onEdit: (step: number) => void;
-  onSave: () => void;
+  onSave: (templateGetUrl: string) => void;
   onCancel: () => void;
 }
 
@@ -116,7 +116,22 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
   const defaultPlaceholder = `{{${keyFieldName}}}`;
   const salesOrderNumber = userInputValue !== null ? userInputValue : defaultPlaceholder;
 
-  // Composes the final OData GET URL dynamically
+  // Template URL always uses the placeholder (for saving to DB)
+  const templateGetUrl = (() => {
+    if (!rootEntity) return "";
+    const expandStr = buildExpandString(rootEntity.originalName, entities);
+    const filterQuery = keyField ? `$filter=${keyField.originalName} eq '${defaultPlaceholder}'` : "";
+    let baseUrl = state?.connection?.baseUrl || "";
+    baseUrl = baseUrl.replace(/\/\$metadata\/?$/i, "").replace(/\/$/, "");
+    const queryParts: string[] = [];
+    if (filterQuery) queryParts.push(filterQuery);
+    const expandStr2 = buildExpandString(rootEntity.originalName, entities);
+    if (expandStr2) queryParts.push(`$expand=${expandStr2}`);
+    queryParts.push("$format=json");
+    return `${baseUrl}/${rootEntity.originalName}?${queryParts.join("&")}`;
+  })();
+
+  // Composes the final OData GET URL dynamically (with user-entered value)
   const composedGetUrl = (() => {
     if (!rootEntity) return "";
 
@@ -324,7 +339,7 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
         <Button variant="ghost" onClick={onCancel}>Cancel</Button>
         <div className="flex flex-col-reverse sm:flex-row gap-2">
           <Button variant="outline" onClick={() => onEdit(1)}>Edit</Button>
-          <Button onClick={onSave} className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-md">
+          <Button onClick={() => onSave(templateGetUrl)} className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-md">
             <CheckCircle2 className="h-4 w-4 mr-2" />
             Save API definition
           </Button>
