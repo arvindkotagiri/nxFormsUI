@@ -14,26 +14,29 @@ interface Props {
 
 export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
   const [activeTab, setActiveTab] = useState<'url' | 'xml' | 'json'>('url');
-  const enabledEntities = Object.values(state.entities).filter((e) => e.enabled);
+  const entities = state?.entities || {};
+  const enabledEntities = Object.values(entities).filter((e) => e?.enabled);
   const totalFields = enabledEntities.reduce(
-    (sum, e) => sum + Object.values(state.fields[e.originalName] ?? {}).filter((f) => f.enabled).length,
+    (sum, e) => sum + Object.values((state?.fields || {})[e.originalName] ?? {}).filter((f) => f?.enabled).length,
     0,
   );
 
   // Heuristic: retrieve saved navigation bindings or reconstruct them on the fly from relationships
   function getEntityBindings(entity: EntityConfig, allEntities: Record<string, EntityConfig>): Array<{ path: string; target: string }> {
+    if (!entity) return [];
     if (entity.navigationBindings && entity.navigationBindings.length > 0) {
       return entity.navigationBindings;
     }
 
-    if (!entity.relationships || entity.relationships.length === 0) {
+    if (!Array.isArray(entity.relationships) || entity.relationships.length === 0) {
       return [];
     }
 
     const reconstructed: Array<{ path: string; target: string }> = [];
-    const allEntityNames = Object.keys(allEntities);
+    const allEntityNames = Object.keys(allEntities || {});
 
     for (const rel of entity.relationships) {
+      if (!rel) continue;
       const relWord = rel.replace(/^to_/i, "").toLowerCase();
       
       let bestMatch = "";
@@ -56,21 +59,36 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
     return reconstructed;
   }
 
-  // Helper: Recursive expand path builder
-  function buildExpandString(entityName: string, allEntities: Record<string, EntityConfig>): string {
+  // Helper: Recursive expand path builder with Cycle/Loop Prevention
+  function buildExpandString(
+    entityName: string, 
+    allEntities: Record<string, EntityConfig>,
+    visited: Set<string> = new Set()
+  ): string {
     const entity = allEntities[entityName];
     if (!entity) return "";
+
+    // Cycle check: if this entity is already in our path, stop recursion to prevent browser crash
+    if (visited.has(entityName.toLowerCase())) {
+      return "";
+    }
+
+    // Add current entity to visited path
+    const nextVisited = new Set(visited);
+    nextVisited.add(entityName.toLowerCase());
 
     const bindings = getEntityBindings(entity, allEntities);
     if (bindings.length === 0) return "";
 
     const subExpands: string[] = [];
     for (const binding of bindings) {
+      if (!binding?.target || !binding?.path) continue;
       const targetEntity = Object.values(allEntities).find(
         (e) => e.originalName.toLowerCase() === binding.target.toLowerCase() && e.enabled
       );
       if (targetEntity) {
-        const nested = buildExpandString(targetEntity.originalName, allEntities);
+        // Recursive call with updated visited set path
+        const nested = buildExpandString(targetEntity.originalName, allEntities, nextVisited);
         if (nested) {
           subExpands.push(`${binding.path}($expand=${nested})`);
         } else {
@@ -87,16 +105,17 @@ export function StepReview({ state, onEdit, onSave, onCancel }: Props) {
     const rootEntity = enabledEntities.find((e) => e.isCore) || enabledEntities[0];
     if (!rootEntity) return "";
 
-    const expandStr = buildExpandString(rootEntity.originalName, state.entities);
+    const expandStr = buildExpandString(rootEntity.originalName, entities);
     
-    // Find the key field of the root entity set
-    const keyField = Object.values(state.fields[rootEntity.originalName] ?? {}).find((f) => f.isKey && f.enabled) 
-      || Object.values(state.fields[rootEntity.originalName] ?? {}).find((f) => f.isKey)
-      || Object.values(state.fields[rootEntity.originalName] ?? {})[0];
+    // Find the key field of the root entity set safely
+    const rootFields = (state?.fields || {})[rootEntity.originalName] || {};
+    const keyField = Object.values(rootFields).find((f) => f.isKey && f.enabled) 
+      || Object.values(rootFields).find((f) => f.isKey)
+      || Object.values(rootFields)[0];
       
     const filterQuery = keyField ? `$filter=${keyField.name} eq '203'` : "";
 
-    let baseUrl = state.connection.baseUrl || "";
+    let baseUrl = state?.connection?.baseUrl || "";
     baseUrl = baseUrl.replace(/\/\$metadata\/?$/i, "").replace(/\/$/, "");
 
     const queryParts: string[] = [];
