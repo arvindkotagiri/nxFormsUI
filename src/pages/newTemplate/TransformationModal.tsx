@@ -69,7 +69,7 @@ export const TRANSFORMATIONS: Record<string, string[]> = {
   MATH: ["ADD", "SUBTRACT", "MULTIPLY", "DIVIDE", "ROUND", "EXPRESSION"],
   NUMBER_FORMATTING: ["FORMAT_NUMBER", "FORMAT_CURRENCY", "FORMAT_COMPACT", "FORMAT_SCIENTIFIC"],
   DATE: ["DATE_FORMAT", "DATE_DIFF", "DATE_NOW", "DATE_TRUNCATE", "DATE_ADD"],
-  LOOKUP: ["LOOKUP BY BUSINESS PARTNER", "LOOKUP BY ADDRESS NUMBER"],
+  LOOKUP: ["LOOKUP BY BUSINESS PARTNER", "LOOKUP BY ADDRESS NUMBER", "Read_Address"],
 };
 
 // ─── Help content per transformation ───────────────────────────────────────
@@ -101,6 +101,7 @@ const HELP: Record<string, { description: string; params: string[]; example?: { 
   DATE_NOW:      { description: "Replaces the field value with the current date/time.", params: ["Format (Optional): Output pattern."] },
   DATE_TRUNCATE: { description: "Truncates a date to the start of a given period.", params: ["Unit: day, month, or year."], example: { input: "2024-07-15", extra: "Unit: month", output: "2024-07-01" } },
   DATE_ADD:      { description: "Adds or subtracts a duration from a date.", params: ["Amount: Number of units (negative to subtract).", "Unit: days, months, or years."], example: { input: "2024-01-01", extra: "Amount: 30, Unit: days", output: "2024-01-31" } },
+  Read_Address:  { description: "Resolves an address number to an address using the integration execute API.", params: ["No additional parameters required."] },
 };
 
 // ─── Field config per transformation ───────────────────────────────────────

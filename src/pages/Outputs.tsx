@@ -60,22 +60,22 @@ type TableColumn = {
 function getTableColumns(onViewDetail: (o: any) => void): TableColumn[] {
   return [
     {
-      id: "outputNumber",
-      label: "Output Number",
-      sortKey: "outputNumber",
-      render: (o) => (
-        <span className="font-mono text-xs font-semibold text-foreground">
-          {o.outputNumber}
-        </span>
-      ),
-    },
-    {
       id: "evt_no",
       label: "Event No",
       sortKey: "evt_no",
       render: (o) => (
         <span className="font-mono text-xs text-muted-foreground">
           {o.evt_no}
+        </span>
+      ),
+    },
+    {
+      id: "outputNumber",
+      label: "Output Number",
+      sortKey: "outputNumber",
+      render: (o) => (
+        <span className="font-mono text-xs font-semibold text-foreground">
+          {o.outputNumber}
         </span>
       ),
     },
@@ -168,8 +168,8 @@ function getTableColumns(onViewDetail: (o: any) => void): TableColumn[] {
 }
 
 const ALL_COLUMN_IDS: ColumnId[] = [
-  "outputNumber",
   "evt_no",
+  "outputNumber",
   "formId",
   "printer",
   "format",
@@ -184,7 +184,7 @@ function compareOutputs(a: any, b: any, key: SortKey, dir: SortDir): number {
   const bv = b[key];
   let cmp = 0;
 
-  if (key === "outputNumber") {
+  if (key === "outputNumber" || key === "evt_no") {
     const an = Number(av);
     const bn = Number(bv);
     cmp =
@@ -208,7 +208,7 @@ export default function Outputs() {
   const [detailOutput, setDetailOutput] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState(0);
   const [outputs, setOutputs] = useState<any[]>([]);
-  const [sortKey, setSortKey] = useState<SortKey>("outputNumber");
+  const [sortKey, setSortKey] = useState<SortKey>("evt_no");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [visibleColumnIds, setVisibleColumnIds] = useState<Set<ColumnId>>(
     () => new Set(ALL_COLUMN_IDS),
