@@ -419,7 +419,7 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
 
                                 {output.status === "Success" && output.rendered_output && (
                                     <>
-                                        {output.format === "html" && (
+                                        {output.format?.toLowerCase() === "html" && (
                                             <div className="rounded-lg overflow-hidden border">
                                                 <iframe
                                                     srcDoc={(() => {
@@ -437,7 +437,7 @@ export default function SimulationModal({ open, onClose, formName, formId, conte
                                                 />
                                             </div>
                                         )}
-                                        {output.format === "zpl" && (
+                                        {output.format?.toLowerCase() === "zpl" && (
                                             <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto whitespace-pre-wrap break-all">
                                                 {output.rendered_output}
                                             </pre>

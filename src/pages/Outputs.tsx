@@ -665,17 +665,36 @@ export default function Outputs() {
                 </div>
               )}
               {activeTab === 3 && (
-                <pre
-                  className="p-4 rounded-xl text-xs font-mono max-h-[400px] w-full overflow-auto whitespace-pre-wrap break-words"
-                  style={{
-                    background: "hsl(var(--primary))",
-                    color: "hsl(var(--primary-foreground))",
-                  }}
-                >
-                  {detailOutput.errorMessage
-                    ? detailOutput.errorMessage
-                    : detailOutput.renderedOutput}
-                </pre>
+                detailOutput.errorMessage ? (
+                  <pre
+                    className="p-4 rounded-xl text-xs font-mono max-h-[400px] w-full overflow-auto whitespace-pre-wrap break-words"
+                    style={{
+                      background: "hsl(var(--primary))",
+                      color: "hsl(var(--primary-foreground))",
+                    }}
+                  >
+                    {detailOutput.errorMessage}
+                  </pre>
+                ) : detailOutput.format?.toLowerCase() === "html" ? (
+                  <div className="w-full h-[400px] border border-border rounded-xl overflow-hidden bg-white">
+                    <iframe
+                      srcDoc={detailOutput.renderedOutput}
+                      title="HTML Output Preview"
+                      className="w-full h-full border-none"
+                      sandbox="allow-scripts allow-same-origin"
+                    />
+                  </div>
+                ) : (
+                  <pre
+                    className="p-4 rounded-xl text-xs font-mono max-h-[400px] w-full overflow-auto whitespace-pre-wrap break-words"
+                    style={{
+                      background: "hsl(var(--primary))",
+                      color: "hsl(var(--primary-foreground))",
+                    }}
+                  >
+                    {detailOutput.renderedOutput}
+                  </pre>
+                )
               )}
             </div>
           </div>
