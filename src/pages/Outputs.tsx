@@ -684,14 +684,76 @@ export default function Outputs() {
                   >
                     {detailOutput.errorMessage}
                   </pre>
-                ) : detailOutput.format?.toLowerCase() === "html" ? (
-                  <div className="w-full h-[400px] border border-border rounded-xl overflow-hidden bg-white">
-                    <iframe
-                      srcDoc={detailOutput.renderedOutput}
-                      title="HTML Output Preview"
-                      className="w-full h-full border-none"
-                      sandbox="allow-scripts allow-same-origin"
-                    />
+                ) : (detailOutput.format?.toLowerCase() === "html" || (detailOutput.renderedOutput && detailOutput.renderedOutput.includes("<html"))) ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-xs font-semibold text-muted-foreground font-body">
+                        HTML Rendered Preview
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            const printWindow = window.open('', '_blank');
+                            if (!printWindow) {
+                              alert("Please allow popups to download/print PDF.");
+                              return;
+                            }
+                            printWindow.document.write(`
+                              <!DOCTYPE html>
+                              <html>
+                                <head>
+                                  <title>Output_${detailOutput.outputNumber || detailOutput.id}</title>
+                                  <style>
+                                    @page { margin: 0; }
+                                    body { margin: 0; padding: 0; }
+                                  </style>
+                                </head>
+                                <body>
+                                  ${detailOutput.renderedOutput}
+                                  <script>
+                                    window.onload = function() {
+                                      window.print();
+                                    };
+                                  </script>
+                                </body>
+                              </html>
+                            `);
+                            printWindow.document.close();
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer"
+                          style={{
+                            background: "hsl(var(--accent))",
+                            color: "white"
+                          }}
+                        >
+                          <Download size={13} /> Download PDF
+                        </button>
+                        <button
+                          onClick={() => {
+                            const blob = new Blob([detailOutput.renderedOutput], { type: "text/html;charset=utf-8" });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.href = url;
+                            link.download = `Output_${detailOutput.outputNumber || detailOutput.id}.html`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all border border-border cursor-pointer"
+                        >
+                          <Download size={13} /> Download HTML
+                        </button>
+                      </div>
+                    </div>
+                    <div className="w-full h-[400px] border border-border rounded-xl overflow-hidden bg-white shadow-inner">
+                      <iframe
+                        srcDoc={detailOutput.renderedOutput}
+                        title="HTML Output Preview"
+                        className="w-full h-full border-none"
+                        sandbox="allow-scripts allow-same-origin"
+                      />
+                    </div>
                   </div>
                 ) : (
                   <pre
