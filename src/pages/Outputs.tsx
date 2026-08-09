@@ -592,7 +592,7 @@ export default function Outputs() {
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h3 className="font-display text-lg font-semibold text-foreground">
-                {detailOutput.id}
+                Output - {detailOutput.outputNumber}
               </h3>
               <button
                 onClick={() => setDetailOutput(null)}

@@ -32,27 +32,35 @@ function getEventError(event: Record<string, unknown>): string | null {
   return String(err);
 }
 
-function formatEventPayload(event: Record<string, unknown>): string {
-  const raw =
-    event.payload ??
-    event.document_json ??
-    event.data ??
-    event.raw_payload ??
-    event.request_payload;
+// function formatEventPayload(event: Record<string, unknown>): string {
+//   console.log(event);
+//   const raw =
+//     event.payload ??
+//     event.document_json ??
+//     event.data ??
+//     event.raw_payload ??
+//     event.request_payload;
 
-  if (raw == null || raw === "") {
+//   if (raw == null || raw === "") {
+//     return "—";
+//   }
+
+//   if (typeof raw === "string") {
+//     try {
+//       return JSON.stringify(JSON.parse(raw), null, 2);
+//     } catch {
+//       return raw;
+//     }
+//   }
+
+//   return JSON.stringify(raw, null, 2);
+// }
+
+function formatEventPayload(event: Record<string, unknown>): string {
+  if (!event || Object.keys(event).length === 0) {
     return "—";
   }
-
-  if (typeof raw === "string") {
-    try {
-      return JSON.stringify(JSON.parse(raw), null, 2);
-    } catch {
-      return raw;
-    }
-  }
-
-  return JSON.stringify(raw, null, 2);
+  return JSON.stringify(event, null, 2);
 }
 
 function formatEvtNo(evtNo: unknown): string {
@@ -254,8 +262,11 @@ export default function Events() {
   const [selectedEvent, setSelectedEvent] = useState<Record<string, unknown> | null>(null);
   const [events, setEvents] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  // const [visibleColumnIds, setVisibleColumnIds] = useState<Set<ColumnId>>(
+  //   () => new Set(ALL_COLUMN_IDS),
+  // );
   const [visibleColumnIds, setVisibleColumnIds] = useState<Set<ColumnId>>(
-    () => new Set(ALL_COLUMN_IDS),
+  () => new Set(ALL_COLUMN_IDS.filter((id) => id !== "id")),
   );
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("ts");
