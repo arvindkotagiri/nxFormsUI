@@ -179,23 +179,32 @@ const ALL_COLUMN_IDS: ColumnId[] = [
   "actions",
 ];
 
+function parseNumericPart(val: any): number {
+  if (val === null || val === undefined) return -Infinity;
+  if (typeof val === "number") return val;
+  const matches = String(val).match(/\d+/);
+  return matches ? parseInt(matches[0], 10) : -Infinity;
+}
+
 function compareOutputs(a: any, b: any, key: SortKey, dir: SortDir): number {
-  const av = a[key];
-  const bv = b[key];
   let cmp = 0;
 
-  if (key === "outputNumber" || key === "evt_no") {
-    const an = Number(av);
-    const bn = Number(bv);
-    cmp =
-      !Number.isNaN(an) && !Number.isNaN(bn)
-        ? an - bn
-        : String(av ?? "").localeCompare(String(bv ?? ""), undefined, {
-          numeric: true,
-        });
+  if (key === "evt_no" || key === "outputNumber") {
+    const numA = parseNumericPart(a[key]);
+    const numB = parseNumericPart(b[key]);
+
+    if (numA !== numB) {
+      cmp = numA - numB;
+    } else {
+      const secondaryKey = key === "evt_no" ? "outputNumber" : "evt_no";
+      const secA = parseNumericPart(a[secondaryKey]);
+      const secB = parseNumericPart(b[secondaryKey]);
+      cmp = secA - secB;
+    }
   } else {
-    cmp = String(av ?? "").localeCompare(String(bv ?? ""), undefined, {
+    cmp = String(a[key] ?? "").localeCompare(String(b[key] ?? ""), undefined, {
       numeric: true,
+      sensitivity: "base",
     });
   }
 
