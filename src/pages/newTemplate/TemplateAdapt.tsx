@@ -241,9 +241,7 @@ export function TemplateAdapt() {
             if (match) {
                 const placeholderName = match[1];
                 const matchingChunk = chunksList.find(c => {
-                    if (c.isStatic || !c.fieldMapping) return false;
-                    const fieldName = c.fieldMapping.split('.').pop();
-                    return fieldName === placeholderName;
+                    return c.label === placeholderName || (c.fieldMapping && c.fieldMapping.split('.').pop() === placeholderName);
                 });
                 
                 if (matchingChunk) {
@@ -267,8 +265,15 @@ export function TemplateAdapt() {
 
         // Annotate <table> elements as entity set loop elements
         const tableElements = Array.from(doc.body.querySelectorAll('table')) as HTMLElement[];
+        const tableChunks = chunksList.filter(c => c.type === 'table');
         tableElements.forEach((tableEl, tableIndex) => {
-            if (!tableEl.id) {
+            const matchingChunk = tableChunks[tableIndex] || chunksList.find(c => c.id === tableEl.id);
+            if (matchingChunk) {
+                tableEl.id = matchingChunk.id;
+                if (matchingChunk.tableConfig && !tableEl.getAttribute('data-table-config')) {
+                    tableEl.setAttribute('data-table-config', JSON.stringify(matchingChunk.tableConfig));
+                }
+            } else if (!tableEl.id) {
                 tableEl.id = `chunk-table-${tableIndex}-${Date.now()}`;
             }
             
