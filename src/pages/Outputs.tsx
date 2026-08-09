@@ -704,8 +704,17 @@ export default function Outputs() {
                                 <head>
                                   <title>Output_${detailOutput.outputNumber || detailOutput.id}</title>
                                   <style>
-                                    @page { margin: 0; }
+                                    @page { margin: 0; size: auto; }
+                                    * {
+                                      -webkit-print-color-adjust: exact !important;
+                                      print-color-adjust: exact !important;
+                                      color-adjust: exact !important;
+                                    }
                                     body { margin: 0; padding: 0; }
+                                    .main-table th {
+                                      background-color: #000 !important;
+                                      color: #fff !important;
+                                    }
                                   </style>
                                 </head>
                                 <body>
