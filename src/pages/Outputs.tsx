@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import {
-import {
   Search,
   Filter,
   RotateCcw,
@@ -949,6 +948,8 @@ export default function Outputs() {
             </div>
           </div>
         </div>
+      )}
+
       {/* Print Configuration Modal */}
       {printModalOutput && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
