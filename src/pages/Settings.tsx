@@ -214,27 +214,30 @@ export default function Settings() {
     return () => window.removeEventListener('agent-log', handleLog);
   }, []);
 
-  const handleSaveAgentSettings = async () => {
+  const handleSaveAgentSettingsWithParams = async (enabled: boolean, siteId: string) => {
     setSaveStatus('saving');
     try {
       await fetch(`${nodeAPI}/api/model-configs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          agent_enabled: agentEnabled ? 'true' : 'false',
-          agent_site_id: agentSiteId
+          agent_enabled: enabled ? 'true' : 'false',
+          agent_site_id: siteId
         })
       });
       setSaveStatus('success');
-      setSaveMessage("Agent settings saved!");
-      // Trigger a storage event so other components (like the background agent) know to update
+      setSaveMessage(`Agent settings saved! (Enabled: ${enabled ? 'YES' : 'NO'}, Site: ${siteId})`);
       window.dispatchEvent(new Event('storage'));
     } catch (err) {
       setSaveStatus('error');
       setSaveMessage("Failed to save agent settings.");
     } finally {
-      setTimeout(() => { setSaveStatus('idle'); setSaveMessage(""); }, 3000);
+      setTimeout(() => { setSaveStatus('idle'); setSaveMessage(""); }, 4000);
     }
+  };
+
+  const handleSaveAgentSettings = async () => {
+    await handleSaveAgentSettingsWithParams(agentEnabled, agentSiteId);
   };
 
   const fetchModels = useCallback(async (keysToUse?: Record<string, string>) => {
@@ -651,7 +654,7 @@ export default function Settings() {
         <div className="space-y-4 animate-fade-in">
           <Section title="Local Print Agent">
             <div className="text-xs text-muted-foreground italic mb-4">
-              When enabled, this browser session will act as a print agent. It will poll for pending jobs for the specified Site ID and send them to the local network printers via the server.
+              When enabled, this browser session will act as a print agent. It will poll for pending jobs for the specified Site ID and process them in real-time.
             </div>
             
             {saveMessage && (
@@ -665,29 +668,85 @@ export default function Settings() {
             )}
 
             <FormRow label="Enable Browser Agent" description="Turn this device into a local printing node">
-              <Toggle value={agentEnabled} onChange={setAgentEnabled} />
+              <div className="flex items-center gap-3">
+                <Toggle
+                  value={agentEnabled}
+                  onChange={(val) => {
+                    setAgentEnabled(val);
+                    handleSaveAgentSettingsWithParams(val, agentSiteId);
+                  }}
+                />
+                <button
+                  onClick={handleSaveAgentSettings}
+                  className="px-3 py-1.5 rounded-lg bg-accent text-accent-foreground text-xs font-semibold hover:opacity-90 transition-all shadow-xs"
+                >
+                  Save & Activate Agent
+                </button>
+              </div>
             </FormRow>
             
             <FormRow label="Agent Site ID" description="Jobs with this site ID will be processed by this agent">
-              <input 
-                type="text"
-                value={agentSiteId}
-                onChange={(e) => setAgentSiteId(e.target.value)}
-                className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-48"
-                placeholder="SITE-001"
-              />
+              <div className="flex items-center gap-2">
+                <input 
+                  type="text"
+                  value={agentSiteId}
+                  onChange={(e) => setAgentSiteId(e.target.value)}
+                  onBlur={() => handleSaveAgentSettingsWithParams(agentEnabled, agentSiteId)}
+                  className="px-3 py-2 text-sm rounded-xl border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent/30 w-48"
+                  placeholder="SITE-001"
+                />
+                <button
+                  onClick={handleSaveAgentSettings}
+                  className="px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-secondary/80 transition-all"
+                >
+                  Update Site ID
+                </button>
+              </div>
             </FormRow>
 
-            <div className="mt-6 p-4 rounded-xl bg-accent/5 border border-accent/10 flex items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent shrink-0">
-                <RefreshCw size={20} className={agentEnabled ? "animate-spin" : ""} />
+            <div className="mt-6 p-4 rounded-xl bg-accent/5 border border-accent/10 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent shrink-0">
+                  <RefreshCw size={20} className={agentEnabled ? "animate-spin" : ""} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold flex items-center gap-2">
+                    Agent Status: 
+                    <span className={cn("text-xs px-2 py-0.5 rounded-md font-bold", agentEnabled ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-slate-500/10 text-slate-500")}>
+                      {agentEnabled ? `● Active & Polling (${agentSiteId})` : "○ Inactive"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Keep this browser window open on your local WiFi network to automatically receive and process print jobs for site {agentSiteId}.
+                  </p>
+                </div>
               </div>
-              <div>
-                <div className="text-sm font-semibold">Agent Status: {agentEnabled ? "Active & Polling" : "Inactive"}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Ensure the device stays connected to the local WiFi and the browser tab remains open to process print jobs in real-time.
-                </p>
-              </div>
+
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`${nodeAPI}/api/print-job`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        site_id: agentSiteId,
+                        payload: `TEST_PRINT_JOB_${Date.now()}`,
+                        copies: 1
+                      })
+                    });
+                    if (res.ok) {
+                      toast.success(`Queued test job for site ${agentSiteId}! Watch terminal below.`);
+                    } else {
+                      toast.error("Failed to queue test job");
+                    }
+                  } catch (err: any) {
+                    toast.error(`Error: ${err.message}`);
+                  }
+                }}
+                className="px-3.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-all shrink-0 cursor-pointer shadow-xs"
+              >
+                Trigger Test Job ({agentSiteId})
+              </button>
             </div>
           </Section>
 
