@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import {
+import {
   Search,
   Filter,
   RotateCcw,
@@ -11,8 +12,13 @@ import {
   ArrowUpDown,
   Download,
   Columns3,
+  Printer,
+  Check,
+  Settings,
+  Send,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 const API_URL = import.meta.env.VITE_NODE_API;
 
 function StatusBadge({ status }: { status: string }) {
@@ -57,7 +63,10 @@ type TableColumn = {
   render: (o: any) => React.ReactNode;
 };
 
-function getTableColumns(onViewDetail: (o: any) => void): TableColumn[] {
+function getTableColumns(
+  onViewDetail: (o: any) => void,
+  onOpenPrintConfig: (o: any) => void
+): TableColumn[] {
   return [
     {
       id: "evt_no",
@@ -138,9 +147,17 @@ function getTableColumns(onViewDetail: (o: any) => void): TableColumn[] {
         <div className="flex items-center gap-1">
           <button
             onClick={() => onViewDetail(o)}
+            title="View Output Details"
             className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
           >
             <Eye size={14} />
+          </button>
+          <button
+            onClick={() => onOpenPrintConfig(o)}
+            title="Configure Print & Send Job"
+            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Printer size={14} />
           </button>
           {o.status === "Failed" && (
             <>
@@ -225,7 +242,107 @@ export default function Outputs() {
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const columnPickerRef = useRef<HTMLDivElement>(null);
 
-  const tableColumns = getTableColumns(setDetailOutput);
+  // Print Configuration Modal state
+  const [printModalOutput, setPrintModalOutput] = useState<any | null>(null);
+  const [availablePrinters, setAvailablePrinters] = useState<any[]>([]);
+  const [selectedPrinterId, setSelectedPrinterId] = useState<string>("");
+  const [siteId, setSiteId] = useState<string>("DEFAULT_SITE");
+  const [copies, setCopies] = useState<number>(1);
+  const [printMode, setPrintMode] = useState<"agent" | "direct" | "browser">("agent");
+  const [isSubmittingPrint, setIsSubmittingPrint] = useState<boolean>(false);
+
+  const handleOpenPrintConfig = (outputItem: any) => {
+    setPrintModalOutput(outputItem);
+    fetch(`${API_URL}/api/printers`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setAvailablePrinters(data);
+          if (data.length > 0) setSelectedPrinterId(data[0].id);
+        }
+      })
+      .catch((err) => console.error("Error fetching printers:", err));
+  };
+
+  const handleSendPrintJob = async () => {
+    if (!printModalOutput) return;
+    setIsSubmittingPrint(true);
+
+    try {
+      if (printMode === "browser") {
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+          toast.error("Please allow popups to print.");
+          setIsSubmittingPrint(false);
+          return;
+        }
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Output_${printModalOutput.outputNumber || printModalOutput.id}</title>
+              <style>
+                @page { margin: 0; size: auto; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                body { margin: 0; padding: 0; }
+                .main-table th { background-color: #000 !important; color: #fff !important; }
+              </style>
+            </head>
+            <body>
+              ${printModalOutput.renderedOutput || ""}
+              <script>window.onload = function() { window.print(); };</script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        toast.success("Opened native print dialog!");
+        setPrintModalOutput(null);
+      } else if (printMode === "direct") {
+        const selectedPrinter = availablePrinters.find((p) => p.id === selectedPrinterId);
+        const res = await fetch(`${API_URL}/api/direct-print`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ip_address: selectedPrinter?.ip_address || "127.0.0.1",
+            payload: printModalOutput.renderedOutput || "",
+            port: 9100,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          toast.success("Direct socket print command sent!");
+          setPrintModalOutput(null);
+        } else {
+          toast.error(`Direct print failed: ${data.error || "Unknown error"}`);
+        }
+      } else {
+        // Default: Print Agent Queue
+        const res = await fetch(`${API_URL}/api/print-job`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            printer_id: selectedPrinterId || null,
+            site_id: siteId || "DEFAULT_SITE",
+            payload: printModalOutput.renderedOutput || "",
+            copies: copies,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          toast.success(`Print job queued for agent at site '${siteId}' (Job ID: ${data.job_id || "OK"})`);
+          setPrintModalOutput(null);
+        } else {
+          toast.error(`Failed to queue print job: ${data.error || "Unknown error"}`);
+        }
+      }
+    } catch (err: any) {
+      toast.error(`Print error: ${err.message}`);
+    } finally {
+      setIsSubmittingPrint(false);
+    }
+  };
+
+  const tableColumns = getTableColumns(setDetailOutput, handleOpenPrintConfig);
   const visibleColumns = tableColumns.filter((c) => visibleColumnIds.has(c.id));
   const allColumnsVisible = visibleColumnIds.size === ALL_COLUMN_IDS.length;
 
@@ -592,14 +709,22 @@ export default function Outputs() {
             {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
               <h3 className="font-display text-lg font-semibold text-foreground">
-                Output - {detailOutput.outputNumber}
+                Output - {detailOutput.outputNumber || detailOutput.id}
               </h3>
-              <button
-                onClick={() => setDetailOutput(null)}
-                className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
-              >
-                <XCircle size={16} className="text-muted-foreground" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleOpenPrintConfig(detailOutput)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-accent text-accent-foreground hover:opacity-90 transition-all shadow-sm cursor-pointer"
+                >
+                  <Printer size={13} /> Print Job
+                </button>
+                <button
+                  onClick={() => setDetailOutput(null)}
+                  className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
+                >
+                  <XCircle size={16} className="text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             {/* Tabs */}
@@ -776,6 +901,177 @@ export default function Outputs() {
                   </pre>
                 )
               )}
+            </div>
+          </div>
+        </div>
+      {/* Print Configuration Modal */}
+      {printModalOutput && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div
+            className="absolute inset-0 bg-foreground/20 backdrop-blur-sm"
+            onClick={() => setPrintModalOutput(null)}
+          />
+          <div className="relative w-full max-w-lg bg-card rounded-2xl shadow-elevated-lg overflow-hidden border border-border">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/20">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-accent" />
+                <h3 className="font-display text-base font-semibold text-foreground">
+                  Print Configuration
+                </h3>
+              </div>
+              <button
+                onClick={() => setPrintModalOutput(null)}
+                className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
+              >
+                <XCircle size={16} className="text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Content Form */}
+            <div className="p-6 space-y-4">
+              <div className="p-3 rounded-xl bg-background border border-border space-y-1 text-xs">
+                <div className="flex justify-between font-body text-muted-foreground">
+                  <span>Output Item:</span>
+                  <span className="font-mono text-foreground font-semibold">
+                    {printModalOutput.outputNumber ? `Output #${printModalOutput.outputNumber}` : printModalOutput.id}
+                  </span>
+                </div>
+                <div className="flex justify-between font-body text-muted-foreground">
+                  <span>Event:</span>
+                  <span className="font-mono text-foreground">{printModalOutput.evt_no}</span>
+                </div>
+                <div className="flex justify-between font-body text-muted-foreground">
+                  <span>Format:</span>
+                  <span className="badge-neutral">{printModalOutput.format}</span>
+                </div>
+              </div>
+
+              {/* Printer Selection */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground font-body block">
+                  Select Target Printer
+                </label>
+                {availablePrinters.length > 0 ? (
+                  <select
+                    value={selectedPrinterId}
+                    onChange={(e) => setSelectedPrinterId(e.target.value)}
+                    className="w-full h-9 text-xs px-3 rounded-lg border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent"
+                  >
+                    {availablePrinters.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} ({p.ip_address || "No IP"}) - {p.type || "Standard"}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Enter Printer Name or ID"
+                    value={selectedPrinterId}
+                    onChange={(e) => setSelectedPrinterId(e.target.value)}
+                    className="w-full h-9 text-xs px-3 rounded-lg border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                )}
+              </div>
+
+              {/* Site ID / Agent Identifier */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground font-body block">
+                    Site / Agent ID
+                  </label>
+                  <input
+                    type="text"
+                    value={siteId}
+                    onChange={(e) => setSiteId(e.target.value)}
+                    placeholder="e.g. DEFAULT_SITE"
+                    className="w-full h-9 text-xs px-3 rounded-lg border border-border bg-background text-foreground font-mono focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground font-body block">
+                    Copies
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={copies}
+                    onChange={(e) => setCopies(parseInt(e.target.value, 10) || 1)}
+                    className="w-full h-9 text-xs px-3 rounded-lg border border-border bg-background text-foreground font-body focus:outline-none focus:ring-2 focus:ring-accent"
+                  />
+                </div>
+              </div>
+
+              {/* Print Mode Selection */}
+              <div className="space-y-2 pt-1">
+                <label className="text-xs font-semibold text-foreground font-body block">
+                  Print Mode / Agent Pipeline
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPrintMode("agent")}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left transition-all",
+                      printMode === "agent"
+                        ? "border-accent bg-accent/10 text-accent font-semibold"
+                        : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                    )}
+                  >
+                    <div className="text-xs font-body font-semibold">Print Agent</div>
+                    <div className="text-[9px] opacity-75 font-body">Queued Agent Job</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPrintMode("direct")}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left transition-all",
+                      printMode === "direct"
+                        ? "border-accent bg-accent/10 text-accent font-semibold"
+                        : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                    )}
+                  >
+                    <div className="text-xs font-body font-semibold">Direct Socket</div>
+                    <div className="text-[9px] opacity-75 font-body">Port 9100 Raw IP</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPrintMode("browser")}
+                    className={cn(
+                      "p-2.5 rounded-xl border text-left transition-all",
+                      printMode === "browser"
+                        ? "border-accent bg-accent/10 text-accent font-semibold"
+                        : "border-border bg-background text-muted-foreground hover:bg-secondary"
+                    )}
+                  >
+                    <div className="text-xs font-body font-semibold">Browser Print</div>
+                    <div className="text-[9px] opacity-75 font-body">Native Dialog</div>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-border bg-muted/10">
+              <button
+                onClick={() => setPrintModalOutput(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold border border-border hover:bg-secondary transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSendPrintJob}
+                disabled={isSubmittingPrint}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-accent text-accent-foreground hover:opacity-90 transition-all shadow-sm disabled:opacity-50 cursor-pointer"
+              >
+                <Send size={13} />
+                {isSubmittingPrint ? "Sending..." : "Send Print Job"}
+              </button>
             </div>
           </div>
         </div>
