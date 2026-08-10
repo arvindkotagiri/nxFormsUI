@@ -690,7 +690,7 @@ export function TemplateAdapt() {
         }
     };
 
-    // Auto-scan and assign data-sap-mapping attribute for any {{...}} placeholders on mount
+    // Auto-scan and assign data-sap-mapping attribute & sync canvas UI text with {{...}} placeholders
     useEffect(() => {
         if (editorRef.current) {
             const allElements = editorRef.current.querySelectorAll('*');
@@ -698,11 +698,18 @@ export function TemplateAdapt() {
             allElements.forEach(el => {
                 const txt = el.textContent?.trim() || '';
                 const existingMapping = el.getAttribute('data-sap-mapping');
+                
                 if (!existingMapping || existingMapping === 'unmapped') {
                     const match = txt.match(/\{\{([^{}]+)\}\}/);
                     if (match && match[1]) {
                         const mappedPath = match[1].trim();
                         el.setAttribute('data-sap-mapping', mappedPath);
+                        modified = true;
+                    }
+                } else if (existingMapping && existingMapping !== 'unmapped' && !txt.startsWith('{{')) {
+                    // Update canvas UI text to show mapped SAP placeholder directly on screen!
+                    if (el.children.length === 0) {
+                        el.textContent = `{{${existingMapping}}}`;
                         modified = true;
                     }
                 }
@@ -1141,6 +1148,7 @@ export function TemplateAdapt() {
     // -------------------------------------------------
     const isTextSelected = selectedElement !== null && 
         selectedElement.tagName.toLowerCase() !== "img" && 
+        selectedElement.tagName.toLowerCase() !== "table" && 
         selectedElement.id !== "watermark-element" &&
         selectedElement.getAttribute('data-chunk-type') !== 'table';
 
@@ -1499,8 +1507,22 @@ export function TemplateAdapt() {
                                         <div className="text-xs font-mono font-bold text-rose-900 break-all">
                                             {selectedElementMapping}
                                         </div>
-                                        <div className="text-[9px] text-rose-700/80 font-medium">
-                                            Bound field placeholder: <code className="font-bold">&#123;&#123;{selectedElementMapping}&#125;&#125;</code>
+                                        <div className="flex items-center justify-between pt-1">
+                                            <div className="text-[9px] text-rose-700/80 font-medium">
+                                                Placeholder: <code className="font-bold">&#123;&#123;{selectedElementMapping}&#125;&#125;</code>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    if (selectedElement) {
+                                                        selectedElement.textContent = `{{${selectedElementMapping}}}`;
+                                                        if (editorRef.current) pushState(editorRef.current.innerHTML);
+                                                        toast.success(`Updated canvas to {{${selectedElementMapping}}}`);
+                                                    }
+                                                }}
+                                                className="text-[9px] font-bold text-rose-700 bg-rose-200/60 hover:bg-rose-200 px-2 py-0.5 rounded-md transition-all uppercase"
+                                            >
+                                                Display &#123;&#123;...&#125;&#125; on Canvas
+                                            </button>
                                         </div>
                                     </div>
                                 ) : (
