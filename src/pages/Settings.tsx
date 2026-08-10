@@ -5,6 +5,7 @@ import { useCustomFonts } from "@/hooks/useCustomFonts";
 import Observability from "./Observability";
 
 const flaskAPI = import.meta.env.VITE_FLASK_API;
+const nodeAPI = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
 
 const TABS = [
   "General",
@@ -113,7 +114,7 @@ export default function Settings() {
 
   // Load settings once on mount
   useEffect(() => {
-    fetch(`${flaskAPI}/model-configs`)
+    fetch(`${nodeAPI}/api/model-configs`)
       .then(r => r.json())
       .then(configs => {
         setModelConfigs(configs || {});
@@ -216,7 +217,7 @@ export default function Settings() {
   const handleSaveAgentSettings = async () => {
     setSaveStatus('saving');
     try {
-      await fetch(`${flaskAPI}/model-configs`, {
+      await fetch(`${nodeAPI}/api/model-configs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -261,7 +262,7 @@ export default function Settings() {
             models = await res.json();
         }
 
-        const configsRes = await fetch(`${flaskAPI}/model-configs`);
+        const configsRes = await fetch(`${nodeAPI}/api/model-configs`);
         const configs = await configsRes.json();
 
         setAvailableModels(Array.isArray(models) ? models : []);
@@ -288,7 +289,7 @@ export default function Settings() {
     setSaveStatus('saving');
     setSaveMessage("");
     try {
-        const res = await fetch(`${flaskAPI}/model-configs`, {
+        const res = await fetch(`${nodeAPI}/api/model-configs`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(modelConfigs)

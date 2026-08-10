@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
-const flaskAPI = import.meta.env.VITE_FLASK_API;
+const nodeAPI = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
 const POLL_INTERVAL = 5000; // 5 seconds
 
 const logToUI = (message: string, type: 'info' | 'success' | 'error' = 'info') => {
@@ -13,6 +13,20 @@ const logToUI = (message: string, type: 'info' | 'success' | 'error' = 'info') =
     }
   });
   window.dispatchEvent(event);
+
+  // Send error logs to logs_audit DB table so they appear on Logs & Audit page
+  if (type === 'error') {
+    fetch(`${nodeAPI}/api/logs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        level: 'ERROR',
+        service: 'PRINT_AGENT',
+        message: message,
+        username: 'PrintAgent'
+      })
+    }).catch(() => {});
+  }
 };
 
 export function PrintAgent() {
@@ -20,8 +34,8 @@ export function PrintAgent() {
 
   const processJobs = async (siteId: string) => {
     try {
-      // 1. Fetch pending jobs
-      const res = await fetch(`${flaskAPI}/api/jobs/pending/${siteId}`);
+      // 1. Fetch pending jobs from Node backend
+      const res = await fetch(`${nodeAPI}/api/jobs/pending/${siteId}`);
       if (!res.ok) return;
       
       const jobs = await res.json();
@@ -35,9 +49,8 @@ export function PrintAgent() {
         logToUI(`Processing job ${id.substring(0, 8)} for printer ${ip_address}`, 'info');
 
         // 2. Direct print via the backend's direct-print endpoint
-        // Since the browser can't do raw sockets, we tell our (local) backend to do it
         try {
-          const printRes = await fetch(`${flaskAPI}/api/direct-print`, {
+          const printRes = await fetch(`${nodeAPI}/api/direct-print`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -49,24 +62,21 @@ export function PrintAgent() {
           const status = printRes.ok ? "COMPLETED" : "FAILED";
           const error_msg = printRes.ok ? null : (await printRes.json()).error;
 
-          // 3. Update status back to server
-          await fetch(`${flaskAPI}/api/jobs/${id}/status`, {
+          if (status === "COMPLETED") {
+            logToUI(`Successfully printed job ${id.substring(0, 8)}`, 'success');
+          } else {
+            logToUI(`Failed to print job ${id.substring(0, 8)}: ${error_msg}`, 'error');
+          }
+
+          // 3. Update job status on backend
+          await fetch(`${nodeAPI}/api/jobs/${id}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status, error_msg })
           });
-
-          if (printRes.ok) {
-            logToUI(`Job ${id.substring(0, 8)} printed successfully`, 'success');
-            toast.success(`Job ${id.substring(0, 8)} printed successfully`);
-          } else {
-            logToUI(`Job ${id.substring(0, 8)} failed: ${error_msg}`, 'error');
-            toast.error(`Job ${id.substring(0, 8)} failed: ${error_msg}`);
-          }
         } catch (err) {
-          logToUI(`Error printing job ${id.substring(0, 8)}: ${err}`, 'error');
-          console.error(`[PrintAgent] Error printing job ${id}:`, err);
-          await fetch(`${flaskAPI}/api/jobs/${id}/status`, {
+          logToUI(`Error processing job ${id.substring(0, 8)}: ${err}`, 'error');
+          await fetch(`${nodeAPI}/api/jobs/${id}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: "FAILED", error_msg: String(err) })
@@ -83,7 +93,10 @@ export function PrintAgent() {
 
     // Check if agent is enabled in settings
     try {
-      const res = await fetch(`${flaskAPI}/model-configs`);
+      const res = await fetch(`${nodeAPI}/api/model-configs`);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const configs = await res.json();
       
       if (configs.agent_enabled === 'true' && configs.agent_site_id) {

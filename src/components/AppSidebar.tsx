@@ -20,6 +20,7 @@ import {
   Layers,
   Image,
   LifeBuoy,
+  ListOrdered,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -66,6 +67,7 @@ const navItems: NavItem[] = [
     children: [
       { title: "Events", url: "/events", icon: Zap },
       { title: "Output Status", url: "/output-status", icon: FileSearch },
+      { title: "Job Queue", url: "/job-queue", icon: ListOrdered },
       { title: "Logs & Audit", url: "/logs", icon: ScrollText },
       { title: "Support Tickets", url: "/tickets", icon: LifeBuoy },
     ],

@@ -23,6 +23,7 @@ import { PrintAgent } from "./components/PrintAgent";
 import ImageRetention from "./pages/ImageRetention";
 import Observability from "./pages/Observability";
 import Tickets from "./pages/Tickets";
+import JobQueue from "./pages/JobQueue";
 import { WizardProvider } from "@/context/WizardContext";
 
 
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/api-configurations" element={<ApiConfigurations />} />
               <Route path="/logs" element={<Logs />} />
               <Route path="/output-status" element={<Outputs />} />
+              <Route path="/job-queue" element={<JobQueue />} />
               <Route path="/settings" element={<Settings />} />
 
               {/* Forms Wizard App Integration */}
