@@ -898,9 +898,13 @@ export function TemplateAdapt() {
     // Helper to get selected image node (handles wrapper containers or direct image tag clicks)
     const getSelectedImageNode = (el: HTMLElement | null): HTMLImageElement | null => {
         if (!el) return null;
+        if (el.tagName.toLowerCase() === "table" || el.getAttribute("data-chunk-type") === "table") return null;
         if (el.tagName.toLowerCase() === "img") return el as HTMLImageElement;
-        const childImg = el.querySelector("img");
-        if (childImg) return childImg as HTMLImageElement;
+        // Only return childImg if container is explicitly an image wrapper, not a complex table
+        if (el.classList.contains("image-container") || el.getAttribute("data-chunk-type") === "image" || el.getAttribute("data-chunk-type") === "logo") {
+            const childImg = el.querySelector("img");
+            if (childImg) return childImg as HTMLImageElement;
+        }
         return null;
     };
 
@@ -940,6 +944,7 @@ export function TemplateAdapt() {
 
     const isBarcodeOrQr = (el: HTMLElement | null): boolean => {
         if (!el) return false;
+        if (el.tagName.toLowerCase() === "table" || el.getAttribute("data-chunk-type") === "table") return false;
         if (el.getAttribute("data-chunk-type") === "barcode" || el.getAttribute("data-barcode-type")) return true;
         const img = el.querySelector("img") || (el.tagName.toLowerCase() === "img" ? el : null);
         if (img) {
@@ -1637,6 +1642,7 @@ export function TemplateAdapt() {
                                                 if (!tableEl.id) {
                                                     tableEl.id = `chunk-table-${Date.now()}`;
                                                 }
+                                                tableEl.setAttribute("data-chunk-type", "table");
                                                 setSelectedIds([tableEl.id]);
                                                 setSelectedElements([tableEl]);
                                             }
