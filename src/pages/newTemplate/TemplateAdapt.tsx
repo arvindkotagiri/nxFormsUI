@@ -65,6 +65,21 @@ export function TemplateAdapt() {
     const [zoomLevel, setZoomLevel] = useState(1);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+    useEffect(() => {
+        const handleResize = () => {
+            if (canvasRef.current?.parentElement) {
+                const availableW = canvasRef.current.parentElement.clientWidth;
+                if (availableW > 0 && availableW < 850) {
+                    const fitZoom = Math.max(0.6, Math.min(1, (availableW - 32) / 816));
+                    setZoomLevel(fitZoom);
+                }
+            }
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     const { fonts: customFonts } = useCustomFonts();
 
     const [isLoading, setIsLoading] = useState(false);
@@ -1425,7 +1440,7 @@ export function TemplateAdapt() {
     const isMultiPage = localHtml.includes("multi-page-container") || localHtml.includes("pdf-page-wrapper");
 
     return (
-        <div className="flex h-[calc(100vh-200px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
+        <div className="flex h-[calc(100vh-140px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
             {/* Editor Workspace (Left) */}
             <div className="flex-1 flex flex-col relative h-full min-w-0">
 
@@ -1543,8 +1558,8 @@ export function TemplateAdapt() {
 
             {/* Premium, High-End Control Inspector Panel (Right) */}
             <div className={cn(
-                "border-l border-slate-200 bg-white flex flex-col justify-between overflow-y-auto z-40 shadow-2xl select-none custom-scrollbar transition-all duration-300 relative",
-                isSidebarOpen ? "w-[360px] p-6 opacity-100" : "w-0 p-0 border-0 opacity-0 pointer-events-none"
+                "shrink-0 border-l border-slate-200 bg-white flex flex-col justify-between overflow-y-auto z-40 shadow-2xl select-none custom-scrollbar transition-all duration-300 relative",
+                isSidebarOpen ? "w-[380px] min-w-[380px] p-6 opacity-100" : "w-0 p-0 border-0 opacity-0 pointer-events-none"
             )}>
                 <div className="space-y-6">
                     {/* Header */}
