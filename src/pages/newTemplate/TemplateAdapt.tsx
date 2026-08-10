@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { FieldMappingSelector } from './FieldMappingSelector';
 import { TransformationModal, type TransformationPayload } from './TransformationModal';
+import { MappingAgentChatPanel, type SuggestedAction } from './MappingAgentChatPanel';
 import { TableLoopConfigPanel, type TableLoopConfig } from './TableLoopConfigPanel';
 
 const flaskAPI = import.meta.env.VITE_FLASK_API;
@@ -1246,6 +1247,68 @@ export function TemplateAdapt() {
         toast.success(`Table loop configured: ${config.entitySetKey}${config.innerEntitySetKey ? ' → ' + config.innerEntitySetKey : ''}`);
     };
 
+    const handleApplyAIMapping = (action: SuggestedAction) => {
+        if (!action.fieldPath) return;
+        let el = selectedElement;
+        if (!el && editorRef.current) {
+            if (action.targetSelector) {
+                try {
+                    el = editorRef.current.querySelector(action.targetSelector) as HTMLElement;
+                } catch {
+                    el = null;
+                }
+            }
+            if (!el && action.targetTextSnippet) {
+                const allElements = Array.from(editorRef.current.querySelectorAll('*')) as HTMLElement[];
+                el = allElements.find(e => e.children.length === 0 && e.textContent?.trim().toLowerCase().includes(action.targetTextSnippet!.toLowerCase())) || null;
+            }
+        }
+
+        if (el) {
+            el.textContent = `{{${action.fieldPath}}}`;
+            el.setAttribute("data-sap-mapping", action.fieldPath);
+            el.setAttribute("data-editor-element", "true");
+            if (editorRef.current) {
+                pushState(editorRef.current.innerHTML);
+                syncCanvasToChunks();
+            }
+            toast.success(`Mapped element to ${action.fieldPath}`);
+        } else {
+            toast.error("Could not find target element on canvas to map.");
+        }
+    };
+
+    const handleApplyAITableLoop = (config: TableLoopConfig) => {
+        let tableEl: HTMLElement | null = null;
+        if (selectedElement && (selectedElement.tagName.toLowerCase() === 'table' || selectedElement.getAttribute('data-chunk-type') === 'table')) {
+            tableEl = selectedElement;
+        } else if (editorRef.current) {
+            tableEl = editorRef.current.querySelector('table');
+        }
+
+        if (tableEl) {
+            tableEl.setAttribute('data-table-config', JSON.stringify(config));
+            setTableConfigMap(prev => ({ ...prev, [tableEl!.id || 'main-table']: config }));
+            if (editorRef.current) {
+                pushState(editorRef.current.innerHTML);
+                syncCanvasToChunks();
+            }
+            toast.success(`Table loop configured: ${config.entitySetKey}`);
+        } else {
+            toast.error("No table element found on canvas to configure.");
+        }
+    };
+
+    const handleApplyAIAllActions = (actions: SuggestedAction[]) => {
+        actions.forEach(action => {
+            if (action.actionType === 'MAP_FIELD') {
+                handleApplyAIMapping(action);
+            } else if (action.actionType === 'CONFIGURE_TABLE_LOOP' && action.tableConfig) {
+                handleApplyAITableLoop(action.tableConfig);
+            }
+        });
+    };
+
     const contextFields = (() => {
         if (!selectedContext?.fields) return [];
         if (Array.isArray(selectedContext.fields)) return selectedContext.fields;
@@ -2088,6 +2151,19 @@ export function TemplateAdapt() {
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* AI Mapping & Table Loop Copilot Chat Interface */}
+                <div className="mt-6">
+                    <MappingAgentChatPanel
+                        selectedContext={selectedContext}
+                        htmlContent={localHtml || (editorRef.current?.innerHTML || "")}
+                        selectedElement={selectedElement}
+                        referenceImageUrl={uploadedImage || undefined}
+                        onApplyMapping={handleApplyAIMapping}
+                        onApplyTableLoop={handleApplyAITableLoop}
+                        onApplyAllActions={handleApplyAIAllActions}
+                    />
                 </div>
 
                 {/* Helpful Guidelines */}
