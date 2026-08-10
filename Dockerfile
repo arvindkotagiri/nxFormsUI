@@ -30,13 +30,14 @@ RUN npm run build
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Add the SPA routing fix for Nginx
+# Add the SPA routing fix for Nginx with no-cache headers for index.html
 RUN echo 'server { \
     listen 80; \
     location / { \
         root /usr/share/nginx/html; \
         index index.html index.htm; \
         try_files $uri $uri/ /index.html; \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 
