@@ -32,7 +32,9 @@ import {
     Maximize2,
     ChevronLeft,
     ChevronRight,
-    Table2
+    Table2,
+    ZoomIn,
+    ZoomOut
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -1443,6 +1445,48 @@ export function TemplateAdapt() {
         <div className="flex h-[calc(100vh-140px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
             {/* Editor Workspace (Left) */}
             <div className="flex-1 flex flex-col relative h-full min-w-0">
+
+                {/* Floating Canvas Controls Bar (Top Left) */}
+                <div className="absolute left-4 top-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md rounded-xl p-1 z-50 flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-600 hover:bg-slate-100"
+                        onClick={() => setZoomLevel(prev => Math.max(0.4, parseFloat((prev - 0.1).toFixed(2))))}
+                        title="Zoom Out"
+                    >
+                        <ZoomOut className="w-3.5 h-3.5" />
+                    </Button>
+                    <span className="text-[10px] font-bold font-mono text-slate-700 w-12 text-center select-none">
+                        {Math.round(zoomLevel * 100)}%
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-600 hover:bg-slate-100"
+                        onClick={() => setZoomLevel(prev => Math.min(2.0, parseFloat((prev + 0.1).toFixed(2))))}
+                        title="Zoom In"
+                    >
+                        <ZoomIn className="w-3.5 h-3.5" />
+                    </Button>
+                    <div className="h-4 w-px bg-slate-200 mx-0.5" />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-[10px] font-bold text-slate-600 hover:bg-slate-100 uppercase tracking-wider"
+                        onClick={() => {
+                            if (canvasRef.current?.parentElement) {
+                                const availW = canvasRef.current.parentElement.clientWidth;
+                                if (availW > 0) {
+                                    const fitZoom = Math.max(0.5, Math.min(1.8, (availW - 48) / 816));
+                                    setZoomLevel(parseFloat(fitZoom.toFixed(2)));
+                                }
+                            }
+                        }}
+                    >
+                        Fit Width
+                    </Button>
+                </div>
 
                 {/* Floating Properties Panel Toggle */}
                 <button
