@@ -1429,7 +1429,7 @@ export function TemplateAdapt() {
     const isMultiPage = localHtml.includes("multi-page-container") || localHtml.includes("pdf-page-wrapper");
 
     return (
-        <div className="flex h-[calc(100vh-140px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
+        <div className="flex h-[calc(100vh-140px)] w-full min-w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
             {/* Editor Workspace (Left) */}
             <div className="flex-1 flex flex-col relative h-full min-w-0">
 

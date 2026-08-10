@@ -19,11 +19,11 @@ export function WizardLayout() {
   };
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="w-full min-w-full space-y-4 animate-fade-in">
 
       {/* Conditionally render header based on step 2 (Studio) for maximum workspace height */}
       {currentStep === 2 ? (
-        <div className="flex items-center justify-between gap-4 py-1.5 px-4 card-elevated rounded-2xl">
+        <div className="flex items-center justify-between gap-4 py-1.5 px-4 card-elevated rounded-2xl w-full">
           <div className="flex items-center gap-2">
             <h1 className="font-display text-sm font-bold text-foreground">
               New Template
@@ -57,11 +57,11 @@ export function WizardLayout() {
 
       {/* Main Step Content */}
       {currentStep === 2 ? (
-        <div className="w-full">
+        <div className="w-full min-w-full">
           {renderStep()}
         </div>
       ) : (
-        <div className="card-elevated p-6 min-h-[600px]">
+        <div className="card-elevated p-6 min-h-[600px] w-full">
           {renderStep()}
         </div>
       )}
