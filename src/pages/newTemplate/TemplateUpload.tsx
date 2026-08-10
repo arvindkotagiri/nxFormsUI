@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useWizard } from '@/context/WizardContext';
-import { bootstrapTokenIfMissing } from '@/lib/api';
+import { bootstrapTokenIfMissing, apiUrl } from '@/lib/api';
 import { legacyApiUrl } from '@/lib/legacyApiBase';
 import { LABEL_SIZES } from '@/data/labelData';
 import { Switch } from '@/components/ui/switch';
@@ -145,8 +145,7 @@ export function TemplateUpload() {
     const formData = new FormData();
     formData.append('image', uploadedFile);
 
-    const baseUrl = flaskAPI || 'http://localhost:5050';
-    const analyzeUrl = `${baseUrl}/analyze-label`;
+    const analyzeUrl = apiUrl('/analyze-label');
 
     try {
       // Step A: Perform layout analysis
@@ -175,7 +174,7 @@ export function TemplateUpload() {
 
       // Step B: Automatically run HTML Design replication immediately afterwards
       setProcessingStatus("Generating HTML replica...");
-      const replicateUrl = `${baseUrl}/replicate-invoice`;
+      const replicateUrl = apiUrl('/replicate-invoice');
       console.log("Combined Step B: Running replication on:", replicateUrl);
 
       const repFormData = new FormData();
