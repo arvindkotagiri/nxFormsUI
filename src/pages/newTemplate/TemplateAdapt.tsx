@@ -1409,28 +1409,11 @@ export function TemplateAdapt() {
                                             transform: translate(0, 0) !important;
                                         }
                                         [data-editor-container] [data-sap-mapping] {
-                                            position: relative !important;
-                                            outline: 2px solid #f43f5e !important;
-                                            background-color: rgba(244, 63, 94, 0.08) !important;
-                                            box-shadow: 0 0 10px rgba(244, 63, 94, 0.2) !important;
-                                            border-radius: 4px !important;
+                                            border-bottom: 2px double #f43f5e !important;
                                         }
-                                        [data-editor-container] [data-sap-mapping]::before {
-                                            content: "🏷️ " attr(data-sap-mapping);
-                                            position: absolute;
-                                            top: -18px;
-                                            left: 2px;
-                                            background: #f43f5e;
-                                            color: #ffffff;
-                                            font-size: 9px;
-                                            font-weight: 800;
-                                            font-family: monospace;
-                                            padding: 1px 6px;
-                                            border-radius: 4px;
-                                            white-space: nowrap;
-                                            pointer-events: none;
-                                            z-index: 99;
-                                            box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+                                        [data-editor-container] [data-sap-mapping]:hover {
+                                            outline: 2px dashed #f43f5e !important;
+                                            background-color: rgba(244, 63, 94, 0.05) !important;
                                         }
                                     }
                                     [data-editor-container] * {

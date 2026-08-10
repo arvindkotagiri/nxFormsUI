@@ -50,37 +50,51 @@ const defaultConfig = (): TableLoopConfig => ({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function getEntityNames(selectedContext: any): string[] {
-  if (!selectedContext) return [];
-  const entities = selectedContext?.entities || [];
-  if (Array.isArray(entities)) {
-    return entities.map((e: any) => e?.name || e?.entitySet || e?.label || e).filter(Boolean);
+  if (!selectedContext) return ["item", "head"];
+  const entities = selectedContext?.entities;
+  if (Array.isArray(entities) && entities.length > 0) {
+    return entities.map((e: any) => typeof e === 'string' ? e : (e?.name || e?.entitySet || e?.label || "")).filter(Boolean);
   }
-  return [];
+  if (selectedContext?.fields && typeof selectedContext.fields === 'object' && !Array.isArray(selectedContext.fields)) {
+    return Object.keys(selectedContext.fields);
+  }
+  return ["item", "head"];
 }
 
 function getEntityFields(selectedContext: any, entityKey: string): string[] {
   if (!selectedContext || !entityKey) return [];
-  const fieldsByEntity = selectedContext?.fields || {};
-  if (typeof fieldsByEntity === "object" && !Array.isArray(fieldsByEntity)) {
+  const fieldsByEntity = selectedContext?.fields;
+  if (fieldsByEntity && typeof fieldsByEntity === "object" && !Array.isArray(fieldsByEntity)) {
     const match = Object.entries(fieldsByEntity).find(
       ([k]) => k.toLowerCase() === entityKey.toLowerCase()
     );
     if (match && Array.isArray(match[1])) {
-      return (match[1] as any[]).map((f: any) => f?.name || f?.field_name || f || "").filter(Boolean);
+      return (match[1] as any[]).map((f: any) => typeof f === 'string' ? f : (f?.name || f?.field_name || f?.path || "")).filter(Boolean);
     }
   }
-  return [];
+  return ["itemno", "material", "description", "quantity", "netprice", "taxamount", "total"];
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }: TableLoopConfigPanelProps) {
-  const [config, setConfig] = useState<TableLoopConfig>(initialConfig ?? defaultConfig());
+  const getSafeConfig = (cfg: TableLoopConfig | null): TableLoopConfig => ({
+    entitySetKey: cfg?.entitySetKey || "item",
+    innerEntitySetKey: cfg?.innerEntitySetKey || "",
+    sortCriteria: Array.isArray(cfg?.sortCriteria) ? cfg.sortCriteria : [],
+    alreadySorted: !!cfg?.alreadySorted,
+    filters: Array.isArray(cfg?.filters) ? cfg.filters : [],
+    subtotalFields: Array.isArray(cfg?.subtotalFields) ? cfg.subtotalFields : [],
+  });
+
+  const [config, setConfig] = useState<TableLoopConfig>(getSafeConfig(initialConfig));
   const [activeTab, setActiveTab] = useState<"entity" | "sort" | "filter" | "subtotal">("entity");
 
   useEffect(() => {
-    setConfig(initialConfig ?? defaultConfig());
+    setConfig(getSafeConfig(initialConfig));
   }, [initialConfig]);
 
   const entityNames = getEntityNames(selectedContext);
@@ -90,22 +104,26 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
   // Merge outer + inner fields for conditions
   const allAvailableFields = Array.from(new Set([...outerFields, ...innerFields]));
 
+  const safeSortCriteria = Array.isArray(config.sortCriteria) ? config.sortCriteria : [];
+  const safeFilters = Array.isArray(config.filters) ? config.filters : [];
+  const safeSubtotalFields = Array.isArray(config.subtotalFields) ? config.subtotalFields : [];
+
   // ── Sort Criteria ─────────────────────────────────────────────────────────
 
   const addSort = () => {
     setConfig(c => ({
       ...c,
-      sortCriteria: [...c.sortCriteria, { field: "", direction: "ASC" }],
+      sortCriteria: [...safeSortCriteria, { field: "", direction: "ASC" }],
     }));
   };
 
   const removeSort = (i: number) => {
-    setConfig(c => ({ ...c, sortCriteria: c.sortCriteria.filter((_, idx) => idx !== i) }));
+    setConfig(c => ({ ...c, sortCriteria: safeSortCriteria.filter((_, idx) => idx !== i) }));
   };
 
   const updateSort = (i: number, patch: Partial<SortCriterion>) => {
     setConfig(c => {
-      const updated = [...c.sortCriteria];
+      const updated = [...safeSortCriteria];
       updated[i] = { ...updated[i], ...patch };
       return { ...c, sortCriteria: updated };
     });
@@ -116,17 +134,17 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
   const addFilter = () => {
     setConfig(c => ({
       ...c,
-      filters: [...c.filters, { field: "", operator: "!=", value: "" }],
+      filters: [...safeFilters, { field: "", operator: "!=", value: "" }],
     }));
   };
 
   const removeFilter = (i: number) => {
-    setConfig(c => ({ ...c, filters: c.filters.filter((_, idx) => idx !== i) }));
+    setConfig(c => ({ ...c, filters: safeFilters.filter((_, idx) => idx !== i) }));
   };
 
   const updateFilter = (i: number, patch: Partial<WhereCondition>) => {
     setConfig(c => {
-      const updated = [...c.filters];
+      const updated = [...safeFilters];
       updated[i] = { ...updated[i], ...patch };
       return { ...c, filters: updated };
     });
@@ -137,9 +155,9 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
   const toggleSubtotalField = (field: string) => {
     setConfig(c => ({
       ...c,
-      subtotalFields: c.subtotalFields.includes(field)
-        ? c.subtotalFields.filter(f => f !== field)
-        : [...c.subtotalFields, field],
+      subtotalFields: safeSubtotalFields.includes(field)
+        ? safeSubtotalFields.filter(f => f !== field)
+        : [...safeSubtotalFields, field],
     }));
   };
 
