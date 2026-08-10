@@ -271,7 +271,7 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
 
           {!config.alreadySorted && (
             <div className="space-y-2">
-              {config.sortCriteria.map((sort, i) => (
+              {safeSortCriteria.map((sort, i) => (
                 <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-2">
                   <select
                     value={sort.field}
@@ -327,7 +327,7 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
           <p className="text-[9px] text-slate-400 leading-relaxed">
             All conditions must pass (AND logic). Rows that fail any condition are excluded from the output.
           </p>
-          {config.filters.map((filter, i) => (
+          {safeFilters.map((filter, i) => (
             <div key={i} className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl p-2">
               {/* Field */}
               {allAvailableFields.length > 0 ? (
@@ -382,17 +382,16 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
 
       {/* ── Tab: Subtotal Fields ──────────────────────────────────────────────── */}
       {activeTab === "subtotal" && (
-        <div className="space-y-2 animate-in fade-in duration-200">
+        <div className="space-y-3 animate-in fade-in duration-200">
           <p className="text-[9px] text-slate-400 leading-relaxed">
-            Select the numeric columns to auto-sum into a subtotal row after each group completes. The values will be injected as <code className="text-[9px] bg-slate-100 px-1 rounded">subtotal_[fieldName]</code> in the Handlebars context.
+            Select numeric fields to sum automatically in a subtotal row at the bottom of each group table.
           </p>
           {allAvailableFields.length > 0 ? (
-            <div className="space-y-1">
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
               {allAvailableFields.map(field => (
                 <label
                   key={field}
                   className={cn(
-                    "flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer text-[11px] font-medium transition-all",
                     config.subtotalFields.includes(field)
                       ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                       : "bg-white border-slate-200 text-slate-600 hover:border-emerald-200"
