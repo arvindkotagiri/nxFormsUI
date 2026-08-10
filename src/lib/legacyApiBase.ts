@@ -1,4 +1,6 @@
-const DEFAULT_NODE_API = "http://localhost:4000";
+const DEFAULT_NODE_API = typeof window !== "undefined"
+  ? `${window.location.protocol}//${window.location.host}/node`
+  : "http://localhost:4000";
 
 function normalizeLegacyBase(raw: string): string {
   // Accept both "http://host:port" and "http://host:port/api" in env config.
@@ -12,16 +14,14 @@ export function getLegacyApiBase(): string {
     return normalizeLegacyBase(nodeApi);
   }
 
-  if (import.meta.env.DEV) {
-    return "";
-  }
-
   const flaskApi = import.meta.env.VITE_FLASK_API;
   if (flaskApi) {
     return normalizeLegacyBase(flaskApi);
   }
 
-  return DEFAULT_NODE_API;
+  return typeof window !== "undefined"
+    ? `${window.location.protocol}//${window.location.host}/node`
+    : DEFAULT_NODE_API;
 }
 
 export function legacyApiUrl(path: string): string {

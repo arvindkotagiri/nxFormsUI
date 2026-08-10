@@ -13,7 +13,7 @@ import {
   Columns3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-const API_URL = import.meta.env.VITE_NODE_API;
+const API_URL = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "Success") return <span className="badge-success">● Success</span>;

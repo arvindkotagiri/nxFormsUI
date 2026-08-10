@@ -25,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { normalizeOutputsByContext } from "@/lib/contextDisplay";
 
-const API_URL = import.meta.env.VITE_NODE_API ?? "";
+const API_URL = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
 
 function AnimatedCounter({ target, isString }: { target: number | string; isString?: boolean }) {
   const [value, setValue] = useState(0);
