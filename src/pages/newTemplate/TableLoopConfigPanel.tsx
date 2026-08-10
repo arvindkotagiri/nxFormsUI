@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Table2, ArrowUpDown, Filter, Sigma } from "lucide-react";
+import { Plus, Trash2, Table2, ArrowUpDown, Filter, Sigma, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +90,8 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
     subtotalFields: Array.isArray(cfg?.subtotalFields) ? cfg.subtotalFields : [],
   });
 
-  const [config, setConfig] = useState<TableLoopConfig>(getSafeConfig(initialConfig));
+  const [config, setConfig] = useState<TableLoopConfig>(defaultConfig());
+
   const [activeTab, setActiveTab] = useState<"entity" | "sort" | "filter" | "subtotal">("entity");
 
   useEffect(() => {
