@@ -406,13 +406,44 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
         <Button
           onClick={() => onApply(config)}
           disabled={!config.entitySetKey.trim()}
-          className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold uppercase tracking-wider disabled:opacity-40"
+          className="w-full h-9 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold uppercase tracking-wider disabled:opacity-40 shadow-sm"
         >
           Apply Loop Configuration
         </Button>
         {!config.entitySetKey.trim() && (
           <p className="text-[9px] text-amber-500 text-center mt-1 font-medium">Set an Entity Set key to enable</p>
         )}
+      </div>
+
+      {/* Interactive Table Loop Architecture & Explanation Guide */}
+      <div className="mt-4 p-4 rounded-xl bg-slate-900 text-slate-200 text-[11px] font-body space-y-3 border border-slate-800 shadow-md">
+        <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-[10px] uppercase tracking-wider border-b border-slate-800 pb-2">
+          <Info className="w-4 h-4 text-emerald-400 shrink-0" />
+          Table Loop Architecture Guide
+        </div>
+
+        <div className="space-y-2 text-[10px] leading-relaxed text-slate-300">
+          <div className="flex items-start gap-2 bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
+            <span className="bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.5 rounded text-[8px] uppercase tracking-tight shrink-0 mt-0.5">1. Array Binding</span>
+            <p>
+              The <strong>Entity Set Key</strong> (e.g. <code className="text-amber-300 bg-slate-950 px-1 py-0.5 rounded font-mono">item</code>) binds your table to line items array in SAP payload.
+            </p>
+          </div>
+
+          <div className="flex items-start gap-2 bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
+            <span className="bg-blue-500/20 text-blue-300 font-bold px-1.5 py-0.5 rounded text-[8px] uppercase tracking-tight shrink-0 mt-0.5">2. Row Duplication</span>
+            <p>
+              Detail rows (<code className="text-emerald-300 bg-slate-950 px-1 py-0.5 rounded font-mono">&lt;td&gt;</code>) repeat dynamically for each line item in payload while headers (<code className="text-slate-400 bg-slate-950 px-1 py-0.5 rounded font-mono">&lt;th&gt;</code>) stay fixed.
+            </p>
+          </div>
+
+          <div className="flex items-start gap-2 bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/50">
+            <span className="bg-purple-500/20 text-purple-300 font-bold px-1.5 py-0.5 rounded text-[8px] uppercase tracking-tight shrink-0 mt-0.5">3. Field Mapping</span>
+            <p>
+              Map cells using <code className="text-rose-300 bg-slate-950 px-1 py-0.5 rounded font-mono">&#123;&#123;item.material&#125;&#125;</code>, <code className="text-rose-300 bg-slate-950 px-1 py-0.5 rounded font-mono">&#123;&#123;item.quantity&#125;&#125;</code>, or <code className="text-rose-300 bg-slate-950 px-1 py-0.5 rounded font-mono">&#123;&#123;item.netprice&#125;&#125;</code>.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

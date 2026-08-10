@@ -690,6 +690,29 @@ export function TemplateAdapt() {
         }
     };
 
+    // Auto-scan and assign data-sap-mapping attribute for any {{...}} placeholders on mount
+    useEffect(() => {
+        if (editorRef.current) {
+            const allElements = editorRef.current.querySelectorAll('*');
+            let modified = false;
+            allElements.forEach(el => {
+                const txt = el.textContent?.trim() || '';
+                const existingMapping = el.getAttribute('data-sap-mapping');
+                if (!existingMapping || existingMapping === 'unmapped') {
+                    const match = txt.match(/\{\{([^{}]+)\}\}/);
+                    if (match && match[1]) {
+                        const mappedPath = match[1].trim();
+                        el.setAttribute('data-sap-mapping', mappedPath);
+                        modified = true;
+                    }
+                }
+            });
+            if (modified) {
+                setLocalHtml(editorRef.current.innerHTML);
+            }
+        }
+    }, [generatedHTML]);
+
     // -------------------------------------------------
     // Drag + Move
     // -------------------------------------------------
@@ -1385,16 +1408,37 @@ export function TemplateAdapt() {
                                         [data-editor-container], .pdf-page-wrapper {
                                             transform: translate(0, 0) !important;
                                         }
+                                        [data-editor-container] [data-sap-mapping] {
+                                            position: relative !important;
+                                            outline: 2px solid #f43f5e !important;
+                                            background-color: rgba(244, 63, 94, 0.08) !important;
+                                            box-shadow: 0 0 10px rgba(244, 63, 94, 0.2) !important;
+                                            border-radius: 4px !important;
+                                        }
+                                        [data-editor-container] [data-sap-mapping]::before {
+                                            content: "🏷️ " attr(data-sap-mapping);
+                                            position: absolute;
+                                            top: -18px;
+                                            left: 2px;
+                                            background: #f43f5e;
+                                            color: #ffffff;
+                                            font-size: 9px;
+                                            font-weight: 800;
+                                            font-family: monospace;
+                                            padding: 1px 6px;
+                                            border-radius: 4px;
+                                            white-space: nowrap;
+                                            pointer-events: none;
+                                            z-index: 99;
+                                            box-shadow: 0 2px 4px rgba(0,0,0,0.18);
+                                        }
                                     }
                                     [data-editor-container] * {
                                         transition: outline 0.08s ease-in-out;
                                     }
                                     [data-editor-container] *:hover {
-                                        outline: 1.5px dashed #3b82f6 !important;
+                                        outline: 2px dashed #3b82f6 !important;
                                         cursor: pointer;
-                                    }
-                                    [data-editor-container] [data-sap-mapping] {
-                                        border-bottom: 2px double #f43f5e;
                                     }
                                     [data-editor-container] table {
                                         width: 100% !important;
@@ -1453,8 +1497,39 @@ export function TemplateAdapt() {
                             </h3>
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-1 font-body">
-                            Customize and configure logo positions and mappings
+                            Inspect mapped fields, Table Loops, and element properties
                         </p>
+
+                        {/* Live Selection Mapping Banner */}
+                        {selectedElement && (
+                            <div className="mt-3">
+                                {selectedElementMapping && selectedElementMapping !== "unmapped" ? (
+                                    <div className="bg-gradient-to-r from-rose-50 to-pink-50 border border-rose-200 rounded-xl p-3 space-y-1 shadow-xs animate-in fade-in duration-200">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[9px] font-extrabold uppercase text-rose-600 tracking-wider flex items-center gap-1">
+                                                <Zap className="w-3 h-3 text-rose-500 animate-pulse" /> Live SAP Mapping
+                                            </span>
+                                            <span className="text-[8px] font-mono bg-rose-600 text-white px-2 py-0.5 rounded-full font-bold uppercase">
+                                                {selectedElementMapping.startsWith('item') ? 'Line Item' : 'Header'}
+                                            </span>
+                                        </div>
+                                        <div className="text-xs font-mono font-bold text-rose-900 break-all">
+                                            {selectedElementMapping}
+                                        </div>
+                                        <div className="text-[9px] text-rose-700/80 font-medium">
+                                            Bound field placeholder: <code className="font-bold">&#123;&#123;{selectedElementMapping}&#125;&#125;</code>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 flex items-center justify-between">
+                                        <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Mapping Status</span>
+                                        <span className="text-[9px] font-bold bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full uppercase">
+                                            Static Text (Unmapped)
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {/* General Canvas & Editor Controls */}
