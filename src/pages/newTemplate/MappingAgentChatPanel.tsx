@@ -113,13 +113,42 @@ export function MappingAgentChatPanel({
 
       const resData = await response.json();
 
-      if (resData?.success && resData?.data) {
-        const { reply, suggestedActions = [] } = resData.data;
+      if (resData?.success) {
+        // resData.data can be an object OR a JSON string (when LLM wraps its response)
+        let agentData = resData.data;
+        if (typeof agentData === 'string') {
+          try { agentData = JSON.parse(agentData); } catch { /* leave as string */ }
+        }
+
+        // Extract reply and suggestedActions safely
+        let reply: string = "Here are the suggested mappings and configurations:";
+        let suggestedActions: any[] = [];
+
+        if (agentData && typeof agentData === 'object') {
+          // Standard case: { reply, suggestedActions }
+          reply = agentData.reply || reply;
+          suggestedActions = Array.isArray(agentData.suggestedActions) ? agentData.suggestedActions : [];
+        } else if (typeof agentData === 'string') {
+          reply = agentData;
+        }
+
+        // Guard: if reply is still a JSON-looking string, parse it one more level
+        if (reply && reply.trim().startsWith('{')) {
+          try {
+            const inner = JSON.parse(reply);
+            if (inner?.reply) {
+              reply = inner.reply;
+              if (Array.isArray(inner.suggestedActions) && inner.suggestedActions.length > 0) {
+                suggestedActions = inner.suggestedActions;
+              }
+            }
+          } catch { /* not JSON, keep as-is */ }
+        }
 
         const assistantMsg: ChatMessage = {
           id: `msg-${Date.now() + 1}`,
           sender: "assistant",
-          text: reply || "Here are the suggested mappings and configurations:",
+          text: reply,
           actions: suggestedActions.map((act: any, idx: number) => ({ ...act, id: act.id || `act-${idx}-${Date.now()}`, applied: false })),
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
