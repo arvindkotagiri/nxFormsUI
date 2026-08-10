@@ -2056,9 +2056,20 @@ export function TemplateAdapt() {
                         <TableLoopConfigPanel
                             initialConfig={(() => {
                                 if (!selectedElement) return null;
-                                const raw = selectedElement.getAttribute('data-table-config');
+                                let raw = selectedElement.getAttribute('data-table-config');
                                 if (!raw) return tableConfigMap[selectedElement.id] ?? null;
-                                try { return JSON.parse(raw); } catch { return null; }
+                                try {
+                                    if (raw.includes('&quot;')) {
+                                        raw = raw.replace(/&quot;/g, '"');
+                                    }
+                                    if (raw.includes('&amp;')) {
+                                        raw = raw.replace(/&amp;/g, '&');
+                                    }
+                                    return JSON.parse(raw);
+                                } catch (err) {
+                                    console.warn("[data-table-config] Failed to parse JSON:", err);
+                                    return tableConfigMap[selectedElement.id] ?? null;
+                                }
                             })()}
                             selectedContext={selectedContext}
                             onApply={handleApplyTableLoopConfig}
