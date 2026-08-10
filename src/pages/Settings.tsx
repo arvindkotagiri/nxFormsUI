@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Save, ToggleLeft, ToggleRight, RefreshCw, BrainCircuit, Cpu, CheckCircle2, XCircle, Loader2, KeyRound, Upload, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/api";
 import { useCustomFonts } from "@/hooks/useCustomFonts";
 import Observability from "./Observability";
 
@@ -250,7 +251,7 @@ export default function Settings() {
         let models: {name: string, display_name: string}[] = [];
         if (hasAnyKey) {
             // POST with current keys so backend can list models without saving first
-            const res = await fetch(`${flaskAPI}/available-models`, {
+            const res = await fetch(apiUrl("/available-models"), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -261,11 +262,11 @@ export default function Settings() {
             });
             models = await res.json();
         } else {
-            const res = await fetch(`${flaskAPI}/available-models`);
+            const res = await fetch(apiUrl("/available-models"));
             models = await res.json();
         }
 
-        const configsRes = await fetch(`${nodeAPI}/api/model-configs`);
+        const configsRes = await fetch(apiUrl("/api/model-configs"));
         const configs = await configsRes.json();
 
         setAvailableModels(Array.isArray(models) ? models : []);
@@ -292,7 +293,7 @@ export default function Settings() {
     setSaveStatus('saving');
     setSaveMessage("");
     try {
-        const res = await fetch(`${nodeAPI}/api/model-configs`, {
+        const res = await fetch(apiUrl("/api/model-configs"), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(modelConfigs)
