@@ -67,20 +67,7 @@ export function TemplateAdapt() {
     const [zoomLevel, setZoomLevel] = useState(1);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-    useEffect(() => {
-        const handleResize = () => {
-            if (canvasRef.current?.parentElement) {
-                const availableW = canvasRef.current.parentElement.clientWidth;
-                if (availableW > 0 && availableW < 850) {
-                    const fitZoom = Math.max(0.6, Math.min(1, (availableW - 32) / 816));
-                    setZoomLevel(fitZoom);
-                }
-            }
-        };
-        handleResize();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+
 
     const { fonts: customFonts } = useCustomFonts();
 
@@ -1474,17 +1461,9 @@ export function TemplateAdapt() {
                         variant="ghost"
                         size="sm"
                         className="h-7 px-2 text-[10px] font-bold text-slate-600 hover:bg-slate-100 uppercase tracking-wider"
-                        onClick={() => {
-                            if (canvasRef.current?.parentElement) {
-                                const availW = canvasRef.current.parentElement.clientWidth;
-                                if (availW > 0) {
-                                    const fitZoom = Math.max(0.5, Math.min(1.8, (availW - 48) / 816));
-                                    setZoomLevel(parseFloat(fitZoom.toFixed(2)));
-                                }
-                            }
-                        }}
+                        onClick={() => setZoomLevel(1.0)}
                     >
-                        Fit Width
+                        100%
                     </Button>
                 </div>
 
@@ -1602,8 +1581,8 @@ export function TemplateAdapt() {
 
             {/* Premium, High-End Control Inspector Panel (Right) */}
             <div className={cn(
-                "shrink-0 border-l border-slate-200 bg-white flex flex-col justify-between overflow-y-auto z-40 shadow-2xl select-none custom-scrollbar transition-all duration-300 relative",
-                isSidebarOpen ? "w-[380px] min-w-[380px] p-6 opacity-100" : "w-0 p-0 border-0 opacity-0 pointer-events-none"
+                "shrink-0 border-l border-slate-200 bg-white flex flex-col justify-between overflow-y-auto z-40 shadow-xl select-none custom-scrollbar relative h-full",
+                isSidebarOpen ? "w-[400px] min-w-[400px] p-6" : "hidden"
             )}>
                 <div className="space-y-6">
                     {/* Header */}
