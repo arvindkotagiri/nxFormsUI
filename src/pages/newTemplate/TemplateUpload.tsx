@@ -155,6 +155,15 @@ export function TemplateUpload() {
         body: formData
       });
 
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error("Step A Analysis HTTP Error:", response.status, errText);
+        setErrorMessage(`Layout analysis failed (HTTP ${response.status}). Please try again.`);
+        setIsProcessing(false);
+        setProcessingStatus("");
+        return;
+      }
+
       const data = await response.json();
       console.log("Analysis results received:", data);
 
@@ -191,6 +200,15 @@ export function TemplateUpload() {
         method: "POST",
         body: repFormData
       });
+
+      if (!repResponse.ok) {
+        const errText = await repResponse.text();
+        console.error("Step B Replication HTTP Error:", repResponse.status, errText);
+        setErrorMessage(`HTML Replication failed (HTTP ${repResponse.status}). Please try again.`);
+        setIsProcessing(false);
+        setProcessingStatus("");
+        return;
+      }
 
       const repData = await repResponse.json();
       console.log("Replication results received:", repData);
