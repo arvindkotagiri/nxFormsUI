@@ -811,11 +811,60 @@ export default function Outputs() {
                   </pre>
                 ) : (detailOutput.format?.toLowerCase() === "html" || (detailOutput.renderedOutput && detailOutput.renderedOutput.includes("<html"))) ? (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between px-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-1">
                       <span className="text-xs font-semibold text-muted-foreground font-body">
                         HTML Rendered Preview
                       </span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Quick Trigger Print with Site ID */}
+                        <div className="flex items-center gap-1 bg-background border border-border p-1 rounded-xl shadow-xs">
+                          <span className="text-[10px] font-bold text-muted-foreground px-2 uppercase tracking-wider font-mono">
+                            Site ID:
+                          </span>
+                          <input
+                            type="text"
+                            value={siteId}
+                            onChange={(e) => setSiteId(e.target.value)}
+                            placeholder="SITE-01"
+                            className="w-28 h-7 text-xs px-2 rounded-lg border border-border bg-card text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-accent"
+                          />
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(`${API_URL}/api/print-job`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    printer_id: selectedPrinterId || null,
+                                    site_id: siteId || "DEFAULT_SITE",
+                                    payload: detailOutput.renderedOutput || "",
+                                    copies: copies || 1,
+                                  }),
+                                });
+                                const data = await res.json();
+                                if (res.ok) {
+                                  toast.success(`Triggered printer! Job queued for Site '${siteId || "DEFAULT_SITE"}' (Job ID: ${data.job_id || "OK"})`);
+                                } else {
+                                  toast.error(`Print trigger failed: ${data.error || "Unknown error"}`);
+                                }
+                              } catch (err: any) {
+                                toast.error(`Print trigger error: ${err.message}`);
+                              }
+                            }}
+                            className="flex items-center gap-1 px-3 h-7 rounded-lg text-xs font-semibold bg-accent text-accent-foreground hover:opacity-90 transition-all shadow-xs cursor-pointer"
+                          >
+                            <Printer size={13} /> Trigger Printer
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={() => handleOpenPrintConfig(detailOutput)}
+                          className="flex items-center gap-1.5 px-3 h-9 rounded-xl text-xs font-semibold bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all border border-border cursor-pointer"
+                          title="Advanced Print Settings"
+                        >
+                          <Settings size={13} /> Print Configs
+                        </button>
+
                         <button
                           onClick={() => {
                             const printWindow = window.open('', '_blank');
@@ -854,11 +903,7 @@ export default function Outputs() {
                             `);
                             printWindow.document.close();
                           }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer"
-                          style={{
-                            background: "hsl(var(--accent))",
-                            color: "white"
-                          }}
+                          className="flex items-center gap-1.5 px-3 h-9 rounded-xl text-xs font-semibold bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all border border-border cursor-pointer"
                         >
                           <Download size={13} /> Download PDF
                         </button>
@@ -874,7 +919,7 @@ export default function Outputs() {
                             document.body.removeChild(link);
                             URL.revokeObjectURL(url);
                           }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all border border-border cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 h-9 rounded-xl text-xs font-semibold bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-all border border-border cursor-pointer"
                         >
                           <Download size={13} /> Download HTML
                         </button>
