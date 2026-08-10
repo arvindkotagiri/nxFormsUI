@@ -726,48 +726,18 @@ export function TemplateAdapt() {
                 }
             }
 
-            // Find the closest draggable absolute container block
-            let draggableEl: HTMLElement | null = target;
-            while (draggableEl && draggableEl !== editorRef.current) {
-                const style = window.getComputedStyle(draggableEl);
-                if (style.position === "absolute") {
-                    if (draggableEl.parentElement === editorRef.current) {
-                        const w = draggableEl.offsetWidth;
-                        const h = draggableEl.offsetHeight;
-                        if (w > 700 && h > 900) {
-                            draggableEl = draggableEl.parentElement;
-                            continue;
-                        }
-                    }
-                    break;
-                }
-                draggableEl = draggableEl.parentElement;
-            }
-
-            if (draggableEl && draggableEl !== editorRef.current) {
+            // Allow dragging ANY selected element anywhere on the canvas
+            if (target && target !== editorRef.current) {
                 setIsDragging(true);
                 setInitialTransforms(
                     nextSelection.map(el => {
-                        let absEl: HTMLElement | null = el;
-                        while (absEl && absEl !== editorRef.current) {
-                            const style = window.getComputedStyle(absEl);
-                            if (style.position === "absolute") {
-                                if (absEl.parentElement === editorRef.current) {
-                                    const w = absEl.offsetWidth;
-                                    const h = absEl.offsetHeight;
-                                    if (w > 700 && h > 900) {
-                                        absEl = absEl.parentElement;
-                                        continue;
-                                    }
-                                }
-                                break;
-                            }
-                            absEl = absEl.parentElement;
+                        const style = window.getComputedStyle(el);
+                        if (style.position === "static") {
+                            el.style.position = "relative";
                         }
-                        const dragTarget = (absEl && absEl !== editorRef.current) ? absEl : el;
                         return {
-                            el: dragTarget,
-                            ...getTransform(dragTarget)
+                            el,
+                            ...getTransform(el)
                         };
                     })
                 );
@@ -913,22 +883,28 @@ export function TemplateAdapt() {
     const currentHeight = imageNode ? parseInt(imageNode.style.height || imageNode.getAttribute("height") || "0") || imageNode.offsetHeight : 0;
 
     const handleResizeLogo = (width: number, height: number) => {
+        if (!selectedElement) return;
         const imgNode = getSelectedImageNode(selectedElement);
+        
+        if (selectedElement.tagName.toLowerCase() !== 'img') {
+            selectedElement.style.width = `${width}px`;
+            selectedElement.style.height = `${height}px`;
+            selectedElement.style.display = 'inline-block';
+        }
+        
         if (imgNode) {
             imgNode.style.width = `${width}px`;
             imgNode.style.height = `${height}px`;
+            imgNode.style.objectFit = 'contain';
+            imgNode.style.maxWidth = 'none';
+            imgNode.style.maxHeight = 'none';
             imgNode.setAttribute("width", String(width));
             imgNode.setAttribute("height", String(height));
-            
-            // Also adjust parent wrapper if it is an absolute container
-            if (selectedElement && selectedElement !== imgNode) {
-                selectedElement.style.width = `${width}px`;
-                selectedElement.style.height = `${height}px`;
-            }
+        }
 
-            if (editorRef.current) {
-                pushState(editorRef.current.innerHTML);
-            }
+        if (editorRef.current) {
+            pushState(editorRef.current.innerHTML);
+            syncCanvasToChunks();
         }
     };
 
@@ -1353,42 +1329,6 @@ export function TemplateAdapt() {
         <div className="flex h-[calc(100vh-200px)] w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
             {/* Editor Workspace (Left) */}
             <div className="flex-1 flex flex-col relative h-full min-w-0">
-
-                {/* Floating Zoom Controls */}
-                <div className="absolute top-4 left-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md rounded-xl p-1 z-50 flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
-                        onClick={() => setZoomLevel(z => Math.max(0.5, z - 0.1))}
-                        disabled={zoomLevel <= 0.5}
-                        title="Zoom Out"
-                    >
-                        <Minus className="w-3.5 h-3.5" />
-                    </Button>
-                    <span className="text-[10px] font-bold text-slate-600 min-w-[36px] text-center">
-                        {Math.round(zoomLevel * 100)}%
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-40"
-                        onClick={() => setZoomLevel(z => Math.min(1.5, z + 0.1))}
-                        disabled={zoomLevel >= 1.5}
-                        title="Zoom In"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 rounded-lg text-slate-600 hover:bg-slate-100 border-l border-slate-200 pl-2 rounded-none"
-                        onClick={() => setZoomLevel(1)}
-                        title="Reset Zoom"
-                    >
-                        <Maximize2 className="w-3.5 h-3.5" />
-                    </Button>
-                </div>
 
                 {/* Floating Properties Panel Toggle */}
                 <button
