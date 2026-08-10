@@ -139,10 +139,21 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, sourceL
     }
   }, [open]);
 
-  // Extract display name
-  // If the value is EntitySet.FieldName, show only FieldName
-  const currentField = value?.includes('.') ? value.split('.')[1] : value;
-  const displayValue = currentField || value || placeholder;
+  const ALIAS_MAP: Record<string, string> = {
+    "items.description": "Items.SalesOrderItemText",
+    "items.service_fee": "Items.Subtotal1Amount",
+    "items.disbursement": "Items.to_PricingElement",
+    "items.total": "Items.NetAmount",
+    "groups.name": "SalesOrderItemPartners.to_Address.FullName",
+    "groups.subtotal_service_fee": "Items.Subtotal1Amount",
+    "groups.subtotal_disbursement": "Items.to_PricingElement",
+    "groups.subtotal_total": "Items.NetAmount",
+    "endUser": "SalesOrderItemPartners.to_Address.FullName"
+  };
+
+  const resolvedValue = value ? (ALIAS_MAP[value] || value) : "";
+  const currentField = resolvedValue.includes('.') ? resolvedValue.split('.')[1] : resolvedValue;
+  const displayValue = currentField || resolvedValue || placeholder;
 
   const normalizeText = (input: string) =>
     String(input || "")
@@ -366,7 +377,7 @@ export function FieldMappingSelector({ value, onSelect, selectedContext, sourceL
                                   {entityPrefix ? `${entityPrefix}.` : ""}{fieldName}{fieldType ? ` (${fieldType})` : ""}
                                 </span>
                               </div>
-                              {value === fullValue && <Check className="ml-auto h-3.5 w-3.5 text-accent" />}
+                              {resolvedValue === fullValue && <Check className="ml-auto h-3.5 w-3.5 text-accent" />}
                             </CommandItem>
                           );
                         })}
