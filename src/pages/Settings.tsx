@@ -571,6 +571,15 @@ export default function Settings() {
                 onChange={(v) => setModelConfigs(prev => ({...prev, model_xdp: v}))}
               />
             </FormRow>
+
+            <FormRow label="AI Mapping Copilot" description="Model used for field mapping & table loop suggestions in the template studio">
+              <SelectInput 
+                options={availableModels} 
+                value={modelConfigs.model_mapping || ""} 
+                placeholder="— save API key & load models —"
+                onChange={(v) => setModelConfigs(prev => ({...prev, model_mapping: v}))}
+              />
+            </FormRow>
           </Section>
 
           <Section title="AI Engine Settings">
