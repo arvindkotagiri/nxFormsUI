@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Sparkles, Send, CheckCircle2, ArrowRight, Bot, User, Table2, Tag, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/api";
 import { toast } from "sonner";
 import { TableLoopConfig } from "./TableLoopConfigPanel";
 
@@ -95,7 +96,7 @@ export function MappingAgentChatPanel({
         content: m.text
       }));
 
-      const response = await fetch('/api/ai/mapping-agent', {
+      const response = await fetch(apiUrl('/api/ai/mapping-agent'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

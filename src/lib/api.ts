@@ -1,6 +1,6 @@
 import { getLegacyApiBase, parseJsonResponse } from "./legacyApiBase";
 
-function apiUrl(path: string): string {
+export function apiUrl(path: string): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const base = getLegacyApiBase();
   return base ? `${base}${normalizedPath}` : normalizedPath;
