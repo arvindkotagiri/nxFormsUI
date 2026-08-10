@@ -13,6 +13,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 const flaskAPI = import.meta.env.VITE_FLASK_API;
+const nodeAPI = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
 import SimulationModal from "./SimulationModal";
 import { Play } from "lucide-react";
 import { useCustomFonts } from "@/hooks/useCustomFonts";
@@ -51,10 +52,10 @@ export default function Templates() {
   const [contexts, setContexts] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch(`${flaskAPI}/labels`)
+    fetch(`${nodeAPI}/api/labels`)
       .then((res) => res.json())
       .then((data) => {
-        setLabelTemplates(data);
+        setLabelTemplates(Array.isArray(data) ? data : []);
         setLoading(false);
       })
       .catch((err) => {
@@ -62,7 +63,7 @@ export default function Templates() {
         setLoading(false);
       });
 
-    fetch(`${flaskAPI}/api/catalog`)
+    fetch(`${nodeAPI}/api/catalog`)
       .then((res) => res.json())
       .then((apis) => {
         if (Array.isArray(apis)) {
@@ -88,7 +89,7 @@ export default function Templates() {
     }
 
     try {
-      const response = await fetch(`${flaskAPI}/api/labels/${uuid}`, {
+      const response = await fetch(`${nodeAPI}/api/labels/${uuid}`, {
         method: "DELETE",
       });
       if (response.ok) {
