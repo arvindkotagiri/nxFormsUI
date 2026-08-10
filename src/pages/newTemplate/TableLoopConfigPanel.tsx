@@ -80,7 +80,7 @@ function getEntityFields(selectedContext: any, entityKey: string): string[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }: TableLoopConfigPanelProps) {
+function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: TableLoopConfigPanelProps) {
   const getSafeConfig = (cfg: TableLoopConfig | null): TableLoopConfig => ({
     entitySetKey: cfg?.entitySetKey || "item",
     innerEntitySetKey: cfg?.innerEntitySetKey || "",
@@ -399,12 +399,12 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
                 >
                   <input
                     type="checkbox"
-                    checked={config.subtotalFields.includes(field)}
+                    checked={safeSubtotalFields.includes(field)}
                     onChange={() => toggleSubtotalField(field)}
                     className="rounded border-slate-300 accent-emerald-600"
                   />
                   {field}
-                  {config.subtotalFields.includes(field) && (
+                  {safeSubtotalFields.includes(field) && (
                     <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">∑</span>
                   )}
                 </label>
@@ -465,3 +465,48 @@ export function TableLoopConfigPanel({ initialConfig, selectedContext, onApply }
     </div>
   );
 }
+
+import React from "react";
+
+class TableLoopConfigPanelBoundary extends React.Component<TableLoopConfigPanelProps, { hasError: boolean }> {
+  constructor(props: TableLoopConfigPanelProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("[TableLoopConfigPanel] Error caught by boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl text-slate-200 space-y-3">
+          <div className="flex items-center gap-2 text-rose-400 font-bold text-xs">
+            <Info className="w-4 h-4 text-rose-400" />
+            Table Loop Config (Reset)
+          </div>
+          <p className="text-[10px] text-slate-400">
+            An error occurred loading the configuration. Click below to re-initialize with default item settings.
+          </p>
+          <Button
+            onClick={() => {
+              this.setState({ hasError: false });
+              this.props.onApply(defaultConfig());
+            }}
+            className="w-full h-8 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase"
+          >
+            Reset Table Loop Config
+          </Button>
+        </div>
+      );
+    }
+    return <TableLoopConfigPanelInner {...this.props} />;
+  }
+}
+
+export { TableLoopConfigPanelBoundary as TableLoopConfigPanel };
