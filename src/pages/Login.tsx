@@ -145,27 +145,6 @@ export default function Login() {
               )}
             </Button>
           </form>
-
-          {/* Quick Demo Credentials hint */}
-          <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
-            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5 text-orange-500" /> Default Admin Credentials
-            </div>
-            <div className="flex items-center justify-between text-xs bg-orange-50/70 p-2.5 rounded-xl border border-orange-100">
-              <span className="text-slate-700 font-mono text-[11px] font-semibold">admin@mygo.ai</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setEmail("admin@mygo.ai");
-                  setPassword("mygo12345");
-                  setError("");
-                }}
-                className="text-[10px] font-bold text-orange-600 hover:text-orange-700 bg-white px-2 py-0.5 rounded border border-orange-200 shadow-2xs hover:bg-orange-50 transition-all"
-              >
-                Auto-Fill
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Footer Link */}

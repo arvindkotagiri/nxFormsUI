@@ -83,7 +83,7 @@ function EmptyState({ message }: { message: string }) {
 
 function buildDashboardUrl(filtersObj: Record<string, string> | null) {
   const base = API_URL?.trim() || "";
-  const pathname = "/dashboard";
+  const pathname = "/api/dashboard";
   const params = new URLSearchParams();
   if (filtersObj) {
     Object.entries(filtersObj).forEach(([k, v]) => {
