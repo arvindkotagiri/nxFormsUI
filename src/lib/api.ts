@@ -7,10 +7,11 @@ export function apiUrl(path: string): string {
 }
 
 function getToken() {
-  return localStorage.getItem("access_token");
+  return localStorage.getItem("nx_token") || localStorage.getItem("access_token");
 }
 
 function setToken(token: string) {
+  localStorage.setItem("nx_token", token);
   localStorage.setItem("access_token", token);
 }
 
@@ -34,17 +35,24 @@ function isTokenExpired(token: string): boolean {
 // Force a fresh login and store the new token
 async function refreshToken(): Promise<void> {
   if (!DEV_EMAIL || !DEV_PASSWORD) {
-    throw new Error("Missing VITE_DEV_EMAIL / VITE_DEV_PASSWORD in .env");
+    return;
   }
-  const res = await fetch(apiUrl("/auth/login"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: DEV_EMAIL, password: DEV_PASSWORD }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.detail || "Re-login failed");
-  setToken(data.access_token);
-  localStorage.setItem("user", JSON.stringify(data.user));
+  try {
+    const res = await fetch(apiUrl("/auth/login"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: DEV_EMAIL, password: DEV_PASSWORD }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.access_token) {
+        setToken(data.access_token);
+        localStorage.setItem("user", JSON.stringify(data.user));
+      }
+    }
+  } catch (err) {
+    // Silently fail if dev login is not available
+  }
 }
 
 export async function bootstrapTokenIfMissing() {

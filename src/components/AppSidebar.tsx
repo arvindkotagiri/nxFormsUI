@@ -76,6 +76,9 @@ const navItems: NavItem[] = [
   { kind: "link", title: "Simulation", url: "/simulation", icon: Zap },
 ];
 
+import { useAuth } from "@/context/AuthContext";
+import { ShieldCheck } from "lucide-react";
+
 interface AppSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -193,6 +196,12 @@ function NavGroupItem({
 
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const location = useLocation();
+  const { isAdmin } = useAuth();
+
+  const activeNavItems = [...navItems];
+  if (isAdmin && !activeNavItems.some(i => i.url === '/admin')) {
+    activeNavItems.push({ kind: "link", title: "Admin Panel", url: "/admin", icon: ShieldCheck });
+  }
 
   return (
     <aside
@@ -235,7 +244,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map((item) => {
+        {activeNavItems.map((item) => {
           if (item.kind === "link") {
             const isActive =
               item.url === "/"

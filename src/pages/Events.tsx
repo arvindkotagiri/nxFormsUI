@@ -278,11 +278,19 @@ export default function Events() {
   const visibleColumns = tableColumns.filter((c) => visibleColumnIds.has(c.id));
   const allColumnsVisible = visibleColumnIds.size === ALL_COLUMN_IDS.length;
 
-  useEffect(() => {
+  const fetchEvents = () => {
     fetch(`${API_URL}/events`)
       .then((res) => res.json())
-      .then((data) => setEvents(data))
+      .then((data) => {
+        if (Array.isArray(data)) setEvents(data);
+      })
       .catch((err) => console.error(err));
+  };
+
+  useEffect(() => {
+    fetchEvents();
+    const interval = setInterval(fetchEvents, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const filtered = useMemo(

@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { Printer, Plus, Play, Settings, RefreshCw, Trash2, X, Loader2 } from "lucide-react";
+import { Printer, Plus, Play, Settings, RefreshCw, Trash2, X, Loader2, CheckCircle2, XCircle, Wifi, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
-const flaskAPI = import.meta.env.VITE_FLASK_API;
+const API_URL = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
 
 type PrinterData = {
   id: string;
@@ -36,6 +36,11 @@ export default function Printers() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingPrinter, setEditingPrinter] = useState<PrinterData | null>(null);
 
+  // Agent State
+  const [agentEnabled, setAgentEnabled] = useState(false);
+  const [agentSiteId, setAgentSiteId] = useState("SITE-001");
+  const [isSavingAgent, setIsSavingAgent] = useState(false);
+
   // Delete confirmation modal state
   const [deleteTarget, setDeleteTarget] = useState<PrinterData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -47,15 +52,56 @@ export default function Printers() {
     type: "ZEBRA",
   });
 
+  const loadAgentConfigs = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/model-configs`);
+      if (res.ok) {
+        const configs = await res.json();
+        setAgentEnabled(configs.agent_enabled === "true");
+        setAgentSiteId(configs.agent_site_id || "SITE-001");
+      }
+    } catch (err) {
+      console.error("Error loading agent configs:", err);
+    }
+  };
+
+  const handleSaveAgentSettings = async (enabled: boolean, siteId: string) => {
+    setIsSavingAgent(true);
+    try {
+      const res = await fetch(`${API_URL}/api/model-configs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agent_enabled: enabled ? "true" : "false",
+          agent_site_id: siteId,
+        }),
+      });
+      if (res.ok) {
+        toast.success(`Cloud Print Agent updated! (Enabled: ${enabled ? "YES" : "NO"}, Site: ${siteId})`);
+        window.dispatchEvent(new Event("storage"));
+      } else {
+        toast.error("Failed to update Agent settings");
+      }
+    } catch (err) {
+      toast.error("Error saving Agent settings");
+    } finally {
+      setIsSavingAgent(false);
+    }
+  };
+
   const fetchPrinters = async () => {
     try {
       setLoading(true);
-      await fetch(`${flaskAPI}/api/init-db`, { method: "POST" });
-      const res = await fetch(`${flaskAPI}/api/printers`);
-      const data = await res.json();
-      setPrinters(data);
+      await fetch(`${API_URL}/api/init-db`, { method: "POST" }).catch(() => {});
+      const res = await fetch(`${API_URL}/api/printers`);
+      if (res.ok) {
+        const data = await res.json();
+        setPrinters(Array.isArray(data) ? data : []);
+      } else {
+        toast.error("Failed to fetch printers from backend");
+      }
     } catch (err) {
-      toast.error("Failed to fetch printers");
+      toast.error("Failed to connect to printer server");
     } finally {
       setLoading(false);
     }
@@ -63,11 +109,12 @@ export default function Printers() {
 
   useEffect(() => {
     fetchPrinters();
+    loadAgentConfigs();
   }, []);
 
   const openAddModal = () => {
     setEditingPrinter(null);
-    setNewPrinter({ name: "", ip_address: "", site_id: "SITE-001", type: "ZEBRA" });
+    setNewPrinter({ name: "", ip_address: "", site_id: agentSiteId || "SITE-001", type: "ZEBRA" });
     setShowAddModal(true);
   };
 
@@ -88,7 +135,7 @@ export default function Printers() {
     try {
       if (editingPrinter) {
         // UPDATE existing printer
-        const res = await fetch(`${flaskAPI}/api/printers/${editingPrinter.id}`, {
+        const res = await fetch(`${API_URL}/api/printers/${editingPrinter.id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newPrinter),
@@ -103,7 +150,7 @@ export default function Printers() {
         }
       } else {
         // CREATE new printer
-        const res = await fetch(`${flaskAPI}/api/printers`, {
+        const res = await fetch(`${API_URL}/api/printers`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(newPrinter),
@@ -127,7 +174,7 @@ export default function Printers() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      await fetch(`${flaskAPI}/api/printers/${deleteTarget.id}`, { method: "DELETE" });
+      await fetch(`${API_URL}/api/printers/${deleteTarget.id}`, { method: "DELETE" });
       toast.success("Printer deleted");
       fetchPrinters();
       if (selected?.id === deleteTarget.id) setSelected(null);
@@ -146,7 +193,7 @@ export default function Printers() {
         "^FO50,50^A0N,50,50^FDMyFormsAI Test Print^FS" +
         "^FO50,120^ADN,36,20^FDPrinter Name - " + printer.name + "^FS" +
         "^XZ";
-      const res = await fetch(`${flaskAPI}/api/print-zpl`, {
+      const res = await fetch(`${API_URL}/api/print-job`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -157,7 +204,9 @@ export default function Printers() {
         }),
       });
       if (res.ok) {
-        toast.success("Test job queued successfully");
+        toast.success(`Test print job queued for site '${printer.site_id}'!`);
+      } else {
+        toast.error("Failed to queue test job");
       }
     } catch (err) {
       toast.error("Failed to queue test job");
@@ -165,12 +214,12 @@ export default function Printers() {
   };
 
   return (
-    <div className="space-y-5 animate-fade-in relative min-h-[calc(100vh-120px)]">
+    <div className="space-y-5 animate-fade-in relative min-h-[calc(100vh-120px)] font-body">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">Printers</h1>
           <p className="text-sm text-muted-foreground font-body mt-1">
-            Managed output destinations & Cloud Print status
+            Managed output destinations & Local Cloud Print Agent
           </p>
         </div>
         <div className="flex gap-2">
@@ -191,10 +240,97 @@ export default function Printers() {
         </div>
       </div>
 
+      {/* Cloud Print Agent Control Banner */}
+      <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-md space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/50 pb-4">
+          <div className="flex items-center gap-3">
+            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0", agentEnabled ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-slate-400")}>
+              <Wifi size={20} className={agentEnabled ? "animate-pulse" : ""} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-display text-base font-bold text-foreground">Local Cloud Print Agent</h3>
+                <span className={cn("text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider", agentEnabled ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-slate-500/10 text-slate-500 border border-slate-200")}>
+                  {agentEnabled ? "● Agent Active & Polling" : "○ Agent Inactive"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Keep this browser active on your office WiFi to automatically process site print jobs.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agentEnabled}
+                onChange={(e) => {
+                  const val = e.target.checked;
+                  setAgentEnabled(val);
+                  handleSaveAgentSettings(val, agentSiteId);
+                }}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500" />
+            </label>
+            <span className="text-xs font-bold text-foreground">{agentEnabled ? "Agent ON" : "Agent OFF"}</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-foreground">Active Site ID:</span>
+            <input
+              type="text"
+              value={agentSiteId}
+              onChange={(e) => setAgentSiteId(e.target.value)}
+              placeholder="SITE-001"
+              className="px-3 py-1.5 text-xs rounded-xl border border-border bg-background text-foreground font-mono font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 w-36"
+            />
+            <button
+              onClick={() => handleSaveAgentSettings(agentEnabled, agentSiteId)}
+              disabled={isSavingAgent}
+              className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-bold hover:opacity-90 transition-all shadow-xs flex items-center gap-1.5"
+            >
+              {isSavingAgent ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={14} />}
+              Save Site Config
+            </button>
+          </div>
+
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch(`${API_URL}/api/print-job`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    site_id: agentSiteId,
+                    payload: `TEST_PRINT_JOB_${Date.now()}`,
+                    copies: 1,
+                  }),
+                });
+                if (res.ok) {
+                  toast.success(`Queued test job for site ${agentSiteId}!`);
+                } else {
+                  toast.error("Failed to queue test job");
+                }
+              } catch (err) {
+                toast.error("Error queueing test job");
+              }
+            }}
+            className="px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-secondary/80 transition-all flex items-center gap-1.5"
+          >
+            <Play size={12} />
+            Send Agent Test Job
+          </button>
+        </div>
+      </div>
+
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <Loader2 size={40} className="animate-spin mb-4" />
-          <p>Loading printers...</p>
+          <Loader2 size={40} className="animate-spin mb-4 text-accent" />
+          <p className="text-sm font-semibold">Loading printers...</p>
         </div>
       ) : printers.length === 0 ? (
         <div className="card-elevated p-20 text-center">

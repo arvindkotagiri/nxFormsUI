@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Search, Bell, ChevronDown, Wifi, WifiOff, Sun, Moon, LifeBuoy } from "lucide-react";
+import { Search, Bell, ChevronDown, Wifi, LifeBuoy, LogOut, ShieldCheck, Tag, Building } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SupportTicketModal } from "./SupportTicketModal";
+import { useAuth } from "@/context/AuthContext";
+import { useNavigate, Link } from "react-router-dom";
 
 interface TopBarProps {
   env?: "DEV" | "QA" | "PROD";
@@ -10,6 +12,10 @@ interface TopBarProps {
 export function TopBar({ env = "DEV" }: TopBarProps) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const { user, logout, isAdmin } = useAuth();
+  const navigate = useNavigate();
 
   const envBadgeClass =
     env === "PROD"
@@ -18,9 +24,18 @@ export function TopBar({ env = "DEV" }: TopBarProps) {
       ? "env-badge-qa"
       : "env-badge-dev";
 
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
+  const initials = user?.name
+    ? user.name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2)
+    : "AD";
+
   return (
     <header
-      className="h-16 flex items-center gap-4 px-6 shrink-0 border-b border-border"
+      className="h-16 flex items-center gap-4 px-6 shrink-0 border-b border-border relative z-20"
       style={{ background: "hsl(var(--background))" }}
     >
       {/* Search */}
@@ -50,11 +65,13 @@ export function TopBar({ env = "DEV" }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-3 ml-auto">
-        {/* WS Status */}
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-body">
-          <Wifi size={13} className="text-success" style={{ color: "hsl(var(--success))" }} />
-          <span className="hidden sm:inline">Live</span>
-        </div>
+        {/* Organization / Tenant ID Badge */}
+        {user?.tenant_id && (
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-mono font-bold">
+            <Tag size={12} className="text-emerald-600" />
+            <span>{user.tenant_id}</span>
+          </div>
+        )}
 
         {/* Env badge */}
         <span className={envBadgeClass}>{env}</span>
@@ -68,38 +85,72 @@ export function TopBar({ env = "DEV" }: TopBarProps) {
           <span className="hidden md:inline">Help & Support</span>
         </button>
 
-        {/* Notifications */}
-        <button className="relative p-2 rounded-lg hover:bg-secondary transition-colors">
-          <Bell size={16} className="text-muted-foreground" />
-          <span
-            className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full"
-            style={{ background: "hsl(var(--accent))" }}
-          />
-        </button>
-
         <SupportTicketModal isOpen={supportOpen} onClose={() => setSupportOpen(false)} />
 
-        {/* Profile */}
-        <button className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-secondary transition-colors">
-          <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-display font-semibold"
-            style={{
-              background: "hsl(var(--primary))",
-              color: "hsl(var(--primary-foreground))",
-            }}
+        {/* User Profile & Menu */}
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-secondary transition-colors text-left"
           >
-            AD
-          </div>
-          <div className="hidden sm:block text-left">
-            <div className="text-xs font-semibold text-foreground font-body leading-tight">
-              Admin User
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-display font-bold shadow-sm"
+              style={{
+                background: isAdmin ? "hsl(var(--accent))" : "hsl(var(--primary))",
+                color: "hsl(var(--primary-foreground))",
+              }}
+            >
+              {initials}
             </div>
-            <div className="text-[10px] text-muted-foreground font-body leading-tight">
-              admin@nxforms.io
+            <div className="hidden sm:block text-left">
+              <div className="text-xs font-bold text-foreground font-body leading-tight flex items-center gap-1">
+                {user?.name || "User"}
+                {isAdmin && <ShieldCheck size={12} className="text-emerald-500" />}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-body leading-tight">
+                {user?.email || "user@nxforms.io"}
+              </div>
             </div>
-          </div>
-          <ChevronDown size={13} className="text-muted-foreground" />
-        </button>
+            <ChevronDown size={14} className="text-muted-foreground ml-1" />
+          </button>
+
+          {/* User Dropdown Menu */}
+          {menuOpen && (
+            <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl p-2 z-50 animate-fade-in space-y-1">
+              <div className="px-3 py-2 border-b border-slate-100 space-y-1">
+                <div className="text-xs font-bold text-slate-800">{user?.name}</div>
+                <div className="text-[10px] text-slate-500">{user?.email}</div>
+                {user?.organization && (
+                  <div className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1 pt-1">
+                    <Building size={10} /> {user.organization}
+                  </div>
+                )}
+                {user?.tenant_id && (
+                  <div className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 w-fit">
+                    Tenant: {user.tenant_id}
+                  </div>
+                )}
+              </div>
+
+              {isAdmin && (
+                <Link
+                  to="/admin"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                >
+                  <ShieldCheck size={14} /> Admin Control Center
+                </Link>
+              )}
+
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <LogOut size={14} /> Sign Out
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

@@ -37,7 +37,6 @@ export default function ApiConfigurations() {
   const fetchApis = async () => {
     try {
       setLoading(true);
-      await fetchLegacyApi("/api/catalog-init", { method: "POST" });
       const data = await fetchLegacyApi<ApiDefinition[]>("/api/catalog");
       setApis(data);
     } catch (err) {

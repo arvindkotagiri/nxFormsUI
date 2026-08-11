@@ -250,7 +250,22 @@ export default function Outputs() {
   const [printMode, setPrintMode] = useState<"agent" | "direct" | "browser">("agent");
   const [isSubmittingPrint, setIsSubmittingPrint] = useState<boolean>(false);
 
-  const handleOpenPrintConfig = (outputItem: any) => {
+  const handleViewDetail = async (outputItem: any) => {
+    setDetailOutput(outputItem);
+    if (!outputItem.renderedOutput && outputItem.id) {
+      try {
+        const res = await fetch(`${API_URL}/outputs/${outputItem.id}`);
+        if (res.ok) {
+          const fullData = await res.json();
+          setDetailOutput(fullData);
+        }
+      } catch (err) {
+        console.error("Error fetching detail output payload:", err);
+      }
+    }
+  };
+
+  const handleOpenPrintConfig = async (outputItem: any) => {
     setPrintModalOutput(outputItem);
     fetch(`${API_URL}/api/printers`)
       .then((res) => res.json())
@@ -261,6 +276,18 @@ export default function Outputs() {
         }
       })
       .catch((err) => console.error("Error fetching printers:", err));
+
+    if (!outputItem.renderedOutput && outputItem.id) {
+      try {
+        const res = await fetch(`${API_URL}/outputs/${outputItem.id}`);
+        if (res.ok) {
+          const fullData = await res.json();
+          setPrintModalOutput(fullData);
+        }
+      } catch (err) {
+        console.error("Error fetching print output payload:", err);
+      }
+    }
   };
 
   const handleSendPrintJob = async () => {
@@ -341,7 +368,7 @@ export default function Outputs() {
     }
   };
 
-  const tableColumns = getTableColumns(setDetailOutput, handleOpenPrintConfig);
+  const tableColumns = getTableColumns(handleViewDetail, handleOpenPrintConfig);
   const visibleColumns = tableColumns.filter((c) => visibleColumnIds.has(c.id));
   const allColumnsVisible = visibleColumnIds.size === ALL_COLUMN_IDS.length;
 
@@ -350,11 +377,19 @@ export default function Outputs() {
   const outputsPerPage = 10;
   const visiblePages = 5;
 
-  useEffect(() => {
+  const fetchOutputs = () => {
     fetch(`${API_URL}/outputs`)
       .then((res) => res.json())
-      .then((data) => setOutputs(data))
+      .then((data) => {
+        if (Array.isArray(data)) setOutputs(data);
+      })
       .catch((err) => console.error(err));
+  };
+
+  useEffect(() => {
+    fetchOutputs();
+    const interval = setInterval(fetchOutputs, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const filtered = useMemo(
