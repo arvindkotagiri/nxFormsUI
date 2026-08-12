@@ -271,7 +271,7 @@ export function MappingAgentChatPanel({
 
             {/* Bubble */}
             <div className={cn(
-              "max-w-[85%] rounded-2xl p-3 space-y-2 border shadow-2xs",
+              "max-w-[92%] rounded-2xl p-3 space-y-2 border shadow-2xs",
               msg.sender === "user"
                 ? "bg-emerald-600 text-white border-emerald-500 rounded-tr-none"
                 : "bg-white text-slate-800 border-slate-200/90 rounded-tl-none"
@@ -281,53 +281,76 @@ export function MappingAgentChatPanel({
               {/* Action Cards */}
               {msg.actions && msg.actions.length > 0 && (
                 <div className="pt-2 space-y-2 border-t border-slate-200/80">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-1 flex-wrap">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
                       <Sparkles className="w-3 h-3" /> Suggested Actions ({msg.actions.length})
                     </span>
                     {msg.actions.some(a => !a.applied) && (
                       <button
                         onClick={() => handleApplyAll(msg.id, msg.actions!)}
-                        className="text-[9px] font-extrabold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs transition-all"
+                        className="text-[9px] font-extrabold uppercase tracking-wider bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded-md flex items-center gap-1 shadow-2xs transition-all shrink-0"
                       >
                         <CheckCircle2 className="w-3 h-3" /> Apply All
                       </button>
                     )}
                   </div>
 
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {msg.actions.map(action => (
                       <div
                         key={action.id}
                         className={cn(
-                          "p-2.5 rounded-xl border text-[10px] space-y-1.5 transition-all",
+                          "p-2.5 rounded-xl border text-[10px] space-y-2 transition-all overflow-hidden",
                           action.applied
                             ? "bg-emerald-50/80 border-emerald-300 text-emerald-900"
                             : "bg-slate-50 border-slate-200 text-slate-800 hover:border-slate-300"
                         )}
                       >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-1.5">
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div className="flex flex-col gap-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              {action.actionType === "MAP_FIELD" ? (
+                                <Tag className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                              ) : (
+                                <Table2 className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                              )}
+                              <span className="font-bold text-slate-700 text-[10px] uppercase tracking-wider">
+                                {action.actionType === "MAP_FIELD" ? "Field Mapping" : "Table Loop"}
+                              </span>
+                            </div>
+
+                            {/* The key visual: what changes */}
                             {action.actionType === "MAP_FIELD" ? (
-                              <Tag className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <div className="flex items-center gap-1.5 flex-wrap font-mono text-[10px]">
+                                {action.targetTextSnippet ? (
+                                  <>
+                                    <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 border border-rose-200 line-through opacity-80 break-all">
+                                      {action.targetTextSnippet}
+                                    </span>
+                                    <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                                  </>
+                                ) : null}
+                                <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold break-all">
+                                  {`{{${action.fieldPath}}}`}
+                                </span>
+                              </div>
                             ) : (
-                              <Table2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                                <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200 font-semibold">
+                                  Loop: {action.tableConfig?.entitySetKey || action.displayLabel}
+                                </span>
+                              </div>
                             )}
-                            <span className="font-bold text-slate-800">
-                              {action.actionType === "MAP_FIELD"
-                                ? `Map to ${action.fieldPath}`
-                                : `Loop table over '${action.tableConfig?.entitySetKey}'`}
-                            </span>
                           </div>
 
                           <button
                             onClick={() => handleApplyAction(msg.id, action.id)}
                             disabled={action.applied}
                             className={cn(
-                              "px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-all flex items-center gap-1 shrink-0",
+                              "px-2.5 py-1.5 rounded-md text-[9px] font-extrabold uppercase tracking-wider transition-all flex items-center gap-1 shrink-0 shadow-2xs",
                               action.applied
-                                ? "bg-emerald-100 text-emerald-800 cursor-default border border-emerald-300 font-extrabold"
-                                : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                                ? "bg-emerald-100 text-emerald-800 cursor-default border border-emerald-300"
+                                : "bg-emerald-600 hover:bg-emerald-700 text-white"
                             )}
                           >
                             {action.applied ? (
@@ -342,13 +365,7 @@ export function MappingAgentChatPanel({
                           </button>
                         </div>
 
-                        <p className="text-slate-600 leading-snug">{action.explanation}</p>
-
-                        {action.targetTextSnippet && (
-                          <div className="font-mono text-[9px] text-slate-600 bg-white px-2 py-1 rounded border border-slate-200">
-                            Target: "{action.targetTextSnippet}"
-                          </div>
-                        )}
+                        <p className="text-slate-500 leading-snug break-words text-[9px] italic">{action.explanation}</p>
                       </div>
                     ))}
                   </div>

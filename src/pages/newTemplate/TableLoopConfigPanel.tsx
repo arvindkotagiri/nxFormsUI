@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Trash2, Table2, ArrowUpDown, Filter, Sigma, Info } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Plus, Trash2, Table2, ArrowUpDown, Filter, Sigma, Info, Play, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -48,7 +48,14 @@ const defaultConfig = (): TableLoopConfig => ({
   subtotalFields: [],
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Sample mock data rows for live simulator testing
+const SAMPLE_SIMULATOR_ROWS = [
+  { itemno: "10", material: "MAT-001", description: "Industrial Sensor A", quantity: 5, netprice: 120.00, total: 600.00 },
+  { itemno: "20", material: "MAT-002", description: "Power Supply Unit 24V", quantity: 2, netprice: 250.00, total: 500.00 },
+  { itemno: "30", material: "MAT-003", description: "Ethernet Relay Switch", quantity: 10, netprice: 45.00, total: 450.00 },
+  { itemno: "40", material: "MAT-004", description: "Mounting Bracket Set", quantity: 1, netprice: 15.00, total: 15.00 },
+  { itemno: "50", material: "MAT-005", description: "High-Temp Fiber Cable", quantity: 8, netprice: 85.00, total: 680.00 },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +82,60 @@ function getEntityFields(selectedContext: any, entityKey: string): string[] {
       return (match[1] as any[]).map((f: any) => typeof f === 'string' ? f : (f?.name || f?.field_name || f?.path || "")).filter(Boolean);
     }
   }
-  return ["itemno", "material", "description", "quantity", "netprice", "taxamount", "total"];
+  return ["itemno", "material", "description", "quantity", "netprice", "total"];
+}
+
+function evaluateFilter(row: any, filter: WhereCondition): boolean {
+  if (!filter.field || filter.value === undefined || filter.value === null || filter.value === "") return true;
+  const rawVal = row[filter.field] ?? row[filter.field.toLowerCase()] ?? "";
+  const strVal = String(rawVal).toLowerCase();
+  const targetVal = String(filter.value).toLowerCase();
+  const numVal = Number(rawVal);
+  const numTarget = Number(filter.value);
+
+  switch (filter.operator) {
+    case "==":
+      return !isNaN(numVal) && !isNaN(numTarget) ? numVal === numTarget : strVal === targetVal;
+    case "!=":
+      return !isNaN(numVal) && !isNaN(numTarget) ? numVal !== numTarget : strVal !== targetVal;
+    case ">":
+      return !isNaN(numVal) && !isNaN(numTarget) ? numVal > numTarget : strVal > targetVal;
+    case "<":
+      return !isNaN(numVal) && !isNaN(numTarget) ? numVal < numTarget : strVal < targetVal;
+    case ">=":
+      return !isNaN(numVal) && !isNaN(numTarget) ? numVal >= numTarget : strVal >= targetVal;
+    case "<=":
+      return !isNaN(numVal) && !isNaN(numTarget) ? numVal <= numTarget : strVal <= targetVal;
+    case "contains":
+      return strVal.includes(targetVal);
+    case "startsWith":
+      return strVal.startsWith(targetVal);
+    default:
+      return true;
+  }
+}
+
+function sortRows(rows: any[], sortCriteria: SortCriterion[]): any[] {
+  if (!sortCriteria || sortCriteria.length === 0) return rows;
+  return [...rows].sort((a, b) => {
+    for (const crit of sortCriteria) {
+      if (!crit.field) continue;
+      const valA = a[crit.field] ?? a[crit.field.toLowerCase()] ?? "";
+      const valB = b[crit.field] ?? b[crit.field.toLowerCase()] ?? "";
+      const numA = Number(valA);
+      const numB = Number(valB);
+      let cmp = 0;
+      if (!isNaN(numA) && !isNaN(numB)) {
+        cmp = numA - numB;
+      } else {
+        cmp = String(valA).localeCompare(String(valB));
+      }
+      if (cmp !== 0) {
+        return crit.direction === "DESC" ? -cmp : cmp;
+      }
+    }
+    return 0;
+  });
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -91,8 +151,7 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
   });
 
   const [config, setConfig] = useState<TableLoopConfig>(defaultConfig());
-
-  const [activeTab, setActiveTab] = useState<"entity" | "sort" | "filter" | "subtotal">("entity");
+  const [activeTab, setActiveTab] = useState<"entity" | "sort" | "filter" | "subtotal" | "simulator">("entity");
 
   useEffect(() => {
     setConfig(getSafeConfig(initialConfig));
@@ -101,29 +160,51 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
   const entityNames = getEntityNames(selectedContext);
   const outerFields = getEntityFields(selectedContext, config.entitySetKey);
   const innerFields = getEntityFields(selectedContext, config.innerEntitySetKey || "");
-
-  // Merge outer + inner fields for conditions
   const allAvailableFields = Array.from(new Set([...outerFields, ...innerFields]));
 
   const safeSortCriteria = Array.isArray(config.sortCriteria) ? config.sortCriteria : [];
   const safeFilters = Array.isArray(config.filters) ? config.filters : [];
   const safeSubtotalFields = Array.isArray(config.subtotalFields) ? config.subtotalFields : [];
 
+  // Live Simulator Computed Rows
+  const simulatedRows = useMemo(() => {
+    let result = SAMPLE_SIMULATOR_ROWS.filter((row) =>
+      safeFilters.every((filter) => evaluateFilter(row, filter))
+    );
+
+    if (!config.alreadySorted && safeSortCriteria.length > 0) {
+      result = sortRows(result, safeSortCriteria);
+    }
+    return result;
+  }, [safeFilters, safeSortCriteria, config.alreadySorted]);
+
+  // Live Simulator Subtotals
+  const simulatedTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
+    safeSubtotalFields.forEach((field) => {
+      totals[field] = simulatedRows.reduce((acc, row: any) => {
+        const val = Number(row[field] ?? row[field.toLowerCase()] ?? 0);
+        return acc + (isNaN(val) ? 0 : val);
+      }, 0);
+    });
+    return totals;
+  }, [simulatedRows, safeSubtotalFields]);
+
   // ── Sort Criteria ─────────────────────────────────────────────────────────
 
   const addSort = () => {
-    setConfig(c => ({
+    setConfig((c) => ({
       ...c,
-      sortCriteria: [...safeSortCriteria, { field: "", direction: "ASC" }],
+      sortCriteria: [...safeSortCriteria, { field: allAvailableFields[0] || "", direction: "ASC" }],
     }));
   };
 
   const removeSort = (i: number) => {
-    setConfig(c => ({ ...c, sortCriteria: safeSortCriteria.filter((_, idx) => idx !== i) }));
+    setConfig((c) => ({ ...c, sortCriteria: safeSortCriteria.filter((_, idx) => idx !== i) }));
   };
 
   const updateSort = (i: number, patch: Partial<SortCriterion>) => {
-    setConfig(c => {
+    setConfig((c) => {
       const updated = [...safeSortCriteria];
       updated[i] = { ...updated[i], ...patch };
       return { ...c, sortCriteria: updated };
@@ -133,18 +214,18 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
   // ── WHERE Conditions ──────────────────────────────────────────────────────
 
   const addFilter = () => {
-    setConfig(c => ({
+    setConfig((c) => ({
       ...c,
-      filters: [...safeFilters, { field: "", operator: "!=", value: "" }],
+      filters: [...safeFilters, { field: allAvailableFields[0] || "", operator: "==", value: "" }],
     }));
   };
 
   const removeFilter = (i: number) => {
-    setConfig(c => ({ ...c, filters: safeFilters.filter((_, idx) => idx !== i) }));
+    setConfig((c) => ({ ...c, filters: safeFilters.filter((_, idx) => idx !== i) }));
   };
 
   const updateFilter = (i: number, patch: Partial<WhereCondition>) => {
-    setConfig(c => {
+    setConfig((c) => {
       const updated = [...safeFilters];
       updated[i] = { ...updated[i], ...patch };
       return { ...c, filters: updated };
@@ -154,42 +235,50 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
   // ── Subtotal ──────────────────────────────────────────────────────────────
 
   const toggleSubtotalField = (field: string) => {
-    setConfig(c => ({
+    setConfig((c) => ({
       ...c,
       subtotalFields: safeSubtotalFields.includes(field)
-        ? safeSubtotalFields.filter(f => f !== field)
+        ? safeSubtotalFields.filter((f) => f !== field)
         : [...safeSubtotalFields, field],
     }));
   };
 
-  // ── Shared select style ────────────────────────────────────────────────────
+  // ── Shared styles ────────────────────────────────────────────────────
 
-  const selectCls = "w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-[11px] font-body focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-sm font-medium text-slate-700";
-  const inputCls = "px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-[11px] font-body focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-sm font-medium text-slate-700 w-full";
+  const selectCls =
+    "w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-[11px] font-body focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-sm font-medium text-slate-700";
+  const inputCls =
+    "px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-[11px] font-body focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-sm font-medium text-slate-700 w-full";
 
   const tabs = [
     { key: "entity" as const, label: "Entity", icon: Table2 },
     { key: "sort" as const, label: "Sort", icon: ArrowUpDown },
     { key: "filter" as const, label: "Filter", icon: Filter },
     { key: "subtotal" as const, label: "Totals", icon: Sigma },
+    { key: "simulator" as const, label: "Simulator", icon: Play },
   ];
 
   return (
     <div className="space-y-4 rounded-2xl border border-emerald-100 p-5 bg-gradient-to-b from-emerald-50/20 to-white shadow-sm animate-in slide-in-from-right duration-300">
       {/* Panel Header */}
-      <div className="flex items-center gap-2 text-emerald-700 font-extrabold text-[10px] uppercase tracking-widest border-b border-emerald-100/50 pb-2">
-        <Table2 className="w-3.5 h-3.5 text-emerald-500" />
-        Table / Entity Set Loop
+      <div className="flex items-center justify-between border-b border-emerald-100/50 pb-2">
+        <div className="flex items-center gap-2 text-emerald-700 font-extrabold text-[10px] uppercase tracking-widest">
+          <Table2 className="w-4 h-4 text-emerald-500" />
+          Table / Entity Set Loop Configurator
+        </div>
+        <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full uppercase">
+          {config.entitySetKey ? `Looping '${config.entitySetKey}'` : "Not Configured"}
+        </span>
       </div>
 
       {/* Tab Bar */}
-      <div className="flex gap-0.5 bg-slate-100 rounded-xl p-0.5 border border-slate-200">
-        {tabs.map(tab => (
+      <div className="flex gap-0.5 bg-slate-100 rounded-xl p-0.5 border border-slate-200 overflow-x-auto">
+        {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={cn(
-              "flex-1 flex flex-col items-center gap-0.5 py-1.5 text-[9px] font-bold tracking-wider rounded-lg transition-all uppercase",
+              "flex-1 flex flex-col items-center gap-0.5 py-1.5 px-2 text-[9px] font-bold tracking-wider rounded-lg transition-all uppercase whitespace-nowrap",
               activeTab === tab.key
                 ? "bg-white shadow-sm text-emerald-700"
                 : "text-slate-400 hover:text-slate-600"
@@ -205,45 +294,53 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
       {activeTab === "entity" && (
         <div className="space-y-3 animate-in fade-in duration-200">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold uppercase text-slate-500 block">Outer Entity Set (Groups)</label>
+            <label className="text-[10px] font-bold uppercase text-slate-500 block">
+              Outer Entity Set (Line Items / Table Rows)
+            </label>
             {entityNames.length > 0 ? (
               <select
                 value={config.entitySetKey}
-                onChange={e => setConfig(c => ({ ...c, entitySetKey: e.target.value }))}
+                onChange={(e) => setConfig((c) => ({ ...c, entitySetKey: e.target.value }))}
                 className={selectCls}
               >
                 <option value="">— Select entity set —</option>
-                {entityNames.map(n => <option key={n} value={n}>{n}</option>)}
+                {entityNames.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
               </select>
             ) : (
               <input
                 type="text"
                 className={inputCls}
                 value={config.entitySetKey}
-                onChange={e => setConfig(c => ({ ...c, entitySetKey: e.target.value }))}
-                placeholder="e.g. groups"
+                onChange={(e) => setConfig((c) => ({ ...c, entitySetKey: e.target.value }))}
+                placeholder="e.g. item"
               />
             )}
             <p className="text-[9px] text-slate-400 leading-normal">
-              The top-level array key in the payload to loop over. Each object in this array becomes a group section.
+              The top-level array key in the payload to loop over. Each object in this array generates a dynamic table row.
             </p>
           </div>
 
           <div className="space-y-1 pt-2 border-t border-slate-100">
-            <label className="text-[10px] font-bold uppercase text-slate-500 block">Inner Entity Set (Line Items)</label>
+            <label className="text-[10px] font-bold uppercase text-slate-500 block">
+              Inner Entity Set (Nested Groups - Optional)
+            </label>
             <input
               type="text"
               className={inputCls}
               value={config.innerEntitySetKey ?? ""}
-              onChange={e => setConfig(c => ({ ...c, innerEntitySetKey: e.target.value }))}
+              onChange={(e) => setConfig((c) => ({ ...c, innerEntitySetKey: e.target.value }))}
               placeholder="e.g. items (leave blank for flat loop)"
             />
             <p className="text-[9px] text-slate-400 leading-normal">
-              If your table has nested groups, enter the key inside each group that contains the row items. Leave blank for a flat single-level loop.
+              If your table has nested groups, enter the key inside each group that contains row items.
             </p>
           </div>
 
-          {/* Summary badges */}
+          {/* Summary Badges */}
           {(config.entitySetKey || config.innerEntitySetKey) && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-[9px] font-mono text-emerald-800 space-y-1">
               <div>Outer loop: <strong>{"{{#each " + (config.entitySetKey || "???") + "}}"}</strong></div>
@@ -259,14 +356,14 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
       {activeTab === "sort" && (
         <div className="space-y-3 animate-in fade-in duration-200">
           <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500 cursor-pointer">
+            <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-600 cursor-pointer">
               <input
                 type="checkbox"
                 checked={config.alreadySorted}
-                onChange={e => setConfig(c => ({ ...c, alreadySorted: e.target.checked }))}
-                className="rounded"
+                onChange={(e) => setConfig((c) => ({ ...c, alreadySorted: e.target.checked }))}
+                className="rounded accent-emerald-600"
               />
-              Already Sorted (skip sort step)
+              Already Sorted (Skip sort step)
             </label>
           </div>
 
@@ -276,36 +373,42 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
                 <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-2">
                   <select
                     value={sort.field}
-                    onChange={e => updateSort(i, { field: e.target.value })}
+                    onChange={(e) => updateSort(i, { field: e.target.value })}
                     className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-medium focus:outline-none focus:ring-1 focus:ring-emerald-400/30"
                   >
                     <option value="">— Field —</option>
-                    {allAvailableFields.map(f => <option key={f} value={f}>{f}</option>)}
-                    {allAvailableFields.length === 0 && (
-                      <option value={sort.field} disabled>{sort.field || "Enter below"}</option>
-                    )}
+                    {allAvailableFields.map((f) => (
+                      <option key={f} value={f}>
+                        {f}
+                      </option>
+                    ))}
                   </select>
-                  {allAvailableFields.length === 0 && (
-                    <input
-                      type="text"
-                      value={sort.field}
-                      onChange={e => updateSort(i, { field: e.target.value })}
-                      placeholder="field name"
-                      className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-medium focus:outline-none"
-                    />
-                  )}
-                  <div className="flex border border-slate-200 rounded-lg overflow-hidden">
+
+                  <div className="flex border border-slate-200 rounded-lg overflow-hidden shrink-0">
                     <button
                       onClick={() => updateSort(i, { direction: "ASC" })}
-                      className={cn("px-2 py-1 text-[9px] font-bold transition-all", sort.direction === "ASC" ? "bg-emerald-500 text-white" : "bg-white text-slate-400 hover:bg-slate-50")}
-                    >ASC</button>
+                      className={cn(
+                        "px-2 py-1 text-[9px] font-bold transition-all",
+                        sort.direction === "ASC" ? "bg-emerald-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"
+                      )}
+                    >
+                      ASC
+                    </button>
                     <button
                       onClick={() => updateSort(i, { direction: "DESC" })}
-                      className={cn("px-2 py-1 text-[9px] font-bold transition-all", sort.direction === "DESC" ? "bg-emerald-500 text-white" : "bg-white text-slate-400 hover:bg-slate-50")}
-                    >DESC</button>
+                      className={cn(
+                        "px-2 py-1 text-[9px] font-bold transition-all",
+                        sort.direction === "DESC" ? "bg-emerald-600 text-white" : "bg-white text-slate-400 hover:bg-slate-50"
+                      )}
+                    >
+                      DESC
+                    </button>
                   </div>
-                  <button onClick={() => removeSort(i)} className="w-6 h-6 rounded-md hover:bg-red-50 text-red-400 flex items-center justify-center">
-                    <Trash2 className="w-3 h-3" />
+                  <button
+                    onClick={() => removeSort(i)}
+                    className="w-6 h-6 rounded-md hover:bg-red-50 text-red-400 flex items-center justify-center shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               ))}
@@ -326,47 +429,48 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
       {activeTab === "filter" && (
         <div className="space-y-2 animate-in fade-in duration-200">
           <p className="text-[9px] text-slate-400 leading-relaxed">
-            All conditions must pass (AND logic). Rows that fail any condition are excluded from the output.
+            All conditions must pass (AND logic). Rows that fail any filter condition are excluded from table rendering.
           </p>
           {safeFilters.map((filter, i) => (
-            <div key={i} className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl p-2">
-              {/* Field */}
-              {allAvailableFields.length > 0 ? (
-                <select
-                  value={filter.field}
-                  onChange={e => updateFilter(i, { field: e.target.value })}
-                  className="flex-[2] px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-medium focus:outline-none focus:ring-1 focus:ring-emerald-400/30"
-                >
-                  <option value="">— Field —</option>
-                  {allAvailableFields.map(f => <option key={f} value={f}>{f}</option>)}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={filter.field}
-                  onChange={e => updateFilter(i, { field: e.target.value })}
-                  placeholder="field"
-                  className="flex-[2] px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-medium focus:outline-none"
-                />
-              )}
-              {/* Operator */}
+            <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl p-2">
+              <select
+                value={filter.field}
+                onChange={(e) => updateFilter(i, { field: e.target.value })}
+                className="flex-[2] px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-medium focus:outline-none"
+              >
+                <option value="">— Field —</option>
+                {allAvailableFields.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+
               <select
                 value={filter.operator}
-                onChange={e => updateFilter(i, { operator: e.target.value as any })}
+                onChange={(e) => updateFilter(i, { operator: e.target.value as any })}
                 className="flex-1 px-1.5 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-medium focus:outline-none"
               >
-                {OPERATORS.map(op => <option key={op} value={op}>{op}</option>)}
+                {OPERATORS.map((op) => (
+                  <option key={op} value={op}>
+                    {op}
+                  </option>
+                ))}
               </select>
-              {/* Value */}
+
               <input
                 type="text"
                 value={filter.value}
-                onChange={e => updateFilter(i, { value: e.target.value })}
+                onChange={(e) => updateFilter(i, { value: e.target.value })}
                 placeholder="value"
                 className="flex-[2] px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-medium focus:outline-none"
               />
-              <button onClick={() => removeFilter(i)} className="w-6 h-6 rounded-md hover:bg-red-50 text-red-400 flex items-center justify-center">
-                <Trash2 className="w-3 h-3" />
+
+              <button
+                onClick={() => removeFilter(i)}
+                className="w-6 h-6 rounded-md hover:bg-red-50 text-red-400 flex items-center justify-center shrink-0"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
           ))}
@@ -376,7 +480,7 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
             onClick={addFilter}
             className="w-full h-7 text-[10px] font-bold border-dashed border-2 hover:border-emerald-400 hover:bg-emerald-50/10"
           >
-            <Plus className="w-3 h-3 mr-1" /> Add Condition
+            <Plus className="w-3 h-3 mr-1" /> Add Filter Condition
           </Button>
         </div>
       )}
@@ -385,37 +489,91 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
       {activeTab === "subtotal" && (
         <div className="space-y-3 animate-in fade-in duration-200">
           <p className="text-[9px] text-slate-400 leading-relaxed">
-            Select numeric fields to sum automatically in a subtotal row at the bottom of each group table.
+            Select numeric fields to sum automatically in a subtotal row at the bottom of the table.
           </p>
-          {allAvailableFields.length > 0 ? (
-            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-              {allAvailableFields.map(field => (
-                <label
-                  key={field}
-                  className={cn(
-                    config.subtotalFields.includes(field)
-                      ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                      : "bg-white border-slate-200 text-slate-600 hover:border-emerald-200"
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    checked={safeSubtotalFields.includes(field)}
-                    onChange={() => toggleSubtotalField(field)}
-                    className="rounded border-slate-300 accent-emerald-600"
-                  />
-                  {field}
-                  {safeSubtotalFields.includes(field) && (
-                    <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">∑</span>
-                  )}
-                </label>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[10px] text-slate-400 text-center py-4 italic">
-              No fields found. Set an Entity Set in the Entity tab first, or type field names manually.
-            </p>
-          )}
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+            {allAvailableFields.map((field) => (
+              <label
+                key={field}
+                className={cn(
+                  "flex items-center gap-2 p-2 rounded-xl border text-[11px] font-medium cursor-pointer transition-all",
+                  safeSubtotalFields.includes(field)
+                    ? "bg-emerald-50 border-emerald-300 text-emerald-900"
+                    : "bg-white border-slate-200 text-slate-600 hover:border-emerald-200"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={safeSubtotalFields.includes(field)}
+                  onChange={() => toggleSubtotalField(field)}
+                  className="rounded border-slate-300 accent-emerald-600"
+                />
+                {field}
+                {safeSubtotalFields.includes(field) && (
+                  <span className="ml-auto text-[9px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full">
+                    ∑ Subtotal
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Live Data Simulator ────────────────────────────────────────── */}
+      {activeTab === "simulator" && (
+        <div className="space-y-3 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between text-[10px] font-bold text-slate-600 uppercase">
+            <span>Simulated Output ({simulatedRows.length} rows)</span>
+            <span className="text-emerald-600 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" /> Live Filters & Sort Applied
+            </span>
+          </div>
+
+          <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white text-[10px] font-body shadow-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold uppercase text-[9px]">
+                  <th className="p-2">Item</th>
+                  <th className="p-2">Material</th>
+                  <th className="p-2">Description</th>
+                  <th className="p-2 text-right">Qty</th>
+                  <th className="p-2 text-right">Price</th>
+                  <th className="p-2 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {simulatedRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-4 text-center text-slate-400 italic">
+                      No rows match the filter conditions.
+                    </td>
+                  </tr>
+                ) : (
+                  simulatedRows.map((row, idx) => (
+                    <tr key={idx} className="border-b border-slate-100 hover:bg-emerald-50/30">
+                      <td className="p-2 font-mono text-slate-600">{row.itemno}</td>
+                      <td className="p-2 font-bold text-slate-800">{row.material}</td>
+                      <td className="p-2 text-slate-600">{row.description}</td>
+                      <td className="p-2 text-right font-mono">{row.quantity}</td>
+                      <td className="p-2 text-right font-mono">${row.netprice.toFixed(2)}</td>
+                      <td className="p-2 text-right font-mono font-bold text-slate-800">${row.total.toFixed(2)}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {safeSubtotalFields.length > 0 && (
+                <tfoot>
+                  <tr className="bg-emerald-100/60 font-bold text-emerald-900 border-t-2 border-emerald-300">
+                    <td colSpan={3} className="p-2 uppercase text-[9px] font-extrabold">Subtotal Summary</td>
+                    <td className="p-2 text-right font-mono">{simulatedTotals.quantity || "—"}</td>
+                    <td className="p-2 text-right font-mono">{simulatedTotals.netprice ? `$${simulatedTotals.netprice.toFixed(2)}` : "—"}</td>
+                    <td className="p-2 text-right font-mono font-extrabold">{simulatedTotals.total ? `$${simulatedTotals.total.toFixed(2)}` : "—"}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
         </div>
       )}
 
@@ -466,8 +624,6 @@ function TableLoopConfigPanelInner({ initialConfig, selectedContext, onApply }: 
     </div>
   );
 }
-
-import React from "react";
 
 class TableLoopConfigPanelBoundary extends React.Component<TableLoopConfigPanelProps, { hasError: boolean }> {
   constructor(props: TableLoopConfigPanelProps) {

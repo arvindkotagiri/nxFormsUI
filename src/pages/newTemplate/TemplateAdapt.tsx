@@ -225,9 +225,9 @@ export function TemplateAdapt() {
         elements.forEach(el => {
             if (el.tagName.toLowerCase() === 'img') return;
             
-            // If the element already has a saved mapping, display it directly on the canvas
-            const sapMapping = el.getAttribute("data-sap-mapping");
-            if (sapMapping && sapMapping !== "unmapped") {
+            // If the element already has a valid saved SAP mapping, display it directly on the canvas
+            let sapMapping = el.getAttribute("data-sap-mapping");
+            if (sapMapping && sapMapping !== "unmapped" && sapMapping !== "undefined") {
                 el.textContent = `{{${sapMapping}}}`;
                 el.setAttribute("data-editor-element", "true");
                 const matchingChunk = chunksList.find(c => c.fieldMapping === sapMapping);
@@ -243,26 +243,32 @@ export function TemplateAdapt() {
             const textContent = el.textContent?.trim() || '';
             const match = textContent.match(/^\{\{(.+)\}\}$/);
             if (match) {
-                const placeholderName = match[1];
+                let placeholderName = match[1];
+                if (placeholderName === 'undefined') {
+                    placeholderName = sapMapping && sapMapping !== 'undefined' ? sapMapping : '';
+                }
+
                 const matchingChunk = chunksList.find(c => {
-                    return c.label === placeholderName || (c.fieldMapping && c.fieldMapping.split('.').pop() === placeholderName);
+                    return (
+                        c.label === placeholderName || 
+                        c.fieldMapping === placeholderName || 
+                        (c.fieldMapping && c.fieldMapping.split('.').pop() === placeholderName)
+                    );
                 });
                 
-                if (matchingChunk) {
+                if (matchingChunk && matchingChunk.fieldMapping) {
                     el.id = matchingChunk.id;
-                    if (!el.getAttribute("data-sap-mapping")) {
-                        el.setAttribute("data-sap-mapping", matchingChunk.fieldMapping);
-                    }
+                    el.setAttribute("data-sap-mapping", matchingChunk.fieldMapping);
                     el.textContent = `{{${matchingChunk.fieldMapping}}}`;
                     el.setAttribute("data-editor-element", "true");
                     if (matchingChunk.transformations && !el.getAttribute("data-transformations")) {
                         el.setAttribute("data-transformations", JSON.stringify(matchingChunk.transformations));
                     }
-                } else {
-                    if (!el.getAttribute("data-sap-mapping")) {
-                        el.setAttribute("data-sap-mapping", "unmapped");
-                        el.setAttribute("data-editor-element", "true");
-                    }
+                } else if (sapMapping && sapMapping !== "unmapped" && sapMapping !== "undefined") {
+                    el.textContent = `{{${sapMapping}}}`;
+                    el.setAttribute("data-editor-element", "true");
+                } else if (placeholderName && placeholderName !== 'undefined') {
+                    el.setAttribute("data-editor-element", "true");
                 }
             }
         });
@@ -1252,34 +1258,87 @@ export function TemplateAdapt() {
 
     const handleApplyAIMapping = (action: SuggestedAction) => {
         if (!action.fieldPath) return;
-        let el = selectedElement;
-        if (!el && editorRef.current) {
-            if (action.targetSelector) {
+
+        // Helper to strip curly braces from snippet for comparison
+        const stripBraces = (s: string) => s.replace(/^\{\{|\}\}$/g, '').trim().toLowerCase();
+
+        let el: HTMLElement | null = null;
+
+        if (editorRef.current) {
+            const allElements = Array.from(editorRef.current.querySelectorAll('*')) as HTMLElement[];
+            const leafElements = allElements.filter(e => e.children.length === 0);
+
+            // Priority 1: Match by targetTextSnippet (exact {{VAR}} or plain text)
+            if (action.targetTextSnippet) {
+                const snip = action.targetTextSnippet.trim().toLowerCase();
+                const snipStripped = stripBraces(snip);
+
+                // Search for element whose textContent matches the snippet (with or without braces)
+                el = leafElements.find(e => {
+                    const t = (e.textContent || '').trim().toLowerCase();
+                    const tStripped = stripBraces(t);
+                    return t === snip ||
+                        t === `{{${snip}}}` ||
+                        t === `{{${snipStripped}}}` ||
+                        tStripped === snipStripped;
+                }) || null;
+
+                // Also search by data-sap-mapping matching snippet
+                if (!el) {
+                    el = allElements.find(e => {
+                        const mapping = (e.getAttribute('data-sap-mapping') || '').toLowerCase();
+                        return mapping === snip || mapping === snipStripped;
+                    }) || null;
+                }
+            }
+
+            // Priority 2: Try CSS selector from AI
+            if (!el && action.targetSelector) {
                 try {
                     el = editorRef.current.querySelector(action.targetSelector) as HTMLElement;
                 } catch {
                     el = null;
                 }
             }
-            if (!el && action.targetTextSnippet) {
-                const allElements = Array.from(editorRef.current.querySelectorAll('*')) as HTMLElement[];
-                el = allElements.find(e => e.children.length === 0 && e.textContent?.trim().toLowerCase().includes(action.targetTextSnippet!.toLowerCase())) || null;
+
+            // Priority 3: Match by field path leaf name (e.g. "SalesOrder" from "head.SalesOrder")
+            if (!el) {
+                const fieldLeaf = action.fieldPath.includes('.')
+                    ? action.fieldPath.split('.').pop()!.toLowerCase()
+                    : action.fieldPath.toLowerCase();
+
+                el = leafElements.find(e => {
+                    const t = (e.textContent || '').trim().toLowerCase();
+                    const tStripped = stripBraces(t);
+                    return tStripped === fieldLeaf ||
+                        t.includes(fieldLeaf) ||
+                        (e.getAttribute('data-sap-mapping') || '').toLowerCase() === action.fieldPath.toLowerCase();
+                }) || null;
+            }
+
+            // Priority 4: Fall back to currently selected element on canvas
+            if (!el && selectedElement) {
+                el = selectedElement;
             }
         }
 
         if (el) {
+            const prevText = el.textContent?.trim() || '';
             el.textContent = `{{${action.fieldPath}}}`;
             el.setAttribute("data-sap-mapping", action.fieldPath);
             el.setAttribute("data-editor-element", "true");
             if (editorRef.current) {
+                setLocalHtml(editorRef.current.innerHTML);
                 pushState(editorRef.current.innerHTML);
                 syncCanvasToChunks();
             }
-            toast.success(`Mapped element to ${action.fieldPath}`);
+            const prevLabel = prevText ? ` (replaced: ${prevText})` : '';
+            toast.success(`Mapped to {{${action.fieldPath}}}${prevLabel}`);
         } else {
-            toast.error("Could not find target element on canvas to map.");
+            toast.error(`Could not locate target element for ${action.fieldPath}. Please click the element first, then apply.`);
         }
     };
+
 
     const handleApplyAITableLoop = (config: TableLoopConfig) => {
         let tableEl: HTMLElement | null = null;
@@ -1431,57 +1490,6 @@ export function TemplateAdapt() {
         <div className="flex h-[calc(100vh-140px)] w-full min-w-full select-none relative overflow-hidden bg-slate-100 rounded-3xl border border-slate-200 shadow-inner">
             {/* Editor Workspace (Left) */}
             <div className="flex-1 flex flex-col relative h-full min-w-0">
-
-                {/* Floating Canvas Controls Bar (Top Left) */}
-                <div className="absolute left-4 top-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md rounded-xl p-1 z-50 flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-slate-600 hover:bg-slate-100"
-                        onClick={() => setZoomLevel(prev => Math.max(0.4, parseFloat((prev - 0.1).toFixed(2))))}
-                        title="Zoom Out"
-                    >
-                        <ZoomOut className="w-3.5 h-3.5" />
-                    </Button>
-                    <span className="text-[10px] font-bold font-mono text-slate-700 w-12 text-center select-none">
-                        {Math.round(zoomLevel * 100)}%
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-slate-600 hover:bg-slate-100"
-                        onClick={() => setZoomLevel(prev => Math.min(2.0, parseFloat((prev + 0.1).toFixed(2))))}
-                        title="Zoom In"
-                    >
-                        <ZoomIn className="w-3.5 h-3.5" />
-                    </Button>
-                    <div className="h-4 w-px bg-slate-200 mx-0.5" />
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-[10px] font-bold text-slate-600 hover:bg-slate-100 uppercase tracking-wider"
-                        onClick={() => setZoomLevel(1.0)}
-                    >
-                        100%
-                    </Button>
-                </div>
-
-                {/* Floating Properties Panel Toggle */}
-                <button
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="absolute right-4 top-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md hover:bg-slate-50 text-slate-700 rounded-xl p-2 z-50 transition-all flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
-                    title={isSidebarOpen ? "Collapse Inspector" : "Expand Inspector"}
-                >
-                    {isSidebarOpen ? (
-                        <>
-                            Collapse Inspector <ChevronRight className="w-4 h-4 text-rose-500" />
-                        </>
-                    ) : (
-                        <>
-                            <ChevronLeft className="w-4 h-4 text-emerald-500 animate-pulse" /> Expand Inspector
-                        </>
-                    )}
-                </button>
 
                 {/* Canvas Area (Removed p-12 double-whitespace padding on page wrappers) */}
                 <div className="flex-1 bg-slate-100 overflow-auto flex justify-center p-2 relative custom-scrollbar shadow-inner">

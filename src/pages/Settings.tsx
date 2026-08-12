@@ -8,12 +8,8 @@ import Observability from "./Observability";
 const nodeAPI = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
 
 const TABS = [
-  "General",
   "Security",
-  "Processing Engine",
   "AI Models",
-  "Notifications",
-  "Data Retention",
   "Cloud Print",
   "Custom Fonts",
   "AI Observability",
@@ -112,14 +108,21 @@ export default function Settings() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState<string>("");
 
+  const DEFAULT_MODELS = [
+    { name: "gemini-2.5-flash-preview-05-20", display_name: "Gemini 2.5 Flash" },
+    { name: "gemini-1.5-pro", display_name: "Gemini 1.5 Pro" },
+    { name: "gpt-4o", display_name: "OpenAI GPT-4o" },
+    { name: "claude-3-5-sonnet-20240620", display_name: "Claude 3.5 Sonnet" }
+  ];
+
   // Load settings once on mount
   useEffect(() => {
-    fetch(`${nodeAPI}/api/model-configs`)
+    fetch(apiUrl("/api/model-configs"))
       .then(r => r.json())
       .then(configs => {
         setModelConfigs(configs || {});
-        setAgentEnabled(configs.agent_enabled === 'true');
-        setAgentSiteId(configs.agent_site_id || "SITE-001");
+        setAgentEnabled(configs?.agent_enabled === 'true');
+        setAgentSiteId(configs?.agent_site_id || "SITE-001");
       })
       .catch(() => {});
   }, []);
@@ -127,10 +130,7 @@ export default function Settings() {
   // Load models when tab 3 is active
   useEffect(() => {
     if (activeTab === 3) {
-      fetch(`${flaskAPI}/available-models`)
-        .then(r => r.json())
-        .then(models => setAvailableModels(Array.isArray(models) ? models : []))
-        .catch(() => setAvailableModels([]));
+      fetchModels();
     }
   }, [activeTab]);
 
@@ -156,7 +156,7 @@ export default function Settings() {
     formData.append("name", fontName);
     formData.append("fontFile", fontFile);
     try {
-      const res = await fetch(`${flaskAPI}/api/upload-font`, {
+      const res = await fetch(apiUrl("/api/upload-font"), {
         method: 'POST',
         body: formData
       });
@@ -184,7 +184,7 @@ export default function Settings() {
   const handleFontDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this custom font?")) return;
     try {
-      const res = await fetch(`${flaskAPI}/api/fonts/${id}`, {
+      const res = await fetch(apiUrl(`/api/fonts/${id}`), {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -250,7 +250,7 @@ export default function Settings() {
         let models: {name: string, display_name: string}[] = [];
         if (hasAnyKey) {
             // POST with current keys so backend can list models without saving first
-            const res = await fetch(apiUrl("/available-models"), {
+            const res = await fetch(apiUrl("/api/available-models"), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -259,30 +259,40 @@ export default function Settings() {
                     api_anthropic: keys.api_anthropic || ""
                 })
             });
-            models = await res.json();
+            if (res.ok) {
+              models = await res.json();
+            }
         } else {
-            const res = await fetch(apiUrl("/available-models"));
-            models = await res.json();
+            const res = await fetch(apiUrl("/api/available-models"));
+            if (res.ok) {
+              models = await res.json();
+            }
         }
 
-        const configsRes = await fetch(apiUrl("/api/model-configs"));
-        const configs = await configsRes.json();
-
-        setAvailableModels(Array.isArray(models) ? models : []);
-        // Merge only non-empty values or keep user-typed values prioritized
-        setModelConfigs(prev => {
-            const newConfigs = { ...prev };
-            for (const [k, v] of Object.entries(configs)) {
-                // Only overwrite if current value is empty OR if we are doing initial load
-                if (!prev[k] || v) {
-                    newConfigs[k] = v as string;
+        try {
+          const configsRes = await fetch(apiUrl("/api/model-configs"));
+          if (configsRes.ok) {
+            const configs = await configsRes.json();
+            setModelConfigs(prev => {
+                const newConfigs = { ...prev };
+                for (const [k, v] of Object.entries(configs || {})) {
+                    if (!prev[k] || v) {
+                        newConfigs[k] = v as string;
+                    }
                 }
-            }
-            return newConfigs;
-        });
+                return newConfigs;
+            });
+          }
+        } catch { /* silent fallback */ }
+
+        if (Array.isArray(models) && models.length > 0) {
+          setAvailableModels(models);
+        } else {
+          setAvailableModels(DEFAULT_MODELS);
+        }
     } catch (err) {
         console.error("Failed to fetch models", err);
-        setAvailableModels([]);
+        setAvailableModels(DEFAULT_MODELS);
     } finally {
         setIsLoadingModels(false);
     }
@@ -331,10 +341,10 @@ export default function Settings() {
           </p>
         </div>
         <button
-          onClick={activeTab === 3 ? handleSaveModelConfigs : activeTab === 6 ? handleSaveAgentSettings : () => {}}
+          onClick={activeTab === 1 ? handleSaveModelConfigs : activeTab === 2 ? handleSaveAgentSettings : () => {}}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all"
           style={{ background: "hsl(var(--accent))", color: "white" }}
-          disabled={activeTab === 3 && saveStatus === 'saving'}
+          disabled={activeTab === 1 && saveStatus === 'saving'}
         >
           {saveStatus === 'saving' ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           {saveStatus === 'saving' ? 'Saving…' : 'Save Changes'}
@@ -353,32 +363,8 @@ export default function Settings() {
           </button>
         ))}
       </div>
-
-      {/* General */}
+            {/* Security */}
       {activeTab === 0 && (
-        <div className="space-y-4 animate-fade-in">
-          <Section title="General Configuration">
-            <FormRow label="Environment Label">
-              <SelectInput options={["DEV", "QA", "PROD"]} value="DEV" />
-            </FormRow>
-            <FormRow label="Timezone">
-              <SelectInput options={["UTC", "America/New_York", "Europe/London", "Asia/Singapore"]} value="UTC" />
-            </FormRow>
-            <FormRow label="Default Printer Fallback">
-              <SelectInput options={["PDF-EXPORT", "LBL-PRN-01", "RPT-PRN-01"]} value="PDF-EXPORT" />
-            </FormRow>
-            <FormRow label="Max Retry Attempts">
-              <TextInput defaultValue="3" type="number" />
-            </FormRow>
-            <FormRow label="Retry Interval (ms)">
-              <TextInput defaultValue="1000" type="number" />
-            </FormRow>
-          </Section>
-        </div>
-      )}
-
-      {/* Security */}
-      {activeTab === 1 && (
         <div className="space-y-4 animate-fade-in">
           <Section title="Authentication & Authorization">
             <FormRow label="OAuth2 Authentication" description="Enable OAuth2 for external API authentication">
@@ -423,31 +409,8 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Processing Engine */}
-      {activeTab === 2 && (
-        <div className="space-y-4 animate-fade-in">
-          <Section title="Engine Configuration">
-            <FormRow label="Parallel Worker Count">
-              <TextInput defaultValue="8" type="number" />
-            </FormRow>
-            <FormRow label="Queue Strategy">
-              <SelectInput options={["FIFO", "Priority", "Round Robin", "Weighted"]} value="Priority" />
-            </FormRow>
-            <FormRow label="Auto Processing" description="Automatically process queued events">
-              <Toggle value={autoProcess} onChange={setAutoProcess} />
-            </FormRow>
-            <FormRow label="Circuit Breaker Threshold">
-              <TextInput defaultValue="5" type="number" />
-            </FormRow>
-            <FormRow label="Circuit Breaker Reset (s)">
-              <TextInput defaultValue="30" type="number" />
-            </FormRow>
-          </Section>
-        </div>
-      )}
-
       {/* AI Models */}
-      {activeTab === 3 && (
+      {activeTab === 1 && (
         <div className="space-y-4 animate-fade-in">
           <Section title="AI Engine API Keys">
             <div className="text-xs text-muted-foreground italic mb-4">Paste your API keys below. They are stored securely in the local database. After entering a key, click <strong>Load Models</strong> to see available models.</div>
@@ -598,7 +561,7 @@ export default function Settings() {
                     </div>
                     <div>
                         <div className="text-sm font-semibold">Processing Mode</div>
-                        <div className="text-xs text-muted-foreground">Low Latency Flash</div>
+                        <div className="text-xs text-muted-foreground font-medium">Flash Multimodal Vision</div>
                     </div>
                 </div>
              </div>
@@ -606,60 +569,8 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Notifications */}
-      {activeTab === 4 && (
-        <div className="space-y-4 animate-fade-in">
-          <Section title="Alert Channels">
-            <FormRow label="Email on Failure" description="Send email alerts when outputs fail">
-              <Toggle value={emailFail} onChange={setEmailFail} />
-            </FormRow>
-            {emailFail && (
-              <FormRow label="Email Address">
-                <TextInput defaultValue="ops@nxforms.io" type="email" />
-              </FormRow>
-            )}
-            <FormRow label="Slack Webhook" description="Post alerts to a Slack channel">
-              <Toggle value={slack} onChange={setSlack} />
-            </FormRow>
-            {slack && (
-              <FormRow label="Webhook URL">
-                <TextInput defaultValue="https://hooks.slack.com/..." />
-              </FormRow>
-            )}
-            <FormRow label="Teams Webhook" description="Post alerts to Microsoft Teams">
-              <Toggle value={teams} onChange={setTeams} />
-            </FormRow>
-          </Section>
-        </div>
-      )}
-
-      {/* Data Retention */}
-      {activeTab === 5 && (
-        <div className="space-y-4 animate-fade-in">
-          <Section title="Retention Policies">
-            <FormRow label="Event Retention (days)">
-              <TextInput defaultValue="90" type="number" />
-            </FormRow>
-            <FormRow label="Output Retention (days)">
-              <TextInput defaultValue="180" type="number" />
-            </FormRow>
-            <FormRow label="Log Retention (days)">
-              <TextInput defaultValue="365" type="number" />
-            </FormRow>
-            <FormRow label="Archive Strategy" description="Auto-archive expired records to cold storage">
-              <Toggle value={archive} onChange={setArchive} />
-            </FormRow>
-            {archive && (
-              <FormRow label="Archive Destination">
-                <SelectInput options={["S3 Bucket", "Azure Blob", "GCS Bucket", "Local Disk"]} value="S3 Bucket" />
-              </FormRow>
-            )}
-          </Section>
-        </div>
-      )}
-
       {/* Cloud Print */}
-      {activeTab === 6 && (
+      {activeTab === 2 && (
         <div className="space-y-4 animate-fade-in">
           <Section title="Local Print Agent">
             <div className="text-xs text-muted-foreground italic mb-4">
@@ -793,7 +704,7 @@ export default function Settings() {
        )}
 
       {/* Custom Fonts */}
-      {activeTab === 7 && (
+      {activeTab === 3 && (
         <div className="space-y-4 animate-fade-in">
           <Section title="Add Custom Font">
             <div className="text-xs text-muted-foreground italic mb-4">
@@ -889,7 +800,7 @@ export default function Settings() {
       )}
 
       {/* AI Observability */}
-      {activeTab === 8 && (
+      {activeTab === 4 && (
         <div className="pt-2 animate-fade-in">
           <Observability />
         </div>

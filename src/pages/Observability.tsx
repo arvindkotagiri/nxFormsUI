@@ -31,7 +31,7 @@ interface Trace {
   ts: string;
 }
 
-const nodeAPI = import.meta.env.VITE_NODE_API || "http://localhost:4000";
+import { apiUrl } from "@/lib/api";
 
 export default function Observability() {
   const [traces, setTraces] = useState<Trace[]>([]);
@@ -42,16 +42,13 @@ export default function Observability() {
   const fetchTraces = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${nodeAPI}/api/observability/traces`);
+      const res = await fetch(apiUrl("/api/observability/traces"));
       if (res.ok) {
         const data = await res.json();
-        setTraces(data);
-      } else {
-        toast.error("Failed to fetch LLM traces");
+        setTraces(Array.isArray(data) ? data : []);
       }
     } catch (err) {
-      console.error(err);
-      toast.error("Network error while loading traces");
+      console.error("[Observability] Error fetching traces:", err);
     } finally {
       setLoading(false);
     }
@@ -60,7 +57,7 @@ export default function Observability() {
   const clearTraces = async () => {
     if (!confirm("Are you sure you want to clear all LLM traces?")) return;
     try {
-      const res = await fetch(`${nodeAPI}/api/observability/traces`, {
+      const res = await fetch(apiUrl("/api/observability/traces"), {
         method: "DELETE"
       });
       if (res.ok) {
