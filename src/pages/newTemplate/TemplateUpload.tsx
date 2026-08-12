@@ -234,47 +234,44 @@ export function TemplateUpload() {
       if (logo) repFormData.append("logo_b64", logo);
       if (signature) repFormData.append("signature_b64", signature);
 
-      try {
-        const repResponse = await fetch(replicateUrl, {
-          method: "POST",
-          body: repFormData
-        });
+      const repResponse = await fetch(replicateUrl, {
+        method: "POST",
+        body: repFormData
+      });
 
-        if (repResponse.ok) {
-          const repData = await repResponse.json();
-          if (repData.status === "success" && repData.full_html) {
-            setGeneratedHTML(repData.full_html);
-            if (currentFileSignature) {
-              const cacheData = {
-                extracted_fields: data.extracted_fields,
-                annotated_images: data.annotated_images && data.annotated_images.length > 0 ? data.annotated_images : data.annotated_image,
-                clean_images: data.clean_images && data.clean_images.length > 0 ? data.clean_images : data.clean_image,
-                generatedHTML: repData.full_html
-              };
-              try {
-                localStorage.setItem(`nx_preprocess_cache_${currentFileSignature}`, JSON.stringify(cacheData));
-                setHasCachedData(true);
-              } catch (e) {}
-            }
-            nextStep();
-            return;
-          }
-        }
-      } catch (repErr) {
-        console.warn("Step B Replication network error/timeout:", repErr);
+      if (!repResponse.ok) {
+        const errText = await repResponse.text();
+        console.error("Step B Replication HTTP Error:", repResponse.status, errText);
+        setErrorMessage(`AI HTML Replica Generation failed (HTTP ${repResponse.status}). Please try again.`);
+        setIsProcessing(false);
+        setProcessingStatus("");
+        return;
       }
 
-      // FALLBACK: If Step B replication times out or fails, construct a structured fallback template from Step A analysis fields so user is NEVER blocked!
-      console.log("[TemplateUpload] Step B failed or timed out. Generating structured template from Step A analysis fields...");
-      toast.info("HTML replication timed out. Created structured template layout from extracted fields.");
-      
-      const fallbackHTML = buildFallbackHTML(data.extracted_fields || []);
-      setGeneratedHTML(fallbackHTML);
-      setHasCachedData(true);
-      nextStep();
+      const repData = await repResponse.json();
+      console.log("Replication results received:", repData);
+
+      if (repData.status === "success" && repData.full_html) {
+        setGeneratedHTML(repData.full_html);
+        if (currentFileSignature) {
+          const cacheData = {
+            extracted_fields: data.extracted_fields,
+            annotated_images: data.annotated_images && data.annotated_images.length > 0 ? data.annotated_images : data.annotated_image,
+            clean_images: data.clean_images && data.clean_images.length > 0 ? data.clean_images : data.clean_image,
+            generatedHTML: repData.full_html
+          };
+          try {
+            localStorage.setItem(`nx_preprocess_cache_${currentFileSignature}`, JSON.stringify(cacheData));
+            setHasCachedData(true);
+          } catch (e) {}
+        }
+        nextStep();
+      } else {
+        setErrorMessage(repData.error || "AI HTML design replication failed");
+      }
     } catch (err) {
       console.error("Combined sequential process error:", err);
-      setErrorMessage("Connection error while processing document.");
+      setErrorMessage("Connection error: backend not reachable.");
     } finally {
       setIsProcessing(false);
       setProcessingStatus("");
