@@ -1258,28 +1258,72 @@ export function TemplateAdapt() {
 
     const handleApplyAIMapping = (action: SuggestedAction) => {
         if (!action.fieldPath) return;
-        let el = selectedElement;
-        if (!el && editorRef.current) {
-            if (action.targetSelector) {
+
+        // Helper to strip curly braces from snippet for comparison
+        const stripBraces = (s: string) => s.replace(/^\{\{|\}\}$/g, '').trim().toLowerCase();
+
+        let el: HTMLElement | null = null;
+
+        if (editorRef.current) {
+            const allElements = Array.from(editorRef.current.querySelectorAll('*')) as HTMLElement[];
+            const leafElements = allElements.filter(e => e.children.length === 0);
+
+            // Priority 1: Match by targetTextSnippet (exact {{VAR}} or plain text)
+            if (action.targetTextSnippet) {
+                const snip = action.targetTextSnippet.trim().toLowerCase();
+                const snipStripped = stripBraces(snip);
+
+                // Search for element whose textContent matches the snippet (with or without braces)
+                el = leafElements.find(e => {
+                    const t = (e.textContent || '').trim().toLowerCase();
+                    const tStripped = stripBraces(t);
+                    return t === snip ||
+                        t === `{{${snip}}}` ||
+                        t === `{{${snipStripped}}}` ||
+                        tStripped === snipStripped;
+                }) || null;
+
+                // Also search by data-sap-mapping matching snippet
+                if (!el) {
+                    el = allElements.find(e => {
+                        const mapping = (e.getAttribute('data-sap-mapping') || '').toLowerCase();
+                        return mapping === snip || mapping === snipStripped;
+                    }) || null;
+                }
+            }
+
+            // Priority 2: Try CSS selector from AI
+            if (!el && action.targetSelector) {
                 try {
                     el = editorRef.current.querySelector(action.targetSelector) as HTMLElement;
                 } catch {
                     el = null;
                 }
             }
-            if (!el && action.targetTextSnippet) {
-                const snip = action.targetTextSnippet.trim().toLowerCase();
-                const allElements = Array.from(editorRef.current.querySelectorAll('*')) as HTMLElement[];
-                el = allElements.find(e => e.children.length === 0 && e.textContent?.trim().toLowerCase().includes(snip)) || null;
-            }
+
+            // Priority 3: Match by field path leaf name (e.g. "SalesOrder" from "head.SalesOrder")
             if (!el) {
-                const fieldLeaf = action.fieldPath.includes('.') ? action.fieldPath.split('.').pop()!.toLowerCase() : action.fieldPath.toLowerCase();
-                const allElements = Array.from(editorRef.current.querySelectorAll('*')) as HTMLElement[];
-                el = allElements.find(e => e.children.length === 0 && (e.textContent?.toLowerCase().includes(fieldLeaf) || e.getAttribute('data-sap-mapping')?.toLowerCase() === action.fieldPath.toLowerCase())) || null;
+                const fieldLeaf = action.fieldPath.includes('.')
+                    ? action.fieldPath.split('.').pop()!.toLowerCase()
+                    : action.fieldPath.toLowerCase();
+
+                el = leafElements.find(e => {
+                    const t = (e.textContent || '').trim().toLowerCase();
+                    const tStripped = stripBraces(t);
+                    return tStripped === fieldLeaf ||
+                        t.includes(fieldLeaf) ||
+                        (e.getAttribute('data-sap-mapping') || '').toLowerCase() === action.fieldPath.toLowerCase();
+                }) || null;
+            }
+
+            // Priority 4: Fall back to currently selected element on canvas
+            if (!el && selectedElement) {
+                el = selectedElement;
             }
         }
 
         if (el) {
+            const prevText = el.textContent?.trim() || '';
             el.textContent = `{{${action.fieldPath}}}`;
             el.setAttribute("data-sap-mapping", action.fieldPath);
             el.setAttribute("data-editor-element", "true");
@@ -1288,11 +1332,13 @@ export function TemplateAdapt() {
                 pushState(editorRef.current.innerHTML);
                 syncCanvasToChunks();
             }
-            toast.success(`Mapped element to {{${action.fieldPath}}}`);
+            const prevLabel = prevText ? ` (replaced: ${prevText})` : '';
+            toast.success(`Mapped to {{${action.fieldPath}}}${prevLabel}`);
         } else {
-            toast.error(`Could not locate target element on canvas for ${action.fieldPath}`);
+            toast.error(`Could not locate target element for ${action.fieldPath}. Please click the element first, then apply.`);
         }
     };
+
 
     const handleApplyAITableLoop = (config: TableLoopConfig) => {
         let tableEl: HTMLElement | null = null;
