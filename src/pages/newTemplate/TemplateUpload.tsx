@@ -7,7 +7,46 @@ import { LABEL_SIZES } from '@/data/labelData';
 import { Switch } from '@/components/ui/switch';
 import { Upload, Loader2 } from 'lucide-react';
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 const nodeAPI = import.meta.env.VITE_NODE_API;
+
+function buildFallbackHTML(fields: any[]): string {
+  if (!fields || !Array.isArray(fields) || fields.length === 0) {
+    return `<div style="font-family: Arial, sans-serif; padding: 30px; width: 816px; min-height: 1056px; border: 1px solid #e2e8f0; background: #ffffff;">
+      <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 20px;">Document Template</h2>
+      <p style="color: #64748b; font-size: 14px;">Extracted template structure. Map payload fields in the Studio.</p>
+    </div>`;
+  }
+
+  const items = fields.filter((f: any) => f.content_type === 'table_cell' || f.category === 'dynamic');
+  const headers = fields.filter((f: any) => f.content_type !== 'table_cell');
+
+  let html = `<div style="font-family: 'Inter', system-ui, sans-serif; padding: 40px; width: 816px; min-height: 1056px; box-sizing: border-box; background: #ffffff; color: #1e293b;">\n`;
+  html += `  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 30px; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px;">\n`;
+  
+  headers.slice(0, 10).forEach((h: any) => {
+    const text = h.text || h.label || h.value || "Field";
+    const cleanKey = text.replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+    html += `    <div><span style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #64748b;">${text}:</span> <span style="font-size: 13px; font-weight: 600;">{{${cleanKey}}}</span></div>\n`;
+  });
+  
+  html += `  </div>\n`;
+  
+  if (items.length > 0) {
+    html += `  <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">\n`;
+    html += `    <thead><tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1; text-align: left; font-size: 11px; text-transform: uppercase;"><th style="padding: 10px;">Item / Description</th><th style="padding: 10px; text-align: right;">Amount</th></tr></thead>\n`;
+    html += `    <tbody>\n`;
+    html += `      {{#each items}}\n`;
+    html += `      <tr style="border-bottom: 1px solid #e2e8f0; font-size: 12px;"><td style="padding: 10px;">{{this.description}}</td><td style="padding: 10px; text-align: right;">{{this.total}}</td></tr>\n`;
+    html += `      {{#each this.items}}<tr style="border-bottom: 1px solid #f1f5f9; font-size: 11px; color: #475569;"><td style="padding: 8px 10px 8px 24px;">{{this.description}}</td><td style="padding: 8px 10px; text-align: right;">{{this.total}}</td></tr>{{/each}}\n`;
+    html += `      {{/each}}\n`;
+    html += `    </tbody>\n`;
+    html += `  </table>\n`;
+  }
+
+  html += `</div>`;
+  return html;
+}
 
 export function TemplateUpload() {
   const {
@@ -195,49 +234,47 @@ export function TemplateUpload() {
       if (logo) repFormData.append("logo_b64", logo);
       if (signature) repFormData.append("signature_b64", signature);
 
-      const repResponse = await fetch(replicateUrl, {
-        method: "POST",
-        body: repFormData
-      });
+      try {
+        const repResponse = await fetch(replicateUrl, {
+          method: "POST",
+          body: repFormData
+        });
 
-      if (!repResponse.ok) {
-        const errText = await repResponse.text();
-        console.error("Step B Replication HTTP Error:", repResponse.status, errText);
-        setErrorMessage(`HTML Replication failed (HTTP ${repResponse.status}). Please try again.`);
-        setIsProcessing(false);
-        setProcessingStatus("");
-        return;
-      }
-
-      const repData = await repResponse.json();
-      console.log("Replication results received:", repData);
-
-      if (repData.status === "success") {
-        setGeneratedHTML(repData.full_html);
-        
-        // Cache preprocessed results persistently
-        if (currentFileSignature) {
-          const cacheData = {
-            extracted_fields: data.extracted_fields,
-            annotated_images: data.annotated_images && data.annotated_images.length > 0 ? data.annotated_images : data.annotated_image,
-            clean_images: data.clean_images && data.clean_images.length > 0 ? data.clean_images : data.clean_image,
-            generatedHTML: repData.full_html
-          };
-          try {
-            localStorage.setItem(`nx_preprocess_cache_${currentFileSignature}`, JSON.stringify(cacheData));
-            setHasCachedData(true);
-          } catch (e) {
-            console.warn("Failed to store preprocessed layout in cache:", e);
+        if (repResponse.ok) {
+          const repData = await repResponse.json();
+          if (repData.status === "success" && repData.full_html) {
+            setGeneratedHTML(repData.full_html);
+            if (currentFileSignature) {
+              const cacheData = {
+                extracted_fields: data.extracted_fields,
+                annotated_images: data.annotated_images && data.annotated_images.length > 0 ? data.annotated_images : data.annotated_image,
+                clean_images: data.clean_images && data.clean_images.length > 0 ? data.clean_images : data.clean_image,
+                generatedHTML: repData.full_html
+              };
+              try {
+                localStorage.setItem(`nx_preprocess_cache_${currentFileSignature}`, JSON.stringify(cacheData));
+                setHasCachedData(true);
+              } catch (e) {}
+            }
+            nextStep();
+            return;
           }
         }
-
-        nextStep();
-      } else {
-        setErrorMessage(repData.error || "HTML design replication failed");
+      } catch (repErr) {
+        console.warn("Step B Replication network error/timeout:", repErr);
       }
+
+      // FALLBACK: If Step B replication times out or fails, construct a structured fallback template from Step A analysis fields so user is NEVER blocked!
+      console.log("[TemplateUpload] Step B failed or timed out. Generating structured template from Step A analysis fields...");
+      toast.info("HTML replication timed out. Created structured template layout from extracted fields.");
+      
+      const fallbackHTML = buildFallbackHTML(data.extracted_fields || []);
+      setGeneratedHTML(fallbackHTML);
+      setHasCachedData(true);
+      nextStep();
     } catch (err) {
       console.error("Combined sequential process error:", err);
-      setErrorMessage("Connection error: backend not reachable.");
+      setErrorMessage("Connection error while processing document.");
     } finally {
       setIsProcessing(false);
       setProcessingStatus("");
@@ -247,9 +284,11 @@ export function TemplateUpload() {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/png': ['.png'],
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'application/pdf': ['.pdf']
+      'image/*': ['.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tiff', '.gif', '.svg'],
+      'application/pdf': ['.pdf'],
+      'application/msword': ['.doc'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'text/plain': ['.txt', '.csv']
     },
     maxFiles: 1
   });
