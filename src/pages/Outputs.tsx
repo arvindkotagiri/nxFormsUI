@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { legacyApiUrl } from "@/lib/legacyApiBase";
 import {
   Search,
   Filter,
@@ -254,7 +255,7 @@ export default function Outputs() {
     setDetailOutput(outputItem);
     if (!outputItem.renderedOutput && outputItem.id) {
       try {
-        const res = await fetch(`${API_URL}/outputs/${outputItem.id}`);
+        const res = await fetch(legacyApiUrl(`/api/outputs/${outputItem.id}`));
         if (res.ok) {
           const fullData = await res.json();
           setDetailOutput(fullData);
@@ -267,7 +268,7 @@ export default function Outputs() {
 
   const handleOpenPrintConfig = async (outputItem: any) => {
     setPrintModalOutput(outputItem);
-    fetch(`${API_URL}/api/printers`)
+    fetch(legacyApiUrl('/api/printers'))
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -279,7 +280,7 @@ export default function Outputs() {
 
     if (!outputItem.renderedOutput && outputItem.id) {
       try {
-        const res = await fetch(`${API_URL}/outputs/${outputItem.id}`);
+        const res = await fetch(legacyApiUrl(`/api/outputs/${outputItem.id}`));
         if (res.ok) {
           const fullData = await res.json();
           setPrintModalOutput(fullData);
@@ -377,20 +378,35 @@ export default function Outputs() {
   const outputsPerPage = 10;
   const visiblePages = 5;
 
-  const fetchOutputs = () => {
-    fetch(`${API_URL}/outputs`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setOutputs(data);
-      })
-      .catch((err) => console.error(err));
-  };
+  const [totalOutputsCount, setTotalOutputsCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const fetchOutputs = useCallback(async () => {
+    try {
+      const url = legacyApiUrl(
+        `/api/outputs?paginated=true&page=${currentPage}&limit=${outputsPerPage}&search=${encodeURIComponent(search)}`
+      );
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data && Array.isArray(data.data)) {
+        setOutputs(data.data);
+        setTotalOutputsCount(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+      } else if (Array.isArray(data)) {
+        setOutputs(data);
+        setTotalOutputsCount(data.length);
+        setTotalPages(Math.ceil(data.length / outputsPerPage) || 1);
+      }
+    } catch (err) {
+      console.error("Error fetching outputs:", err);
+    }
+  }, [currentPage, outputsPerPage, search]);
 
   useEffect(() => {
     fetchOutputs();
-    const interval = setInterval(fetchOutputs, 5000);
+    const interval = setInterval(fetchOutputs, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchOutputs]);
 
   const filtered = useMemo(
     () =>
@@ -409,12 +425,7 @@ export default function Outputs() {
     return list;
   }, [filtered, sortKey, sortDir]);
 
-  const totalPages = Math.ceil(sorted.length / outputsPerPage);
-
-  const paginatedOutputs = sorted.slice(
-    (currentPage - 1) * outputsPerPage,
-    currentPage * outputsPerPage,
-  );
+  const paginatedOutputs = sorted;
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {

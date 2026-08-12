@@ -14,11 +14,6 @@ export function getLegacyApiBase(): string {
     return normalizeLegacyBase(nodeApi);
   }
 
-  const flaskApi = import.meta.env.VITE_FLASK_API;
-  if (flaskApi) {
-    return normalizeLegacyBase(flaskApi);
-  }
-
   return typeof window !== "undefined"
     ? `${window.location.protocol}//${window.location.host}/node`
     : DEFAULT_NODE_API;

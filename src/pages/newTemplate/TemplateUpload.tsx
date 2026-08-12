@@ -7,7 +7,6 @@ import { LABEL_SIZES } from '@/data/labelData';
 import { Switch } from '@/components/ui/switch';
 import { Upload, Loader2 } from 'lucide-react';
 import { cn } from "@/lib/utils";
-const flaskAPI = import.meta.env.VITE_FLASK_API;
 const nodeAPI = import.meta.env.VITE_NODE_API;
 
 export function TemplateUpload() {

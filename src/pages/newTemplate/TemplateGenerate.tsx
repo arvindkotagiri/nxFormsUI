@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-const flaskAPI = import.meta.env.VITE_FLASK_API;
+import { legacyApiUrl } from "@/lib/legacyApiBase";
 
 export function TemplateGenerate() {
   const { cssString } = useCustomFonts();
@@ -36,8 +36,6 @@ export function TemplateGenerate() {
     outputMode,
     modifiedLabelBlob,
   } = useWizard();
-
-  const baseUrl = flaskAPI || 'http://localhost:5050';
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isLoadingZPL, setIsLoadingZPL] = useState(false);
@@ -63,8 +61,7 @@ export function TemplateGenerate() {
     formData.append("image", fileToSend);
     if (generatedHTML) formData.append("html_design", generatedHTML);
     try {
-      // const res = await fetch('http://localhost:5050/generate-zpl', { method: 'POST', body: formData });
-      const res = await fetch(`${baseUrl}/generate-zpl`, {
+      const res = await fetch(legacyApiUrl('/generate-zpl'), {
         method: "POST",
         body: formData,
       });
@@ -89,8 +86,7 @@ export function TemplateGenerate() {
     const formData = new FormData();
     formData.append("image", fileToSend);
     try {
-      // const res = await fetch('http://localhost:5050/replicate-invoice', { method: 'POST', body: formData });
-      const res = await fetch(`${baseUrl}/replicate-invoice`, {
+      const res = await fetch(legacyApiUrl('/replicate-invoice'), {
         method: "POST",
         body: formData,
       });
@@ -114,7 +110,7 @@ export function TemplateGenerate() {
     formData.append("image", fileToSend);
     if (generatedHTML) formData.append("html_design", generatedHTML);
     try {
-      const res = await fetch(`${baseUrl}/generate-xdp`, {
+      const res = await fetch(legacyApiUrl('/generate-xdp'), {
         method: "POST",
         body: formData,
       });

@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, Save, RotateCcw, CheckCircle2, Plus, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
-const flaskAPI = import.meta.env.VITE_FLASK_API;
-const nodeAPI = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
+import { legacyApiUrl } from '@/lib/legacyApiBase';
 
 export function TemplateSave() {
   const { labelName, setLabelName, selectedContext, selectedSize, chunks, generatedZPL, generatedHTML, generatedXDP, outputMode, watermarkName, printSystemId, reset, prevStep, editingUuid, labelId } = useWizard();
@@ -65,7 +64,7 @@ export function TemplateSave() {
 
       // 2. Send to Backend
       // const response = await fetch('http://localhost:5050/save-label', {
-      const response = await fetch(`${nodeAPI}/api/save-label`, {
+      const response = await fetch(legacyApiUrl('/api/save-label'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

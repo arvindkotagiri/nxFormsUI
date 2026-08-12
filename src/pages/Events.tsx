@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
+import { legacyApiUrl } from "@/lib/legacyApiBase";
 import {
   Search,
   Filter,
@@ -278,20 +279,35 @@ export default function Events() {
   const visibleColumns = tableColumns.filter((c) => visibleColumnIds.has(c.id));
   const allColumnsVisible = visibleColumnIds.size === ALL_COLUMN_IDS.length;
 
-  const fetchEvents = () => {
-    fetch(`${API_URL}/events`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setEvents(data);
-      })
-      .catch((err) => console.error(err));
-  };
+  const [totalEventsCount, setTotalEventsCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const fetchEvents = useCallback(async () => {
+    try {
+      const url = legacyApiUrl(
+        `/api/events?paginated=true&page=${currentPage}&limit=${eventsPerPage}&search=${encodeURIComponent(search)}`
+      );
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data && Array.isArray(data.data)) {
+        setEvents(data.data);
+        setTotalEventsCount(data.total || 0);
+        setTotalPages(data.totalPages || 1);
+      } else if (Array.isArray(data)) {
+        setEvents(data);
+        setTotalEventsCount(data.length);
+        setTotalPages(Math.ceil(data.length / eventsPerPage) || 1);
+      }
+    } catch (err) {
+      console.error("Error fetching events:", err);
+    }
+  }, [currentPage, eventsPerPage, search]);
 
   useEffect(() => {
     fetchEvents();
-    const interval = setInterval(fetchEvents, 5000);
+    const interval = setInterval(fetchEvents, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchEvents]);
 
   const filtered = useMemo(
     () =>
@@ -311,12 +327,7 @@ export default function Events() {
     return list;
   }, [filtered, sortKey, sortDir]);
 
-  const totalPages = Math.ceil(sorted.length / eventsPerPage);
-
-  const paginatedEvents = sorted.slice(
-    (currentPage - 1) * eventsPerPage,
-    currentPage * eventsPerPage,
-  );
+  const paginatedEvents = sorted;
 
   const visiblePages = 5;
 

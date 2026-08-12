@@ -43,7 +43,6 @@ import { TransformationModal, type TransformationPayload } from './Transformatio
 import { MappingAgentChatPanel, type SuggestedAction } from './MappingAgentChatPanel';
 import { TableLoopConfigPanel, type TableLoopConfig } from './TableLoopConfigPanel';
 
-const flaskAPI = import.meta.env.VITE_FLASK_API;
 const nodeAPI = import.meta.env.VITE_NODE_API;
 
 const GRID_SIZE = 10;

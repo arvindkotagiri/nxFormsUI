@@ -5,7 +5,6 @@ import { apiUrl } from "@/lib/api";
 import { useCustomFonts } from "@/hooks/useCustomFonts";
 import Observability from "./Observability";
 
-const flaskAPI = import.meta.env.VITE_FLASK_API;
 const nodeAPI = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
 
 const TABS = [

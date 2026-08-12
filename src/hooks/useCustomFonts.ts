@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-
-const flaskAPI = import.meta.env.VITE_FLASK_API || "http://localhost:5000";
+import { legacyApiUrl } from '@/lib/legacyApiBase';
 
 export interface CustomFont {
   id: number;
@@ -11,7 +10,7 @@ export interface CustomFont {
 export function getFontStylesCss(fonts: CustomFont[]): string {
   let css = '';
   fonts.forEach(font => {
-    const fontUrl = `${flaskAPI}/static/fonts/${font.filename}`;
+    const fontUrl = legacyApiUrl(`/static/fonts/${font.filename}`);
     css += `
 @font-face {
   font-family: '${font.name}';
@@ -28,7 +27,7 @@ export function useCustomFonts() {
 
   const refreshFonts = useCallback(async () => {
     try {
-      const res = await fetch(`${flaskAPI}/api/fonts`);
+      const res = await fetch(legacyApiUrl('/api/fonts'));
       if (!res.ok) throw new Error("Failed to fetch fonts");
       const data = await res.json();
       if (Array.isArray(data)) {

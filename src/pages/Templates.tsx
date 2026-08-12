@@ -1,21 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   Plus,
   Search,
   Eye,
   Edit,
-  Copy,
-  Layers,
   FileText,
-  Tag,
   Trash2,
+  Play,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-const flaskAPI = import.meta.env.VITE_FLASK_API;
-const nodeAPI = import.meta.env.VITE_NODE_API || (typeof window !== "undefined" ? `${window.location.protocol}//${window.location.host}/node` : "http://localhost:4000");
+import { legacyApiUrl } from "@/lib/legacyApiBase";
 import SimulationModal from "./SimulationModal";
-import { Play } from "lucide-react";
 import { useCustomFonts } from "@/hooks/useCustomFonts";
 import { useWizard } from "@/context/WizardContext";
 
@@ -24,8 +23,8 @@ type LabelTemplate = {
   label_id: string;
   label_name: string;
   context: string;
-  fields: any[];
-  html_code: string;
+  fields?: any[];
+  html_code?: string;
   zpl_code?: string;
   xdp_code?: string;
   output_mode: string;
@@ -34,16 +33,17 @@ type LabelTemplate = {
   created_by: string;
   created_on: string;
 };
+
 export default function Templates() {
   const navigate = useNavigate();
   const { cssString } = useCustomFonts();
   const { loadSavedTemplate } = useWizard();
   const [view, setView] = useState<"grid" | "editor">("grid");
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTemplate, setSelectedTemplate] =
-    useState<LabelTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<LabelTemplate | null>(null);
   const [labelTemplates, setLabelTemplates] = useState<LabelTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchingDetail, setFetchingDetail] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [simulateOpen, setSimulateOpen] = useState(false);
   const [simulateForm, setSimulateForm] = useState("");
@@ -51,19 +51,45 @@ export default function Templates() {
   const [formContext, setFormContext] = useState("");
   const [contexts, setContexts] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetch(`${nodeAPI}/api/labels`)
-      .then((res) => res.json())
-      .then((data) => {
-        setLabelTemplates(Array.isArray(data) ? data : []);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Error fetching labels:", err);
-        setLoading(false);
-      });
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const limit = 12;
 
-    fetch(`${nodeAPI}/api/catalog`)
+  const loadTemplates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const url = legacyApiUrl(
+        `/api/labels?summary=true&paginated=true&page=${page}&limit=${limit}&search=${encodeURIComponent(searchQuery)}`
+      );
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data && Array.isArray(data.data)) {
+        setLabelTemplates(data.data);
+        setTotalPages(data.totalPages || 1);
+        setTotalCount(data.total || 0);
+      } else if (Array.isArray(data)) {
+        setLabelTemplates(data);
+        setTotalPages(1);
+        setTotalCount(data.length);
+      } else {
+        setLabelTemplates([]);
+      }
+    } catch (err) {
+      console.error("Error fetching labels:", err);
+      setLabelTemplates([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, searchQuery]);
+
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
+
+  useEffect(() => {
+    fetch(legacyApiUrl("/api/catalog"))
       .then((res) => res.json())
       .then((apis) => {
         if (Array.isArray(apis)) {
@@ -83,17 +109,34 @@ export default function Templates() {
       });
   }, []);
 
+  const fetchFullTemplate = async (t: LabelTemplate): Promise<LabelTemplate> => {
+    if (t.html_code || t.zpl_code || t.xdp_code) return t;
+    setFetchingDetail(true);
+    try {
+      const res = await fetch(legacyApiUrl(`/api/labels/${t.uuid}`));
+      if (res.ok) {
+        const full = await res.json();
+        return full;
+      }
+    } catch (e) {
+      console.error("Error fetching full template detail:", e);
+    } finally {
+      setFetchingDetail(false);
+    }
+    return t;
+  };
+
   const handleDelete = async (uuid: string) => {
     if (!window.confirm("Are you sure you want to delete this template? This action cannot be undone.")) {
       return;
     }
 
     try {
-      const response = await fetch(`${nodeAPI}/api/labels/${uuid}`, {
+      const response = await fetch(legacyApiUrl(`/api/labels/${uuid}`), {
         method: "DELETE",
       });
       if (response.ok) {
-        setLabelTemplates((prev) => prev.filter((t) => t.uuid !== uuid));
+        loadTemplates();
         if (selectedTemplate?.uuid === uuid) {
           setSelectedTemplate(null);
           setView("grid");
@@ -115,7 +158,7 @@ export default function Templates() {
     }
   };
 
-  function HtmlPreview({ html }: { html: string }) {
+  function HtmlPreview({ html }: { html?: string }) {
     const srcDoc = `
   <html>
   <head>
@@ -135,29 +178,24 @@ export default function Templates() {
         title="preview"
         srcDoc={srcDoc}
         className="w-full h-full border-0"
-        style={{
-          background: "white",
-        }}
+        style={{ background: "white" }}
       />
     );
   }
 
   const loadPreview = async (zplCode: string) => {
+    if (!zplCode) return;
     try {
       const res = await fetch(
         "https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: zplCode,
-        },
+        }
       );
-
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-
       setPreview(url);
     } catch (err) {
       console.error(err);
@@ -173,11 +211,9 @@ export default function Templates() {
       loadPreview(selectedTemplate.zpl_code || "");
     }
   }, [selectedTemplate]);
+
   if (view === "editor" && selectedTemplate) {
     const { output_mode } = selectedTemplate;
-
-    const showHtml = output_mode === "html" || output_mode === "both" || output_mode === "all";
-    const showZpl = output_mode === "zpl" || output_mode === "both" || output_mode === "all";
 
     return (
       <div className="space-y-5 animate-fade-in">
@@ -198,52 +234,15 @@ export default function Templates() {
               <h1 className="text-2xl font-semibold">
                 {selectedTemplate.label_name}
               </h1>
-              <p className="text-sm text-muted-foreground">
-                v{selectedTemplate.version} · {selectedTemplate.output_mode}
-              </p>
+              <div className="text-xs text-muted-foreground font-mono">
+                {selectedTemplate.label_id} • {selectedTemplate.context}
+              </div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const matchingContext = contexts.find(c => c.name === selectedTemplate.context) || {
-                  name: selectedTemplate.context,
-                  entities: [],
-                  fields: {}
-                };
-                loadSavedTemplate(selectedTemplate, matchingContext);
-                navigate("/templates/new");
-              }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all"
-              style={{ background: "hsl(var(--accent))" }}
-            >
-              <Edit size={14} />
-              Edit in Studio
-            </button>
-            <button
-              onClick={() => handleDelete(selectedTemplate.uuid)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white transition-all bg-red-600 hover:bg-red-700"
-            >
-              <Trash2 size={14} />
-              Delete
-            </button>
           </div>
         </div>
 
-        {/* ================= MAIN EDITOR AREA ================= */}
-        {/* Template Metadata */}
-        <div className="card-elevated p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <div className="text-xs text-muted-foreground">Label ID</div>
-            <div className="font-semibold">{selectedTemplate.label_id}</div>
-          </div>
-
-          <div>
-            <div className="text-xs text-muted-foreground">Label Name</div>
-            <div className="font-semibold">{selectedTemplate.label_name}</div>
-          </div>
-
+        {/* Info Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-6 gap-4 p-4 card-elevated text-sm">
           <div>
             <div className="text-xs text-muted-foreground">Context</div>
             <div className="font-semibold">{selectedTemplate.context}</div>
@@ -251,9 +250,7 @@ export default function Templates() {
 
           <div>
             <div className="text-xs text-muted-foreground">Output Mode</div>
-            <div className="font-semibold uppercase">
-              {selectedTemplate.output_mode}
-            </div>
+            <div className="font-semibold uppercase">{selectedTemplate.output_mode}</div>
           </div>
 
           <div>
@@ -263,9 +260,7 @@ export default function Templates() {
 
           <div>
             <div className="text-xs text-muted-foreground">Page Size</div>
-            <div className="font-semibold">
-              {selectedTemplate.page_dimensions}
-            </div>
+            <div className="font-semibold">{selectedTemplate.page_dimensions}</div>
           </div>
 
           <div>
@@ -280,74 +275,65 @@ export default function Templates() {
             </div>
           </div>
         </div>
+
         <div
           className={cn(
             "gap-4 grid",
-            (output_mode === "all")
+            output_mode === "all"
               ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-              : (output_mode === "both" ? "grid-cols-1 sm:grid-cols-2 sm:grid-rows-2" : "grid-cols-1 sm:grid-cols-2")
+              : output_mode === "both"
+              ? "grid-cols-1 sm:grid-cols-2 sm:grid-rows-2"
+              : "grid-cols-1 sm:grid-cols-2"
           )}
         >
-          {/* ---------- LEFT SIDE HTML CODE ---------- */}
+          {/* HTML CODE */}
           {(output_mode === "html" || output_mode === "both" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden flex flex-col h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
                 HTML Code
               </div>
-
               <textarea
                 value={selectedTemplate.html_code || ""}
                 readOnly
-                className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none"
-                style={{
-                  background: "hsl(var(--background))",
-                  color: "hsl(var(--foreground))",
-                  lineHeight: 1.6,
-                }}
+                className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none bg-background text-foreground"
+                style={{ lineHeight: 1.6 }}
               />
             </div>
           )}
 
-          {/* ---------- RIGHT SIDE HTML PREVIEW ---------- */}
+          {/* HTML PREVIEW */}
           {(output_mode === "html" || output_mode === "both" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
                 <span>HTML Preview</span>
               </div>
-
               <div className="p-4 overflow-auto h-full">
                 <HtmlPreview html={selectedTemplate.html_code} />
               </div>
             </div>
           )}
 
-          {/* ---------- LEFT SIDE ZPL CODE ---------- */}
+          {/* ZPL CODE */}
           {(output_mode === "zpl" || output_mode === "both" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden flex flex-col h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
                 ZPL Code
               </div>
-
               <textarea
                 value={selectedTemplate.zpl_code || ""}
                 readOnly
-                className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none"
-                style={{
-                  background: "hsl(var(--background))",
-                  color: "hsl(var(--foreground))",
-                  lineHeight: 1.6,
-                }}
+                className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none bg-background text-foreground"
+                style={{ lineHeight: 1.6 }}
               />
             </div>
           )}
 
-          {/* ---------- RIGHT SIDE ZPL PREVIEW ---------- */}
+          {/* ZPL PREVIEW */}
           {(output_mode === "zpl" || output_mode === "both" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-primary text-primary-foreground">
                 <span>ZPL Preview</span>
               </div>
-
               <div className="p-4 overflow-auto h-full">
                 {preview ? (
                   <img
@@ -356,30 +342,23 @@ export default function Templates() {
                     className="w-full h-full object-contain border rounded shadow"
                   />
                 ) : (
-                  <div className="text-muted-foreground text-sm">
-                    Preview unavailable
-                  </div>
+                  <div className="text-muted-foreground text-sm">Preview unavailable</div>
                 )}
               </div>
             </div>
           )}
 
-          {/* ---------- XDP CODE ---------- */}
+          {/* XDP CODE */}
           {(output_mode === "xdp" || output_mode === "all") && (
             <div className="card-elevated overflow-hidden flex flex-col h-[70vh]">
               <div className="px-4 py-2 border-b font-semibold text-xs bg-orange-600 text-white">
                 XDP Code
               </div>
-
               <textarea
                 value={selectedTemplate.xdp_code || ""}
                 readOnly
-                className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none"
-                style={{
-                  background: "hsl(var(--background))",
-                  color: "hsl(var(--foreground))",
-                  lineHeight: 1.6,
-                }}
+                className="flex-1 p-4 text-xs font-mono resize-none focus:outline-none bg-background text-foreground"
+                style={{ lineHeight: 1.6 }}
               />
             </div>
           )}
@@ -388,129 +367,110 @@ export default function Templates() {
     );
   }
 
-  const filteredTemplates = labelTemplates.filter(
-    (t) =>
-      t.label_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.label_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.context.toLowerCase().includes(searchQuery.toLowerCase()),
-  );
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-3xl font-semibold text-foreground">
-            Templates
+            Saved Templates
           </h1>
           <p className="text-sm text-muted-foreground font-body mt-1">
-            Output template library
+            Output template library ({totalCount} total)
           </p>
         </div>
         <button
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all"
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold font-body transition-all bg-primary text-primary-foreground hover:opacity-90"
           onClick={() => navigate("/templates/new")}
-          style={{ background: "hsl(var(--accent))", color: "white" }}
         >
           <Plus size={16} />
           New Template
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search
-          size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-        />
-        <input
-          type="text"
-          placeholder="Search templates…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
-        />
+      {/* Search & Actions */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="relative max-w-xs w-full">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+          <input
+            type="text"
+            placeholder="Search templates…"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-border bg-card font-body focus:outline-none focus:ring-2 focus:ring-accent/30"
+          />
+        </div>
       </div>
 
       {/* Grid */}
       {loading ? (
-        <div className="text-muted-foreground text-sm">
+        <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
+          <Loader2 size={18} className="animate-spin" />
           Loading templates...
+        </div>
+      ) : labelTemplates.length === 0 ? (
+        <div className="card-elevated p-12 text-center text-muted-foreground text-sm">
+          No templates found matching your query.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* {templates.map((t) => ( */}
-          {filteredTemplates.map((t) => (
-            <div key={t.uuid} className="card-elevated p-5 space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center"
-                    style={{ background: "hsl(var(--secondary))" }}
-                  >
-                    <FileText
-                      size={18}
-                      style={{ color: "hsl(var(--primary))" }}
-                    />
-                  </div>
-                  <div>
-                    <h3 className="font-display text-sm font-semibold text-foreground leading-tight">
-                      {t.label_name}
-                    </h3>
-                    <div className="text-xs text-muted-foreground font-body mt-0.5">
-                      {t.label_id}
+          {labelTemplates.map((t) => (
+            <div key={t.uuid} className="card-elevated p-5 space-y-4 flex flex-col justify-between">
+              <div className="space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center bg-secondary"
+                    >
+                      <FileText size={18} className="text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="font-display text-sm font-semibold text-foreground leading-tight">
+                        {t.label_name}
+                      </h3>
+                      <div className="text-xs text-muted-foreground font-body mt-0.5 font-mono">
+                        {t.label_id}
+                      </div>
                     </div>
                   </div>
+                  <div className="status-dot bg-emerald-500" />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {/* <div
-                  className="status-dot"
-                  style={{
-                    background: t.active ? "hsl(var(--success))" : "hsl(var(--muted-foreground))",
-                    boxShadow: t.active ? "0 0 0 3px hsl(var(--success) / 0.2)" : "none",
-                  }}
-                /> */}
-                  <div
-                    className="status-dot"
-                    style={{
-                      background: "hsl(var(--success))",
-                    }}
-                  />
+
+                <div className="flex items-center gap-2 flex-wrap text-xs">
+                  <span className="badge-neutral uppercase">{t.output_mode}</span>
+                  <span className="badge-info">v{t.version}</span>
+                  <span className="badge-neutral">{t.context}</span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-body text-muted-foreground pt-1">
+                  <span>Created {new Date(t.created_on).toLocaleDateString()}</span>
+                  <span>{t.page_dimensions || "Standard"}</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="badge-neutral">{t.output_mode}</span>
-                <span className="badge-info">v{t.version}</span>
-                {/* {t.contexts.map((c) => (
-                <span key={c} className="badge-neutral">{c}</span>
-              ))} */}
-                <span className="badge-neutral">{t.context}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-xs font-body text-muted-foreground">
-                {/* <span>Updated {t.updated}</span> */}
-                {/* <span className="font-semibold text-foreground">{t.uses.toLocaleString()} uses</span> */}
-                <span>
-                  Created {new Date(t.created_on).toLocaleDateString()}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2 pt-1 border-t border-border">
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
                 <button
-                  onClick={() => {
-                    const matchingContext = contexts.find(c => c.name === t.context) || {
+                  onClick={async () => {
+                    const full = await fetchFullTemplate(t);
+                    const matchingContext = contexts.find((c) => c.name === t.context) || {
                       name: t.context,
                       entities: [],
-                      fields: {}
+                      fields: {},
                     };
-                    loadSavedTemplate(t, matchingContext);
+                    loadSavedTemplate(full, matchingContext);
                     navigate("/templates/new");
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold font-body transition-all"
-                  style={{ background: "hsl(var(--accent))", color: "white" }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold font-body bg-primary text-primary-foreground hover:opacity-90 transition-all"
                 >
                   <Edit size={12} />
                   Edit
                 </button>
+
                 <button
                   onClick={() => {
                     setSimulateForm(t.label_name);
@@ -525,8 +485,9 @@ export default function Templates() {
                 </button>
 
                 <button
-                  onClick={() => {
-                    setSelectedTemplate(t);
+                  onClick={async () => {
+                    const full = await fetchFullTemplate(t);
+                    setSelectedTemplate(full);
                     setView("editor");
                   }}
                   title="View Source Code"
@@ -546,6 +507,32 @@ export default function Templates() {
           ))}
         </div>
       )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <div className="text-xs text-muted-foreground">
+            Page {page} of {totalPages} ({totalCount} items)
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 hover:bg-muted"
+            >
+              <ChevronLeft size={14} /> Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 rounded-lg border text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 hover:bg-muted"
+            >
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <SimulationModal
         open={simulateOpen}
         formName={simulateForm}
