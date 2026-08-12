@@ -465,7 +465,7 @@ export default function Templates() {
                     loadSavedTemplate(full, matchingContext);
                     navigate("/templates/new");
                   }}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold font-body bg-primary text-primary-foreground hover:opacity-90 transition-all"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold font-body bg-accent text-accent-foreground hover:opacity-90 transition-all shadow-xs"
                 >
                   <Edit size={12} />
                   Edit

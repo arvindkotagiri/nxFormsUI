@@ -115,13 +115,17 @@ export default function Dashboard() {
     { name: "Pending", value: summary.pendingOutputs || 0, color: "#f59e0b" },
   ];
 
-  const templateModes = data?.templateModes && data.templateModes.length > 0 
-    ? data.templateModes 
-    : [
+  const rawTemplateModes = data?.templateModes || [];
+  const activeTemplateModes = rawTemplateModes.filter(m => m.value > 0);
+  const templateModes = activeTemplateModes.length > 0 
+    ? activeTemplateModes 
+    : summary.totalTemplates > 0
+    ? [
         { name: "ZPL Labels", value: summary.totalTemplates, color: "#3b82f6" },
         { name: "HTML / Doc", value: 0, color: "#10b981" },
         { name: "Adobe XDP", value: 0, color: "#8b5cf6" },
-      ];
+      ]
+    : [];
 
   return (
     <div className="space-y-6 animate-fade-in pb-8">
