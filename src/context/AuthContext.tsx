@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { apiUrl } from "@/lib/api";
+import { apiUrl, clearStoredAuthToken } from "@/lib/api";
 
 export interface UserProfile {
   id: string;
@@ -53,7 +53,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(profile);
       } else {
         // Invalid token
-        localStorage.removeItem("nx_token");
+        clearStoredAuthToken();
         setToken(null);
         setUser(null);
       }
@@ -103,6 +103,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const userProfile = data.user;
 
       localStorage.setItem("nx_token", authToken);
+      localStorage.setItem("access_token", authToken);
       setToken(authToken);
       setUser(userProfile);
 
@@ -159,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    localStorage.removeItem("nx_token");
+    clearStoredAuthToken();
     setToken(null);
     setUser(null);
   };

@@ -6,13 +6,26 @@ export function apiUrl(path: string): string {
   return base ? `${base}${normalizedPath}` : normalizedPath;
 }
 
+export function getStoredAuthToken(): string | null {
+  return localStorage.getItem("nx_token") || localStorage.getItem("access_token") || null;
+}
+
+export function setStoredAuthToken(token: string): void {
+  localStorage.setItem("nx_token", token);
+  localStorage.setItem("access_token", token);
+}
+
+export function clearStoredAuthToken(): void {
+  localStorage.removeItem("nx_token");
+  localStorage.removeItem("access_token");
+}
+
 function getToken() {
-  return localStorage.getItem("nx_token") || localStorage.getItem("access_token");
+  return getStoredAuthToken();
 }
 
 function setToken(token: string) {
-  localStorage.setItem("nx_token", token);
-  localStorage.setItem("access_token", token);
+  setStoredAuthToken(token);
 }
 
 let bootstrappingPromise: Promise<void> | null = null;

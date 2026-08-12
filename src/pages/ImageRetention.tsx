@@ -49,7 +49,7 @@ export default function ImageRetention() {
 
   const getTokenHeader = useCallback(async () => {
     await bootstrapTokenIfMissing();
-    const token = localStorage.getItem("access_token");
+    const token = localStorage.getItem("nx_token") || localStorage.getItem("access_token");
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
