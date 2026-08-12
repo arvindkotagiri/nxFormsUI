@@ -83,7 +83,6 @@ const App = () => (
                 <Route path="/templates" element={<Templates />} />
                 <Route path="/printers" element={<Printers />} />
                 <Route path="/api-configurations" element={<ApiConfigurations />} />
-                <Route path="/logs" element={<Logs />} />
                 <Route path="/output-status" element={<Outputs />} />
                 <Route path="/job-queue" element={<JobQueue />} />
                 <Route path="/settings" element={<Settings />} />
@@ -105,9 +104,6 @@ const App = () => (
                 <Route path="/labelConfigurator" element={<LabelConfigurator />} />
                 <Route path="/config/new" element={<ConfigDetailPage />} />
                 <Route path="/config/:configId" element={<ConfigDetailPage />} />
-
-                {/* Simulation App Integration */}
-                <Route path="/simulation" element={<SimulationPage />} />
 
                 {/* Additional routes */}
                 <Route path="/image-retention" element={<ImageRetention />} />

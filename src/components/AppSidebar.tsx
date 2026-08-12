@@ -68,12 +68,10 @@ const navItems: NavItem[] = [
       { title: "Events", url: "/events", icon: Zap },
       { title: "Output Status", url: "/output-status", icon: FileSearch },
       { title: "Job Queue", url: "/job-queue", icon: ListOrdered },
-      { title: "Logs & Audit", url: "/logs", icon: ScrollText },
       { title: "Support Tickets", url: "/tickets", icon: LifeBuoy },
     ],
   },
   { kind: "link", title: "Settings", url: "/settings", icon: Settings },
-  { kind: "link", title: "Simulation", url: "/simulation", icon: Zap },
 ];
 
 import { useAuth } from "@/context/AuthContext";

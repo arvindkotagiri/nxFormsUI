@@ -404,7 +404,7 @@ export default function Outputs() {
 
   useEffect(() => {
     fetchOutputs();
-    const interval = setInterval(fetchOutputs, 10000);
+    const interval = setInterval(fetchOutputs, 4000);
     return () => clearInterval(interval);
   }, [fetchOutputs]);
 

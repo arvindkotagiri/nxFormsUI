@@ -112,14 +112,21 @@ export default function Settings() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState<string>("");
 
+  const DEFAULT_MODELS = [
+    { name: "gemini-2.5-flash-preview-05-20", display_name: "Gemini 2.5 Flash" },
+    { name: "gemini-1.5-pro", display_name: "Gemini 1.5 Pro" },
+    { name: "gpt-4o", display_name: "OpenAI GPT-4o" },
+    { name: "claude-3-5-sonnet-20240620", display_name: "Claude 3.5 Sonnet" }
+  ];
+
   // Load settings once on mount
   useEffect(() => {
-    fetch(`${nodeAPI}/api/model-configs`)
+    fetch(apiUrl("/api/model-configs"))
       .then(r => r.json())
       .then(configs => {
         setModelConfigs(configs || {});
-        setAgentEnabled(configs.agent_enabled === 'true');
-        setAgentSiteId(configs.agent_site_id || "SITE-001");
+        setAgentEnabled(configs?.agent_enabled === 'true');
+        setAgentSiteId(configs?.agent_site_id || "SITE-001");
       })
       .catch(() => {});
   }, []);
@@ -127,10 +134,7 @@ export default function Settings() {
   // Load models when tab 3 is active
   useEffect(() => {
     if (activeTab === 3) {
-      fetch(`${flaskAPI}/available-models`)
-        .then(r => r.json())
-        .then(models => setAvailableModels(Array.isArray(models) ? models : []))
-        .catch(() => setAvailableModels([]));
+      fetchModels();
     }
   }, [activeTab]);
 
@@ -156,7 +160,7 @@ export default function Settings() {
     formData.append("name", fontName);
     formData.append("fontFile", fontFile);
     try {
-      const res = await fetch(`${flaskAPI}/api/upload-font`, {
+      const res = await fetch(apiUrl("/api/upload-font"), {
         method: 'POST',
         body: formData
       });
@@ -184,7 +188,7 @@ export default function Settings() {
   const handleFontDelete = async (id: number) => {
     if (!confirm("Are you sure you want to delete this custom font?")) return;
     try {
-      const res = await fetch(`${flaskAPI}/api/fonts/${id}`, {
+      const res = await fetch(apiUrl(`/api/fonts/${id}`), {
         method: 'DELETE'
       });
       if (res.ok) {
@@ -250,7 +254,7 @@ export default function Settings() {
         let models: {name: string, display_name: string}[] = [];
         if (hasAnyKey) {
             // POST with current keys so backend can list models without saving first
-            const res = await fetch(apiUrl("/available-models"), {
+            const res = await fetch(apiUrl("/api/available-models"), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -259,30 +263,40 @@ export default function Settings() {
                     api_anthropic: keys.api_anthropic || ""
                 })
             });
-            models = await res.json();
+            if (res.ok) {
+              models = await res.json();
+            }
         } else {
-            const res = await fetch(apiUrl("/available-models"));
-            models = await res.json();
+            const res = await fetch(apiUrl("/api/available-models"));
+            if (res.ok) {
+              models = await res.json();
+            }
         }
 
-        const configsRes = await fetch(apiUrl("/api/model-configs"));
-        const configs = await configsRes.json();
-
-        setAvailableModels(Array.isArray(models) ? models : []);
-        // Merge only non-empty values or keep user-typed values prioritized
-        setModelConfigs(prev => {
-            const newConfigs = { ...prev };
-            for (const [k, v] of Object.entries(configs)) {
-                // Only overwrite if current value is empty OR if we are doing initial load
-                if (!prev[k] || v) {
-                    newConfigs[k] = v as string;
+        try {
+          const configsRes = await fetch(apiUrl("/api/model-configs"));
+          if (configsRes.ok) {
+            const configs = await configsRes.json();
+            setModelConfigs(prev => {
+                const newConfigs = { ...prev };
+                for (const [k, v] of Object.entries(configs || {})) {
+                    if (!prev[k] || v) {
+                        newConfigs[k] = v as string;
+                    }
                 }
-            }
-            return newConfigs;
-        });
+                return newConfigs;
+            });
+          }
+        } catch { /* silent fallback */ }
+
+        if (Array.isArray(models) && models.length > 0) {
+          setAvailableModels(models);
+        } else {
+          setAvailableModels(DEFAULT_MODELS);
+        }
     } catch (err) {
         console.error("Failed to fetch models", err);
-        setAvailableModels([]);
+        setAvailableModels(DEFAULT_MODELS);
     } finally {
         setIsLoadingModels(false);
     }
