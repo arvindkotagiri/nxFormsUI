@@ -1432,57 +1432,6 @@ export function TemplateAdapt() {
             {/* Editor Workspace (Left) */}
             <div className="flex-1 flex flex-col relative h-full min-w-0">
 
-                {/* Floating Canvas Controls Bar (Top Left) */}
-                <div className="absolute left-4 top-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md rounded-xl p-1 z-50 flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-slate-600 hover:bg-slate-100"
-                        onClick={() => setZoomLevel(prev => Math.max(0.4, parseFloat((prev - 0.1).toFixed(2))))}
-                        title="Zoom Out"
-                    >
-                        <ZoomOut className="w-3.5 h-3.5" />
-                    </Button>
-                    <span className="text-[10px] font-bold font-mono text-slate-700 w-12 text-center select-none">
-                        {Math.round(zoomLevel * 100)}%
-                    </span>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-slate-600 hover:bg-slate-100"
-                        onClick={() => setZoomLevel(prev => Math.min(2.0, parseFloat((prev + 0.1).toFixed(2))))}
-                        title="Zoom In"
-                    >
-                        <ZoomIn className="w-3.5 h-3.5" />
-                    </Button>
-                    <div className="h-4 w-px bg-slate-200 mx-0.5" />
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2 text-[10px] font-bold text-slate-600 hover:bg-slate-100 uppercase tracking-wider"
-                        onClick={() => setZoomLevel(1.0)}
-                    >
-                        100%
-                    </Button>
-                </div>
-
-                {/* Floating Properties Panel Toggle */}
-                <button
-                    onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                    className="absolute right-4 top-4 bg-white/90 backdrop-blur border border-slate-200 shadow-md hover:bg-slate-50 text-slate-700 rounded-xl p-2 z-50 transition-all flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider"
-                    title={isSidebarOpen ? "Collapse Inspector" : "Expand Inspector"}
-                >
-                    {isSidebarOpen ? (
-                        <>
-                            Collapse Inspector <ChevronRight className="w-4 h-4 text-rose-500" />
-                        </>
-                    ) : (
-                        <>
-                            <ChevronLeft className="w-4 h-4 text-emerald-500 animate-pulse" /> Expand Inspector
-                        </>
-                    )}
-                </button>
-
                 {/* Canvas Area (Removed p-12 double-whitespace padding on page wrappers) */}
                 <div className="flex-1 bg-slate-100 overflow-auto flex justify-center p-2 relative custom-scrollbar shadow-inner">
                     {isLoading ? (
