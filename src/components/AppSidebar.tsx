@@ -68,9 +68,9 @@ const navItems: NavItem[] = [
       { title: "Events", url: "/events", icon: Zap },
       { title: "Output Status", url: "/output-status", icon: FileSearch },
       { title: "Job Queue", url: "/job-queue", icon: ListOrdered },
-      { title: "Support Tickets", url: "/tickets", icon: LifeBuoy },
     ],
   },
+  { kind: "link", title: "Support Tickets", url: "/tickets", icon: LifeBuoy },
   { kind: "link", title: "Settings", url: "/settings", icon: Settings },
 ];
 
