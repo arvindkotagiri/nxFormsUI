@@ -225,9 +225,9 @@ export function TemplateAdapt() {
         elements.forEach(el => {
             if (el.tagName.toLowerCase() === 'img') return;
             
-            // If the element already has a saved mapping, display it directly on the canvas
-            const sapMapping = el.getAttribute("data-sap-mapping");
-            if (sapMapping && sapMapping !== "unmapped") {
+            // If the element already has a valid saved SAP mapping, display it directly on the canvas
+            let sapMapping = el.getAttribute("data-sap-mapping");
+            if (sapMapping && sapMapping !== "unmapped" && sapMapping !== "undefined") {
                 el.textContent = `{{${sapMapping}}}`;
                 el.setAttribute("data-editor-element", "true");
                 const matchingChunk = chunksList.find(c => c.fieldMapping === sapMapping);
@@ -243,26 +243,32 @@ export function TemplateAdapt() {
             const textContent = el.textContent?.trim() || '';
             const match = textContent.match(/^\{\{(.+)\}\}$/);
             if (match) {
-                const placeholderName = match[1];
+                let placeholderName = match[1];
+                if (placeholderName === 'undefined') {
+                    placeholderName = sapMapping && sapMapping !== 'undefined' ? sapMapping : '';
+                }
+
                 const matchingChunk = chunksList.find(c => {
-                    return c.label === placeholderName || (c.fieldMapping && c.fieldMapping.split('.').pop() === placeholderName);
+                    return (
+                        c.label === placeholderName || 
+                        c.fieldMapping === placeholderName || 
+                        (c.fieldMapping && c.fieldMapping.split('.').pop() === placeholderName)
+                    );
                 });
                 
-                if (matchingChunk) {
+                if (matchingChunk && matchingChunk.fieldMapping) {
                     el.id = matchingChunk.id;
-                    if (!el.getAttribute("data-sap-mapping")) {
-                        el.setAttribute("data-sap-mapping", matchingChunk.fieldMapping);
-                    }
+                    el.setAttribute("data-sap-mapping", matchingChunk.fieldMapping);
                     el.textContent = `{{${matchingChunk.fieldMapping}}}`;
                     el.setAttribute("data-editor-element", "true");
                     if (matchingChunk.transformations && !el.getAttribute("data-transformations")) {
                         el.setAttribute("data-transformations", JSON.stringify(matchingChunk.transformations));
                     }
-                } else {
-                    if (!el.getAttribute("data-sap-mapping")) {
-                        el.setAttribute("data-sap-mapping", "unmapped");
-                        el.setAttribute("data-editor-element", "true");
-                    }
+                } else if (sapMapping && sapMapping !== "unmapped" && sapMapping !== "undefined") {
+                    el.textContent = `{{${sapMapping}}}`;
+                    el.setAttribute("data-editor-element", "true");
+                } else if (placeholderName && placeholderName !== 'undefined') {
+                    el.setAttribute("data-editor-element", "true");
                 }
             }
         });
@@ -1262,8 +1268,14 @@ export function TemplateAdapt() {
                 }
             }
             if (!el && action.targetTextSnippet) {
+                const snip = action.targetTextSnippet.trim().toLowerCase();
                 const allElements = Array.from(editorRef.current.querySelectorAll('*')) as HTMLElement[];
-                el = allElements.find(e => e.children.length === 0 && e.textContent?.trim().toLowerCase().includes(action.targetTextSnippet!.toLowerCase())) || null;
+                el = allElements.find(e => e.children.length === 0 && e.textContent?.trim().toLowerCase().includes(snip)) || null;
+            }
+            if (!el) {
+                const fieldLeaf = action.fieldPath.includes('.') ? action.fieldPath.split('.').pop()!.toLowerCase() : action.fieldPath.toLowerCase();
+                const allElements = Array.from(editorRef.current.querySelectorAll('*')) as HTMLElement[];
+                el = allElements.find(e => e.children.length === 0 && (e.textContent?.toLowerCase().includes(fieldLeaf) || e.getAttribute('data-sap-mapping')?.toLowerCase() === action.fieldPath.toLowerCase())) || null;
             }
         }
 
@@ -1272,12 +1284,13 @@ export function TemplateAdapt() {
             el.setAttribute("data-sap-mapping", action.fieldPath);
             el.setAttribute("data-editor-element", "true");
             if (editorRef.current) {
+                setLocalHtml(editorRef.current.innerHTML);
                 pushState(editorRef.current.innerHTML);
                 syncCanvasToChunks();
             }
-            toast.success(`Mapped element to ${action.fieldPath}`);
+            toast.success(`Mapped element to {{${action.fieldPath}}}`);
         } else {
-            toast.error("Could not find target element on canvas to map.");
+            toast.error(`Could not locate target element on canvas for ${action.fieldPath}`);
         }
     };
 
