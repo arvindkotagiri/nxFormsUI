@@ -3,6 +3,8 @@ import { LifeBuoy, X, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { getConsoleLogs } from "@/utils/logger";
 import { toast } from "sonner";
 
+import { apiUrl } from "@/lib/api";
+
 interface SupportTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -62,8 +64,7 @@ export function SupportTicketModal({ isOpen, onClose }: SupportTicketModalProps)
     };
 
     try {
-      const nodeAPI = import.meta.env.VITE_NODE_API || "http://localhost:4000";
-      const response = await fetch(`${nodeAPI}/api/support/tickets`, {
+      const response = await fetch(apiUrl("/api/support/tickets"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json"

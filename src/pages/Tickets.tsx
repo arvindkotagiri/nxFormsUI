@@ -34,7 +34,7 @@ interface Ticket {
   updated_at: string;
 }
 
-const nodeAPI = import.meta.env.VITE_NODE_API || "http://localhost:4000";
+import { apiUrl } from "@/lib/api";
 
 export default function Tickets() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -46,10 +46,10 @@ export default function Tickets() {
   const fetchTickets = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${nodeAPI}/api/support/tickets`);
+      const res = await fetch(apiUrl("/api/support/tickets"));
       if (res.ok) {
         const data = await res.json();
-        setTickets(data);
+        setTickets(Array.isArray(data) ? data : []);
       } else {
         toast.error("Failed to fetch tickets from support proxy");
       }
@@ -64,7 +64,7 @@ export default function Tickets() {
   const deleteTicket = async (ticketId: string, id: number) => {
     if (!confirm(`Are you sure you want to delete support ticket ${ticketId}?`)) return;
     try {
-      const res = await fetch(`${nodeAPI}/api/support/tickets/${ticketId}`, {
+      const res = await fetch(apiUrl(`/api/support/tickets/${ticketId}`), {
         method: "DELETE"
       });
       if (res.ok) {
