@@ -30,6 +30,7 @@ interface Ticket {
   tenant_id: string;
   source: string;
   logs: string;
+  screenshot?: string;
   created_at: string;
   updated_at: string;
 }

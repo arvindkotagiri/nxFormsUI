@@ -7,15 +7,18 @@ export function apiUrl(path: string): string {
 }
 
 export function getStoredAuthToken(): string | null {
+  if (typeof localStorage === "undefined" || !localStorage.getItem) return null;
   return localStorage.getItem("nx_token") || localStorage.getItem("access_token") || null;
 }
 
 export function setStoredAuthToken(token: string): void {
+  if (typeof localStorage === "undefined" || !localStorage.setItem) return;
   localStorage.setItem("nx_token", token);
   localStorage.setItem("access_token", token);
 }
 
 export function clearStoredAuthToken(): void {
+  if (typeof localStorage === "undefined" || !localStorage.removeItem) return;
   localStorage.removeItem("nx_token");
   localStorage.removeItem("access_token");
 }
